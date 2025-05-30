@@ -1,9 +1,10 @@
 import React from 'react';
 import { useGame } from '../../contexts/GameContext';
+import { DifficultyLevel } from '../../utils/chessAI';
 
 const GameModeSelector: React.FC = () => {
-  const { gameState, setGameMode } = useGame();
-  const { gameMode, aiColor } = gameState;
+  const { gameState, setGameMode, setAIDifficulty } = useGame();
+  const { gameMode, aiColor, aiDifficulty } = gameState;
 
   const handleModeChange = (mode: 'human-vs-human' | 'human-vs-ai') => {
     if (mode === 'human-vs-ai') {
@@ -16,6 +17,18 @@ const GameModeSelector: React.FC = () => {
 
   const handleAIColorChange = (color: 'w' | 'b') => {
     setGameMode('human-vs-ai', color);
+  };
+
+  const handleDifficultyChange = (difficulty: DifficultyLevel) => {
+    setAIDifficulty(difficulty);
+  };
+
+  const difficultyLabels: Record<DifficultyLevel, { name: string; description: string }> = {
+    beginner: { name: 'Beginner', description: 'Very easy, makes many mistakes' },
+    easy: { name: 'Easy', description: 'Casual play, some mistakes' },
+    medium: { name: 'Medium', description: 'Balanced challenge' },
+    hard: { name: 'Hard', description: 'Strong play, few mistakes' },
+    expert: { name: 'Expert', description: 'Very strong, minimal mistakes' },
   };
 
   return (
@@ -55,40 +68,66 @@ const GameModeSelector: React.FC = () => {
           </div>
         </label>
 
-        {/* AI Color Selection */}
+        {/* AI Settings */}
         {gameMode === 'human-vs-ai' && (
-          <div className="ml-6 pl-4 border-l-2 border-gray-200">
-            <div className="text-sm font-medium mb-2">Computer plays:</div>
-            <div className="flex gap-3">
-              <label className="flex items-center cursor-pointer">
-                <input
-                  type="radio"
-                  name="aiColor"
-                  value="w"
-                  checked={aiColor === 'w'}
-                  onChange={() => handleAIColorChange('w')}
-                  className="mr-2"
-                />
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 bg-gray-100 border border-gray-400 rounded-sm"></div>
-                  <span className="text-sm">White</span>
-                </div>
-              </label>
-              
-              <label className="flex items-center cursor-pointer">
-                <input
-                  type="radio"
-                  name="aiColor"
-                  value="b"
-                  checked={aiColor === 'b'}
-                  onChange={() => handleAIColorChange('b')}
-                  className="mr-2"
-                />
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 bg-gray-800 rounded-sm"></div>
-                  <span className="text-sm">Black</span>
-                </div>
-              </label>
+          <div className="ml-6 pl-4 border-l-2 border-gray-200 space-y-4">
+            {/* AI Color Selection */}
+            <div>
+              <div className="text-sm font-medium mb-2">Computer plays:</div>
+              <div className="flex gap-3">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    name="aiColor"
+                    value="w"
+                    checked={aiColor === 'w'}
+                    onChange={() => handleAIColorChange('w')}
+                    className="mr-2"
+                  />
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 bg-gray-100 border border-gray-400 rounded-sm"></div>
+                    <span className="text-sm">White</span>
+                  </div>
+                </label>
+                
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    name="aiColor"
+                    value="b"
+                    checked={aiColor === 'b'}
+                    onChange={() => handleAIColorChange('b')}
+                    className="mr-2"
+                  />
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 bg-gray-800 rounded-sm"></div>
+                    <span className="text-sm">Black</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Difficulty Selection */}
+            <div>
+              <div className="text-sm font-medium mb-2">Difficulty Level:</div>
+              <div className="space-y-2">
+                {Object.entries(difficultyLabels).map(([level, info]) => (
+                  <label key={level} className="flex items-start cursor-pointer">
+                    <input
+                      type="radio"
+                      name="difficulty"
+                      value={level}
+                      checked={aiDifficulty === level}
+                      onChange={() => handleDifficultyChange(level as DifficultyLevel)}
+                      className="mr-3 mt-0.5"
+                    />
+                    <div>
+                      <div className="text-sm font-medium">{info.name}</div>
+                      <div className="text-xs text-gray-600">{info.description}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -100,7 +139,7 @@ const GameModeSelector: React.FC = () => {
           Current: <span className="font-semibold">
             {gameMode === 'human-vs-human' 
               ? 'Human vs Human' 
-              : `Human vs AI (AI plays ${aiColor === 'w' ? 'White' : 'Black'})`
+              : `Human vs AI (${difficultyLabels[aiDifficulty].name}, AI plays ${aiColor === 'w' ? 'White' : 'Black'})`
             }
           </span>
         </div>

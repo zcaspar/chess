@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
 import { Chess, Move, Square } from 'chess.js';
-import { ChessAI } from '../utils/chessAI';
+import { ChessAI, DifficultyLevel } from '../utils/chessAI';
 
 interface TimeControl {
   initial: number; // Initial time in seconds
@@ -41,6 +41,7 @@ interface GameState {
   gameStats: GameStats;
   gameMode: 'human-vs-human' | 'human-vs-ai';
   aiColor: 'w' | 'b' | null; // Which color the AI is playing
+  aiDifficulty: DifficultyLevel;
 }
 
 interface GameContextType {
@@ -53,13 +54,14 @@ interface GameContextType {
   offerDraw: (color: 'w' | 'b') => void;
   acceptDraw: () => void;
   declineDraw: () => void;
-  setTimeControl: (minutes: number, increment?: number) => void;
+  setTimeControl: (minutes: number | null, increment?: number) => void;
   startClock: () => void;
   pauseClock: () => void;
   setPlayerName: (player: 'player1' | 'player2', name: string) => void;
   swapColors: () => void;
   getPlayerByColor: (color: 'w' | 'b') => string;
   setGameMode: (mode: 'human-vs-human' | 'human-vs-ai', aiColor?: 'w' | 'b') => void;
+  setAIDifficulty: (difficulty: DifficultyLevel) => void;
   canUndo: boolean;
   canRedo: boolean;
 }
@@ -136,10 +138,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     },
     gameMode: 'human-vs-human',
     aiColor: null,
+    aiDifficulty: 'medium',
   });
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const aiRef = useRef<ChessAI>(new ChessAI('simple', 1000));
+  const aiRef = useRef<ChessAI>(new ChessAI('medium', 1000));
   const isAiThinking = useRef<boolean>(false);
 
   // Clock ticker
@@ -379,6 +382,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     const gameStats = gameState.gameStats; // Keep existing stats - they've already been updated
     const gameMode = gameState.gameMode;
     const aiColor = gameState.aiColor;
+    const aiDifficulty = gameState.aiDifficulty;
     
     // Reset AI thinking state
     isAiThinking.current = false;
@@ -399,6 +403,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       gameStats: gameStats,
       gameMode: gameMode,
       aiColor: aiColor,
+      aiDifficulty: aiDifficulty,
     });
   }, [gameState]);
 
@@ -500,6 +505,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     isAiThinking.current = false;
   }, []);
 
+  const setAIDifficulty = useCallback((difficulty: DifficultyLevel) => {
+    setGameState(prev => ({
+      ...prev,
+      aiDifficulty: difficulty,
+    }));
+    
+    // Update the AI engine with new difficulty
+    aiRef.current.setDifficulty(difficulty);
+  }, []);
+
   const canUndo = gameState.currentMoveIndex >= 0;
   const canRedo = gameState.currentMoveIndex < gameState.history.length - 1;
 
@@ -520,6 +535,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     swapColors,
     getPlayerByColor,
     setGameMode,
+    setAIDifficulty,
     canUndo,
     canRedo,
   };
