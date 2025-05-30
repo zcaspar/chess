@@ -1,26 +1,44 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { GameProvider } from './contexts/GameContext';
 import ChessBoard from './components/ChessBoard';
+import GameControls from './components/GameControls';
+import MoveHistory from './components/MoveHistory';
+import GameStatus from './components/GameStatus';
+import ChessClock from './components/ChessClock';
+import PlayerInfo from './components/PlayerInfo';
 import './App.css';
 
 function App() {
-  const [gameResult, setGameResult] = useState<string>('');
-
-  const handleGameOver = (result: string) => {
-    setGameResult(result);
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-      <h1 className="text-4xl font-bold mb-8 text-gray-800">Chess Game</h1>
-      
-      {gameResult && (
-        <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
-          <p className="text-lg font-semibold">{gameResult}</p>
+    <GameProvider>
+      <div className="min-h-screen bg-gray-100 p-4">
+        <div className="max-w-7xl mx-auto">
+          <h1 className="text-4xl font-bold text-center mb-8 text-gray-800">Chess Game</h1>
+          
+          <div className="grid grid-cols-1 xl:grid-cols-[300px_1fr_300px] lg:grid-cols-[250px_1fr_250px] gap-4 lg:gap-6">
+            {/* Left Sidebar */}
+            <div className="order-2 lg:order-1 space-y-4">
+              <PlayerInfo />
+              <GameStatus />
+              <GameControls />
+            </div>
+            
+            {/* Center - Chess Board */}
+            <div className="order-1 lg:order-2 flex justify-center items-start">
+              <div className="w-full max-w-[500px]">
+                <ChessBoard />
+              </div>
+            </div>
+            
+            {/* Right Sidebar */}
+            <div className="order-3 space-y-4">
+              <MoveHistory />
+              <ChessClock />
+            </div>
+          </div>
         </div>
-      )}
-      
-      <ChessBoard onGameOver={handleGameOver} />
-    </div>
+      </div>
+    </GameProvider>
   );
 }
 

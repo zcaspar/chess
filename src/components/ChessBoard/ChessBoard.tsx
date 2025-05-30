@@ -1,99 +1,132 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Chessboard } from 'react-chessboard';
-import { Chess, Square } from 'chess.js';
+import { Square } from 'chess.js';
+import { useGame } from '../../contexts/GameContext';
 
-interface ChessBoardProps {
-  onGameOver?: (result: string) => void;
-}
+const ChessBoard: React.FC = () => {
+  const { gameState, makeMove } = useGame();
+  const [moveFrom, setMoveFrom] = useState<Square | null>(null);
+  const [rightClickedSquares, setRightClickedSquares] = useState<Square[]>([]);
+  const [optionSquares, setOptionSquares] = useState<Partial<Record<Square, { background: string }>>>({});
 
-const ChessBoard: React.FC<ChessBoardProps> = ({ onGameOver }) => {
-  const [game, setGame] = useState(new Chess());
-  const [moveHistory, setMoveHistory] = useState<string[]>([]);
+  const getMoveOptions = (square: Square) => {
+    const moves = gameState.game.moves({
+      square,
+      verbose: true,
+    });
+    
+    const options: Partial<Record<Square, { background: string }>> = {};
+    
+    moves.forEach((move) => {
+      options[move.to as Square] = {
+        background:
+          gameState.game.get(move.to as Square) && gameState.game.get(move.to as Square)?.color !== gameState.game.get(square)?.color
+            ? 'radial-gradient(circle, rgba(0,0,0,.1) 85%, transparent 85%)'
+            : 'radial-gradient(circle, rgba(0,0,0,.1) 25%, transparent 25%)',
+      };
+    });
+    
+    return options;
+  };
 
-  const makeMove = (sourceSquare: Square, targetSquare: Square) => {
-    try {
-      const gameCopy = new Chess(game.fen());
-      const move = gameCopy.move({
-        from: sourceSquare,
-        to: targetSquare,
-        promotion: 'q', // Always promote to queen for simplicity
-      });
+  const onSquareClick = (square: Square) => {
+    // Clear right-clicked squares
+    setRightClickedSquares([]);
 
-      if (!move) return false;
-
-      setGame(gameCopy);
-      setMoveHistory([...moveHistory, move.san]);
-
-      // Check game over conditions
-      if (gameCopy.isGameOver()) {
-        let result = '';
-        if (gameCopy.isCheckmate()) {
-          result = `Checkmate! ${gameCopy.turn() === 'w' ? 'Black' : 'White'} wins!`;
-        } else if (gameCopy.isDraw()) {
-          result = 'Draw!';
-        } else if (gameCopy.isStalemate()) {
-          result = 'Stalemate!';
-        } else if (gameCopy.isThreefoldRepetition()) {
-          result = 'Draw by threefold repetition!';
-        } else if (gameCopy.isInsufficientMaterial()) {
-          result = 'Draw by insufficient material!';
-        }
-        onGameOver?.(result);
-      }
-
-      return true;
-    } catch (error) {
-      return false;
+    // If clicking the same square, deselect it
+    if (moveFrom === square) {
+      setMoveFrom(null);
+      setOptionSquares({});
+      return;
     }
+
+    // If no piece is selected
+    if (!moveFrom) {
+      // Check if there's a piece on this square and it's the right color
+      const piece = gameState.game.get(square);
+      if (piece && piece.color === gameState.game.turn()) {
+        setMoveFrom(square);
+        setOptionSquares(getMoveOptions(square));
+      }
+      return;
+    }
+
+    // Try to make the move
+    const moveSuccessful = makeMove(moveFrom, square);
+    
+    if (moveSuccessful) {
+      setMoveFrom(null);
+      setOptionSquares({});
+    } else {
+      // If move failed, check if clicked square has a piece of the current color
+      const piece = gameState.game.get(square);
+      if (piece && piece.color === gameState.game.turn()) {
+        setMoveFrom(square);
+        setOptionSquares(getMoveOptions(square));
+      } else {
+        setMoveFrom(null);
+        setOptionSquares({});
+      }
+    }
+  };
+
+  const onSquareRightClick = (square: Square) => {
+    const newSquares = rightClickedSquares.includes(square)
+      ? rightClickedSquares.filter((s) => s !== square)
+      : [...rightClickedSquares, square];
+    setRightClickedSquares(newSquares);
   };
 
   const onDrop = (sourceSquare: Square, targetSquare: Square) => {
     const moveSuccessful = makeMove(sourceSquare, targetSquare);
+    setMoveFrom(null);
+    setOptionSquares({});
     return moveSuccessful;
   };
 
-  const resetGame = () => {
-    setGame(new Chess());
-    setMoveHistory([]);
-  };
+  // Custom square styles for highlights
+  const customSquareStyles = useMemo(() => {
+    const styles: Partial<Record<Square, { backgroundColor?: string; background?: string }>> = {};
+    
+    // Highlight the selected square
+    if (moveFrom) {
+      styles[moveFrom] = { backgroundColor: 'rgba(255, 255, 0, 0.4)' };
+    }
+    
+    // Highlight right-clicked squares
+    rightClickedSquares.forEach((square) => {
+      styles[square] = { backgroundColor: 'rgba(0, 0, 255, 0.4)' };
+    });
+    
+    // Show possible moves
+    Object.entries(optionSquares).forEach(([square, style]) => {
+      styles[square as Square] = style;
+    });
+    
+    // Highlight last move
+    if (gameState.history.length > 0 && gameState.currentMoveIndex >= 0) {
+      const lastMove = gameState.history[gameState.currentMoveIndex];
+      styles[lastMove.from as Square] = { backgroundColor: 'rgba(255, 255, 0, 0.2)' };
+      styles[lastMove.to as Square] = { backgroundColor: 'rgba(255, 255, 0, 0.2)' };
+    }
+    
+    return styles;
+  }, [moveFrom, rightClickedSquares, optionSquares, gameState.history, gameState.currentMoveIndex]);
 
   return (
-    <div className="flex flex-col items-center">
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold mb-2">
-          Turn: {game.turn() === 'w' ? 'White' : 'Black'}
-        </h2>
-        {game.isCheck() && <p className="text-red-600 font-bold">Check!</p>}
-      </div>
-      
-      <div className="mb-4">
-        <Chessboard 
-          position={game.fen()} 
-          onPieceDrop={onDrop}
-          boardWidth={500}
-        />
-      </div>
-
-      <button
-        onClick={resetGame}
-        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-      >
-        New Game
-      </button>
-
-      <div className="mt-4 p-4 bg-gray-100 rounded max-h-40 overflow-y-auto">
-        <h3 className="font-bold mb-2">Move History</h3>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          {moveHistory.map((move, index) => (
-            <div key={index} className="flex">
-              {index % 2 === 0 && (
-                <span className="font-semibold mr-2">{Math.floor(index / 2) + 1}.</span>
-              )}
-              <span>{move}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+    <div className="chess-board-container">
+      <Chessboard
+        position={gameState.game.fen()}
+        onPieceDrop={onDrop}
+        onSquareClick={onSquareClick}
+        onSquareRightClick={onSquareRightClick}
+        boardWidth={500}
+        customSquareStyles={customSquareStyles}
+        customBoardStyle={{
+          borderRadius: '4px',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+        }}
+      />
     </div>
   );
 };
