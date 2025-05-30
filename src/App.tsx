@@ -1,24 +1,25 @@
-import React from 'react';
-import logo from './logo.svg';
+import React, { useState } from 'react';
+import ChessBoard from './components/ChessBoard';
 import './App.css';
 
 function App() {
+  const [gameResult, setGameResult] = useState<string>('');
+
+  const handleGameOver = (result: string) => {
+    setGameResult(result);
+  };
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+      <h1 className="text-4xl font-bold mb-8 text-gray-800">Chess Game</h1>
+      
+      {gameResult && (
+        <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
+          <p className="text-lg font-semibold">{gameResult}</p>
+        </div>
+      )}
+      
+      <ChessBoard onGameOver={handleGameOver} />
     </div>
   );
 }
