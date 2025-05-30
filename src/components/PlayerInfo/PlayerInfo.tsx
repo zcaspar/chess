@@ -3,7 +3,7 @@ import { useGame } from '../../contexts/GameContext';
 
 const PlayerInfo: React.FC = () => {
   const { gameState, setPlayerName, swapColors } = useGame();
-  const { players, gameStats, colorAssignment } = gameState;
+  const { players, gameStats, colorAssignment, gameMode, aiColor } = gameState;
   const [editingPlayer1, setEditingPlayer1] = useState(false);
   const [editingPlayer2, setEditingPlayer2] = useState(false);
   const [player1Input, setPlayer1Input] = useState(players.player1);
@@ -31,6 +31,10 @@ const PlayerInfo: React.FC = () => {
 
   const player1Color = colorAssignment.white === 'player1' ? 'w' : 'b';
   const player2Color = colorAssignment.white === 'player2' ? 'w' : 'b';
+  
+  // Check if players are AI
+  const isPlayer1AI = gameMode === 'human-vs-ai' && aiColor === player1Color;
+  const isPlayer2AI = gameMode === 'human-vs-ai' && aiColor === player2Color;
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4">
@@ -53,7 +57,7 @@ const PlayerInfo: React.FC = () => {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <div className={`w-4 h-4 ${player1Color === 'w' ? 'bg-gray-100 border border-gray-400' : 'bg-gray-800'} rounded-sm`}></div>
-            {editingPlayer1 ? (
+            {editingPlayer1 && !isPlayer1AI ? (
               <input
                 type="text"
                 value={player1Input}
@@ -63,6 +67,10 @@ const PlayerInfo: React.FC = () => {
                 className="px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 autoFocus
               />
+            ) : isPlayer1AI ? (
+              <span className="font-semibold text-blue-600">
+                {players.player1}
+              </span>
             ) : (
               <button
                 onClick={() => {
@@ -75,7 +83,7 @@ const PlayerInfo: React.FC = () => {
               </button>
             )}
             <span className="text-xs text-gray-500">
-              (playing {player1Color === 'w' ? 'White' : 'Black'})
+              (playing {player1Color === 'w' ? 'White' : 'Black'}{isPlayer1AI ? ' - AI' : ''})
             </span>
           </div>
           {!editingPlayer1 && (
@@ -106,7 +114,7 @@ const PlayerInfo: React.FC = () => {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <div className={`w-4 h-4 ${player2Color === 'w' ? 'bg-gray-100 border border-gray-400' : 'bg-gray-800'} rounded-sm`}></div>
-            {editingPlayer2 ? (
+            {editingPlayer2 && !isPlayer2AI ? (
               <input
                 type="text"
                 value={player2Input}
@@ -116,6 +124,10 @@ const PlayerInfo: React.FC = () => {
                 className="px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 autoFocus
               />
+            ) : isPlayer2AI ? (
+              <span className="font-semibold text-blue-600">
+                {players.player2}
+              </span>
             ) : (
               <button
                 onClick={() => {
@@ -128,7 +140,7 @@ const PlayerInfo: React.FC = () => {
               </button>
             )}
             <span className="text-xs text-gray-500">
-              (playing {player2Color === 'w' ? 'White' : 'Black'})
+              (playing {player2Color === 'w' ? 'White' : 'Black'}{isPlayer2AI ? ' - AI' : ''})
             </span>
           </div>
           {!editingPlayer2 && (

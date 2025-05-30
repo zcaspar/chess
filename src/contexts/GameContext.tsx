@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
 import { Chess, Move, Square } from 'chess.js';
+import { ChessAI } from '../utils/chessAI';
 
 interface TimeControl {
   initial: number; // Initial time in seconds
@@ -38,6 +39,8 @@ interface GameState {
   players: PlayerInfo;
   colorAssignment: ColorAssignment;
   gameStats: GameStats;
+  gameMode: 'human-vs-human' | 'human-vs-ai';
+  aiColor: 'w' | 'b' | null; // Which color the AI is playing
 }
 
 interface GameContextType {
@@ -56,6 +59,7 @@ interface GameContextType {
   setPlayerName: (player: 'player1' | 'player2', name: string) => void;
   swapColors: () => void;
   getPlayerByColor: (color: 'w' | 'b') => string;
+  setGameMode: (mode: 'human-vs-human' | 'human-vs-ai', aiColor?: 'w' | 'b') => void;
   canUndo: boolean;
   canRedo: boolean;
 }
@@ -130,9 +134,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       player1: { wins: 0, draws: 0, losses: 0 },
       player2: { wins: 0, draws: 0, losses: 0 },
     },
+    gameMode: 'human-vs-human',
+    aiColor: null,
   });
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const aiRef = useRef<ChessAI>(new ChessAI('simple', 1000));
+  const isAiThinking = useRef<boolean>(false);
 
   // Clock ticker
   useEffect(() => {
@@ -180,16 +188,64 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     };
   }, [gameState.activeColor, gameState.startTime, gameState.gameResult]);
 
-  const setTimeControl = useCallback((minutes: number, increment: number = 0) => {
-    const seconds = minutes * 60;
-    setGameState(prev => ({
-      ...prev,
-      timeControl: { initial: seconds, increment },
-      whiteTime: seconds,
-      blackTime: seconds,
-      activeColor: null,
-      startTime: null,
-    }));
+  // AI move effect
+  useEffect(() => {
+    const shouldAIMove = 
+      gameState.gameMode === 'human-vs-ai' &&
+      gameState.aiColor === gameState.game.turn() &&
+      !gameState.gameResult &&
+      !isAiThinking.current;
+
+    if (shouldAIMove) {
+      isAiThinking.current = true;
+      
+      const makeAIMove = async () => {
+        try {
+          // Double-check game hasn't ended before getting AI move
+          if (gameState.gameResult) {
+            isAiThinking.current = false;
+            return;
+          }
+          
+          const aiMove = await aiRef.current.getBestMove(gameState.game);
+          
+          // Check again after AI thinking - game might have ended during thinking
+          if (aiMove && !gameState.gameResult) {
+            // Make sure we're still in the same game state
+            makeMove(aiMove.from as Square, aiMove.to as Square, aiMove.promotion);
+          }
+        } catch (error) {
+          console.error('AI move error:', error);
+        } finally {
+          isAiThinking.current = false;
+        }
+      };
+
+      makeAIMove();
+    }
+  }, [gameState.game, gameState.gameMode, gameState.aiColor, gameState.gameResult]);
+
+  const setTimeControl = useCallback((minutes: number | null, increment: number = 0) => {
+    if (minutes === null) {
+      setGameState(prev => ({
+        ...prev,
+        timeControl: null,
+        whiteTime: 0,
+        blackTime: 0,
+        activeColor: null,
+        startTime: null,
+      }));
+    } else {
+      const seconds = minutes * 60;
+      setGameState(prev => ({
+        ...prev,
+        timeControl: { initial: seconds, increment },
+        whiteTime: seconds,
+        blackTime: seconds,
+        activeColor: null,
+        startTime: null,
+      }));
+    }
   }, []);
 
   const startClock = useCallback(() => {
@@ -321,6 +377,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     const players = gameState.players;
     const colorAssignment = gameState.colorAssignment;
     const gameStats = gameState.gameStats; // Keep existing stats - they've already been updated
+    const gameMode = gameState.gameMode;
+    const aiColor = gameState.aiColor;
+    
+    // Reset AI thinking state
+    isAiThinking.current = false;
     
     setGameState({
       game: new Chess(),
@@ -336,6 +397,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       players: players,
       colorAssignment: colorAssignment,
       gameStats: gameStats,
+      gameMode: gameMode,
+      aiColor: aiColor,
     });
   }, [gameState]);
 
@@ -406,6 +469,37 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     return gameState.players[playerKey];
   }, [gameState.colorAssignment, gameState.players]);
 
+  const setGameMode = useCallback((mode: 'human-vs-human' | 'human-vs-ai', aiColor: 'w' | 'b' = 'b') => {
+    setGameState(prev => {
+      const newState = {
+        ...prev,
+        gameMode: mode,
+        aiColor: mode === 'human-vs-ai' ? aiColor : null,
+      };
+
+      // Update player names when switching to AI mode
+      if (mode === 'human-vs-ai') {
+        const aiPlayerKey = (aiColor === 'w' && prev.colorAssignment.white === 'player1') || 
+                            (aiColor === 'b' && prev.colorAssignment.black === 'player1') ? 'player1' : 'player2';
+        newState.players = {
+          ...prev.players,
+          [aiPlayerKey]: 'Computer',
+        };
+      } else {
+        // Reset to default names when switching back to human vs human
+        newState.players = {
+          player1: prev.players.player1 === 'Computer' ? 'Player 1' : prev.players.player1,
+          player2: prev.players.player2 === 'Computer' ? 'Player 2' : prev.players.player2,
+        };
+      }
+
+      return newState;
+    });
+    
+    // Reset AI thinking state
+    isAiThinking.current = false;
+  }, []);
+
   const canUndo = gameState.currentMoveIndex >= 0;
   const canRedo = gameState.currentMoveIndex < gameState.history.length - 1;
 
@@ -425,6 +519,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     setPlayerName,
     swapColors,
     getPlayerByColor,
+    setGameMode,
     canUndo,
     canRedo,
   };

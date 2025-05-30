@@ -6,6 +6,7 @@ import MoveHistory from './components/MoveHistory';
 import GameStatus from './components/GameStatus';
 import ChessClock from './components/ChessClock';
 import PlayerInfo from './components/PlayerInfo';
+import GameModeSelector from './components/GameModeSelector';
 import './App.css';
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
             {/* Left Sidebar */}
             <div className="order-2 lg:order-1 space-y-4">
               <PlayerInfo />
+              <GameModeSelector />
               <GameStatus />
               <GameControls />
             </div>
