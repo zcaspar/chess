@@ -127,17 +127,23 @@ export class AdvancedChessAI {
     let bestScore = -Infinity;
 
     // Evaluate all possible moves with time limit
-    for (const move of possibleMoves) {
+    for (let i = 0; i < possibleMoves.length; i++) {
       // Check time limit
       if (Date.now() - startTime > timeLimit) {
         console.log('AI time limit reached, returning best move found so far');
         break;
       }
 
+      // Yield control to event loop every few moves to keep UI responsive
+      if (i % 3 === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+
+      const move = possibleMoves[i];
       const gameCopy = new Chess(game.fen());
       gameCopy.move(move);
       
-      const score = -this.minimax(gameCopy, this.settings.depth - 1, -Infinity, Infinity, false, startTime, timeLimit);
+      const score = -(await this.minimax(gameCopy, this.settings.depth - 1, -Infinity, Infinity, false, startTime, timeLimit));
       
       // Add some randomness based on difficulty
       const randomFactor = (Math.random() - 0.5) * this.settings.randomness * 10;
@@ -166,7 +172,7 @@ export class AdvancedChessAI {
     return bestMove;
   }
 
-  private minimax(game: Chess, depth: number, alpha: number, beta: number, isMaximizing: boolean, startTime?: number, timeLimit?: number): number {
+  private async minimax(game: Chess, depth: number, alpha: number, beta: number, isMaximizing: boolean, startTime?: number, timeLimit?: number, moveCount: number = 0): Promise<number> {
     // Check time limit if provided
     if (startTime && timeLimit && Date.now() - startTime > timeLimit) {
       return this.evaluatePosition(game); // Return current position evaluation if time is up
@@ -192,16 +198,22 @@ export class AdvancedChessAI {
     // Move ordering - prioritize captures and checks
     moves.sort((a, b) => this.getMoveOrderScore(b) - this.getMoveOrderScore(a));
 
-    for (const move of moves) {
+    for (let i = 0; i < moves.length; i++) {
       // Check time limit before each move evaluation
       if (startTime && timeLimit && Date.now() - startTime > timeLimit) {
         break;
       }
 
+      // Yield control every few moves at deeper levels to keep UI responsive
+      if (depth > 1 && i % 2 === 0 && moveCount % 5 === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+
+      const move = moves[i];
       const gameCopy = new Chess(game.fen());
       gameCopy.move(move);
       
-      const score = this.minimax(gameCopy, depth - 1, alpha, beta, !isMaximizing, startTime, timeLimit);
+      const score = await this.minimax(gameCopy, depth - 1, alpha, beta, !isMaximizing, startTime, timeLimit, moveCount + 1);
       
       if (isMaximizing) {
         if (score > bestScore) {
