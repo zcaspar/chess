@@ -87,18 +87,20 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   };
 
   // Helper function to update game stats based on result
-  const updateGameStats = (result: string, currentStats: GameStats, colorAssignment: ColorAssignment): GameStats => {
+  const updateGameStats = (result: string, currentStats: GameStats, colorAssignment: ColorAssignment, players: PlayerInfo): GameStats => {
     const newStats = { ...currentStats };
     
     if (result.includes('wins')) {
-      if (result.includes('White wins')) {
-        const winner = colorAssignment.white;
-        const loser = colorAssignment.black;
-        newStats[winner].wins += 1;
-        newStats[loser].losses += 1;
-      } else if (result.includes('Black wins')) {
-        const winner = colorAssignment.black;
-        const loser = colorAssignment.white;
+      // Find which player won by checking if their name is in the result
+      let winner: 'player1' | 'player2' | null = null;
+      if (result.includes(players.player1)) {
+        winner = 'player1';
+      } else if (result.includes(players.player2)) {
+        winner = 'player2';
+      }
+      
+      if (winner) {
+        const loser = winner === 'player1' ? 'player2' : 'player1';
         newStats[winner].wins += 1;
         newStats[loser].losses += 1;
       }
@@ -150,16 +152,27 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     if (gameState.timeControl && gameState.activeColor && gameState.startTime && !gameState.gameResult) {
       intervalRef.current = setInterval(() => {
         setGameState(prev => {
-          const elapsed = (Date.now() - prev.startTime!) / 1000;
+          // Check if we should still be running the timer
+          if (!prev.activeColor || prev.gameResult || !prev.startTime) {
+            return prev;
+          }
+          
+          // Timer should always count down for the active player
+          
+          const elapsed = (Date.now() - prev.startTime) / 1000;
           const timeKey = prev.activeColor === 'w' ? 'whiteTime' : 'blackTime';
           const newTime = Math.max(0, prev[timeKey] - elapsed);
           
           // Check for time expiration
           if (newTime === 0) {
-            const loser = prev.activeColor === 'w' ? 'White' : 'Black';
-            const winner = prev.activeColor === 'w' ? 'Black' : 'White';
-            const result = `${winner} wins on time! ${loser} ran out of time.`;
-            const updatedStats = updateGameStats(result, prev.gameStats, prev.colorAssignment);
+            const losingColor = prev.activeColor!;
+            const winningColor = prev.activeColor === 'w' ? 'b' : 'w';
+            const loserPlayerKey = getPlayerKeyByColor(losingColor, prev.colorAssignment);
+            const winnerPlayerKey = getPlayerKeyByColor(winningColor, prev.colorAssignment);
+            const loserName = prev.players[loserPlayerKey];
+            const winnerName = prev.players[winnerPlayerKey];
+            const result = `${winnerName} wins on time! ${loserName} ran out of time.`;
+            const updatedStats = updateGameStats(result, prev.gameStats, prev.colorAssignment, prev.players);
             return {
               ...prev,
               [timeKey]: 0,
@@ -170,10 +183,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
             };
           }
           
+          // Update the time and refresh startTime for next calculation
           return {
             ...prev,
             [timeKey]: newTime,
-            startTime: Date.now(),
+            startTime: Date.now(), // Reset startTime for next interval
           };
         });
       }, 100); // Update every 100ms for smooth display
@@ -201,6 +215,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
     if (shouldAIMove) {
       isAiThinking.current = true;
+      
       
       const makeAIMove = async () => {
         try {
@@ -252,14 +267,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   }, []);
 
   const startClock = useCallback(() => {
-    if (gameState.timeControl && !gameState.activeColor) {
-      setGameState(prev => ({
-        ...prev,
-        activeColor: 'w',
-        startTime: Date.now(),
-      }));
-    }
-  }, [gameState.timeControl, gameState.activeColor]);
+    setGameState(prev => {
+      if (prev.timeControl && !prev.activeColor) {
+        return {
+          ...prev,
+          activeColor: 'w',
+          startTime: Date.now(),
+        };
+      }
+      return prev;
+    });
+  }, []);
 
   const pauseClock = useCallback(() => {
     setGameState(prev => ({
@@ -286,7 +304,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       let result = '';
       if (gameCopy.isGameOver()) {
         if (gameCopy.isCheckmate()) {
-          result = `Checkmate! ${gameCopy.turn() === 'w' ? 'Black' : 'White'} wins!`;
+          const winningColor = gameCopy.turn() === 'w' ? 'b' : 'w';
+          const winnerPlayerKey = getPlayerKeyByColor(winningColor, gameState.colorAssignment);
+          const winnerName = gameState.players[winnerPlayerKey];
+          result = `Checkmate! ${winnerName} wins!`;
         } else if (gameCopy.isDraw()) {
           if (gameCopy.isStalemate()) {
             result = 'Draw by stalemate!';
@@ -315,7 +336,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         }
 
         // Update game stats if game ended
-        const updatedStats = result ? updateGameStats(result, prev.gameStats, prev.colorAssignment) : prev.gameStats;
+        const updatedStats = result ? updateGameStats(result, prev.gameStats, prev.colorAssignment, prev.players) : prev.gameStats;
 
         return {
           ...prev,
@@ -326,8 +347,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           drawOffer: { offered: false, by: null }, // Clear draw offer on move
           whiteTime: newWhiteTime,
           blackTime: newBlackTime,
-          activeColor: result ? null : (prev.timeControl ? (shouldStartClock ? 'w' : (prev.activeColor === 'w' ? 'b' : 'w')) : null),
-          startTime: result ? null : (prev.timeControl && (shouldStartClock || prev.activeColor) ? Date.now() : null),
+          activeColor: result ? null : (prev.timeControl ? (gameCopy.turn() === 'w' ? 'w' : 'b') : null),
+          startTime: result ? null : (prev.timeControl ? Date.now() : null),
           gameStats: updatedStats,
         };
       });
@@ -408,9 +429,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   }, [gameState]);
 
   const resign = useCallback((color: 'w' | 'b') => {
-    const winner = color === 'w' ? 'Black' : 'White';
-    const result = `${winner} wins by resignation!`;
-    const updatedStats = updateGameStats(result, gameState.gameStats, gameState.colorAssignment);
+    const winningColor = color === 'w' ? 'b' : 'w';
+    const winnerPlayerKey = getPlayerKeyByColor(winningColor, gameState.colorAssignment);
+    const winnerName = gameState.players[winnerPlayerKey];
+    const result = `${winnerName} wins by resignation!`;
+    const updatedStats = updateGameStats(result, gameState.gameStats, gameState.colorAssignment, gameState.players);
     
     setGameState({
       ...gameState,
@@ -430,7 +453,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   const acceptDraw = useCallback(() => {
     const result = 'Draw by agreement!';
-    const updatedStats = updateGameStats(result, gameState.gameStats, gameState.colorAssignment);
+    const updatedStats = updateGameStats(result, gameState.gameStats, gameState.colorAssignment, gameState.players);
     
     setGameState({
       ...gameState,
