@@ -13,8 +13,8 @@ const DIFFICULTY_SETTINGS: Record<DifficultyLevel, AISettings> = {
   beginner: { depth: 1, randomness: 40, useOpeningBook: false, evaluationAccuracy: 60 },
   easy: { depth: 2, randomness: 25, useOpeningBook: true, evaluationAccuracy: 75 },
   medium: { depth: 3, randomness: 15, useOpeningBook: true, evaluationAccuracy: 85 },
-  hard: { depth: 4, randomness: 8, useOpeningBook: true, evaluationAccuracy: 95 },
-  expert: { depth: 5, randomness: 3, useOpeningBook: true, evaluationAccuracy: 98 }
+  hard: { depth: 3, randomness: 8, useOpeningBook: true, evaluationAccuracy: 95 }, // Reduced from 4 to 3
+  expert: { depth: 4, randomness: 3, useOpeningBook: true, evaluationAccuracy: 98 } // Reduced from 5 to 4
 };
 
 // Piece values for evaluation
@@ -119,19 +119,25 @@ export class AdvancedChessAI {
       }
     }
 
-    // Add thinking delay
-    const thinkingTime = Math.random() * 1000 + 500;
-    await new Promise(resolve => setTimeout(resolve, thinkingTime));
+    // Set time limit for AI thinking (max 3 seconds)
+    const timeLimit = 3000;
+    const startTime = Date.now();
 
     let bestMove: Move | null = null;
     let bestScore = -Infinity;
 
-    // Evaluate all possible moves
+    // Evaluate all possible moves with time limit
     for (const move of possibleMoves) {
+      // Check time limit
+      if (Date.now() - startTime > timeLimit) {
+        console.log('AI time limit reached, returning best move found so far');
+        break;
+      }
+
       const gameCopy = new Chess(game.fen());
       gameCopy.move(move);
       
-      const score = -this.minimax(gameCopy, this.settings.depth - 1, -Infinity, Infinity, false);
+      const score = -this.minimax(gameCopy, this.settings.depth - 1, -Infinity, Infinity, false, startTime, timeLimit);
       
       // Add some randomness based on difficulty
       const randomFactor = (Math.random() - 0.5) * this.settings.randomness * 10;
@@ -147,24 +153,25 @@ export class AdvancedChessAI {
       }
     }
 
-    // Add final randomness - sometimes pick a different good move
-    if (Math.random() * 100 < this.settings.randomness) {
-      const goodMoves = possibleMoves.filter(move => {
-        const gameCopy = new Chess(game.fen());
-        gameCopy.move(move);
-        const score = -this.minimax(gameCopy, 1, -Infinity, Infinity, false);
-        return score > bestScore - 100; // Within 100 centipawns of best
-      });
-      
-      if (goodMoves.length > 1) {
-        bestMove = goodMoves[Math.floor(Math.random() * goodMoves.length)];
+    // Add final randomness - sometimes pick a different good move (only for lower difficulties)
+    if (this.settings.randomness > 10 && Math.random() * 100 < this.settings.randomness && bestMove) {
+      // Only do this for beginner/easy modes and only do a quick evaluation
+      const quickMoves = possibleMoves.slice(0, Math.min(5, possibleMoves.length));
+      const randomMove = quickMoves[Math.floor(Math.random() * quickMoves.length)];
+      if (randomMove) {
+        bestMove = randomMove;
       }
     }
 
     return bestMove;
   }
 
-  private minimax(game: Chess, depth: number, alpha: number, beta: number, isMaximizing: boolean): number {
+  private minimax(game: Chess, depth: number, alpha: number, beta: number, isMaximizing: boolean, startTime?: number, timeLimit?: number): number {
+    // Check time limit if provided
+    if (startTime && timeLimit && Date.now() - startTime > timeLimit) {
+      return this.evaluatePosition(game); // Return current position evaluation if time is up
+    }
+
     const fen = game.fen();
     const cached = this.transpositionTable.get(fen);
     
@@ -186,10 +193,15 @@ export class AdvancedChessAI {
     moves.sort((a, b) => this.getMoveOrderScore(b) - this.getMoveOrderScore(a));
 
     for (const move of moves) {
+      // Check time limit before each move evaluation
+      if (startTime && timeLimit && Date.now() - startTime > timeLimit) {
+        break;
+      }
+
       const gameCopy = new Chess(game.fen());
       gameCopy.move(move);
       
-      const score = this.minimax(gameCopy, depth - 1, alpha, beta, !isMaximizing);
+      const score = this.minimax(gameCopy, depth - 1, alpha, beta, !isMaximizing, startTime, timeLimit);
       
       if (isMaximizing) {
         if (score > bestScore) {
