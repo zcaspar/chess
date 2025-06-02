@@ -62,8 +62,8 @@ interface GameContextType {
   setPlayerName: (player: 'player1' | 'player2', name: string) => void;
   swapColors: () => void;
   getPlayerByColor: (color: 'w' | 'b') => string;
-  setGameMode: (mode: 'human-vs-human' | 'human-vs-ai', aiColor?: 'w' | 'b') => void;
-  setAIDifficulty: (difficulty: DifficultyLevel) => void;
+  setGameMode: (mode: 'human-vs-human' | 'human-vs-ai', aiColor?: 'w' | 'b') => Promise<void>;
+  setAIDifficulty: (difficulty: DifficultyLevel) => Promise<void>;
   canUndo: boolean;
   canRedo: boolean;
 }
@@ -567,7 +567,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     return gameState.players[playerKey];
   }, [gameState.colorAssignment, gameState.players]);
 
-  const setGameMode = useCallback((mode: 'human-vs-human' | 'human-vs-ai', aiColor: 'w' | 'b' = 'b') => {
+  const setGameMode = useCallback(async (mode: 'human-vs-human' | 'human-vs-ai', aiColor: 'w' | 'b' = 'b') => {
     setGameState(prev => {
       const newState = {
         ...prev,
@@ -594,11 +594,23 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       return newState;
     });
     
+    // Initialize LC0 engine when switching to AI mode
+    if (mode === 'human-vs-ai') {
+      try {
+        console.log('Initializing LC0 engine...');
+        await aiRef.current.initializeLc0();
+        console.log('LC0 engine initialized successfully!');
+      } catch (error) {
+        console.error('Failed to initialize LC0 engine:', error);
+        console.log('Falling back to built-in engine');
+      }
+    }
+    
     // Reset AI thinking state
     isAiThinking.current = false;
   }, []);
 
-  const setAIDifficulty = useCallback((difficulty: DifficultyLevel) => {
+  const setAIDifficulty = useCallback(async (difficulty: DifficultyLevel) => {
     setGameState(prev => ({
       ...prev,
       aiDifficulty: difficulty,
@@ -606,7 +618,18 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     
     // Update the AI engine with new difficulty
     aiRef.current.setDifficulty(difficulty);
-  }, []);
+    
+    // Reinitialize LC0 engine if we're using it
+    if (aiRef.current.getEngineType() === 'lc0' && gameState.gameMode === 'human-vs-ai') {
+      try {
+        console.log(`Reinitializing LC0 engine with ${difficulty} difficulty...`);
+        await aiRef.current.initializeLc0();
+        console.log('LC0 engine reinitialized successfully!');
+      } catch (error) {
+        console.error('Failed to reinitialize LC0 engine:', error);
+      }
+    }
+  }, [gameState.gameMode]);
 
   const canUndo = gameState.currentMoveIndex >= 0;
   const canRedo = gameState.currentMoveIndex < gameState.history.length - 1;

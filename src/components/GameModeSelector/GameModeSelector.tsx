@@ -6,21 +6,21 @@ const GameModeSelector: React.FC = () => {
   const { gameState, setGameMode, setAIDifficulty } = useGame();
   const { gameMode, aiColor, aiDifficulty } = gameState;
 
-  const handleModeChange = (mode: 'human-vs-human' | 'human-vs-ai') => {
+  const handleModeChange = async (mode: 'human-vs-human' | 'human-vs-ai') => {
     if (mode === 'human-vs-ai') {
       // Default to AI playing black
-      setGameMode(mode, 'b');
+      await setGameMode(mode, 'b');
     } else {
-      setGameMode(mode);
+      await setGameMode(mode);
     }
   };
 
-  const handleAIColorChange = (color: 'w' | 'b') => {
-    setGameMode('human-vs-ai', color);
+  const handleAIColorChange = async (color: 'w' | 'b') => {
+    await setGameMode('human-vs-ai', color);
   };
 
-  const handleDifficultyChange = (difficulty: DifficultyLevel) => {
-    setAIDifficulty(difficulty);
+  const handleDifficultyChange = async (difficulty: DifficultyLevel) => {
+    await setAIDifficulty(difficulty);
   };
 
   const difficultyLabels: Record<DifficultyLevel, { name: string; description: string }> = {

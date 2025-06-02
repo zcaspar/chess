@@ -1,6 +1,9 @@
 import { Chess, Move } from 'chess.js';
+import { Lc0Engine } from './lc0Engine';
+import { Lc0EngineBackend } from './lc0EngineBackend';
 
 type DifficultyLevel = 'beginner' | 'easy' | 'medium' | 'hard' | 'expert';
+type EngineType = 'built-in' | 'lc0';
 
 interface AISettings {
   depth: number;
@@ -12,9 +15,9 @@ interface AISettings {
 const DIFFICULTY_SETTINGS: Record<DifficultyLevel, AISettings> = {
   beginner: { depth: 1, randomness: 40, useOpeningBook: false, evaluationAccuracy: 60 },
   easy: { depth: 2, randomness: 25, useOpeningBook: true, evaluationAccuracy: 75 },
-  medium: { depth: 3, randomness: 15, useOpeningBook: true, evaluationAccuracy: 85 },
-  hard: { depth: 3, randomness: 8, useOpeningBook: true, evaluationAccuracy: 95 }, // Reduced from 4 to 3
-  expert: { depth: 4, randomness: 3, useOpeningBook: true, evaluationAccuracy: 98 } // Reduced from 5 to 4
+  medium: { depth: 4, randomness: 15, useOpeningBook: true, evaluationAccuracy: 85 },
+  hard: { depth: 5, randomness: 5, useOpeningBook: true, evaluationAccuracy: 95 },
+  expert: { depth: 6, randomness: 1, useOpeningBook: true, evaluationAccuracy: 99 }
 };
 
 // Piece values for evaluation
@@ -365,37 +368,205 @@ export class SimpleAI {
   }
 }
 
-// Main AI interface with difficulty levels
+// Main AI interface with difficulty levels and engine selection
 export class ChessAI {
-  private engine: AdvancedChessAI | SimpleAI;
+  private engine: AdvancedChessAI | SimpleAI | null = null;
+  private lc0Engine: Lc0Engine | null = null;
+  private lc0BackendEngine: Lc0EngineBackend | null = null;
   private difficulty: DifficultyLevel;
+  private engineType: EngineType;
+  private weightsPath: string;
+  private useBackend: boolean;
 
-  constructor(difficulty: DifficultyLevel = 'medium', timeLimitMs: number = 1000) {
+  constructor(
+    difficulty: DifficultyLevel = 'medium', 
+    timeLimitMs: number = 1000,
+    engineType: EngineType = 'lc0',
+    weightsPath: string = '/home/caspar/Documents/Coding/Chess/lc0/lc0/build/release/weights.pb',
+    useBackend: boolean = true
+  ) {
     this.difficulty = difficulty;
-    if (difficulty === 'beginner' && Math.random() < 0.3) {
+    this.engineType = engineType;
+    this.weightsPath = weightsPath;
+    this.useBackend = useBackend;
+    
+    if (engineType === 'built-in') {
+      this.initializeBuiltInEngine(timeLimitMs);
+    }
+    // Lc0 engine will be initialized asynchronously via initializeLc0()
+  }
+
+  private initializeBuiltInEngine(timeLimitMs: number) {
+    if (this.difficulty === 'beginner' && Math.random() < 0.3) {
       // Sometimes use simple random AI for absolute beginners
       this.engine = new SimpleAI(timeLimitMs);
     } else {
-      this.engine = new AdvancedChessAI(difficulty);
+      this.engine = new AdvancedChessAI(this.difficulty);
+    }
+  }
+
+  async initializeLc0(): Promise<void> {
+    if (this.engineType !== 'lc0') {
+      throw new Error('Engine type must be lc0 to initialize Lc0 engine');
+    }
+
+    try {
+      if (this.useBackend) {
+        // Use real Lc0 backend engine
+        console.log('Initializing Lc0 backend engine...');
+        switch (this.difficulty) {
+          case 'beginner':
+            this.lc0BackendEngine = await Lc0EngineBackend.createBeginner();
+            break;
+          case 'easy':
+            this.lc0BackendEngine = await Lc0EngineBackend.createEasy();
+            break;
+          case 'medium':
+            this.lc0BackendEngine = await Lc0EngineBackend.createMedium();
+            break;
+          case 'hard':
+            this.lc0BackendEngine = await Lc0EngineBackend.createHard();
+            break;
+          case 'expert':
+            this.lc0BackendEngine = await Lc0EngineBackend.createExpert();
+            break;
+          default:
+            this.lc0BackendEngine = await Lc0EngineBackend.createMedium();
+        }
+        console.log('Real Lc0 backend engine initialized successfully!');
+      } else {
+        // Use browser simulation engine
+        switch (this.difficulty) {
+          case 'beginner':
+            this.lc0Engine = await Lc0Engine.createBeginner(this.weightsPath);
+            break;
+          case 'easy':
+          case 'medium':
+            this.lc0Engine = await Lc0Engine.createIntermediate(this.weightsPath);
+            break;
+          case 'hard':
+          case 'expert':
+            this.lc0Engine = await Lc0Engine.createAdvanced(this.weightsPath);
+            break;
+          default:
+            this.lc0Engine = await Lc0Engine.createIntermediate(this.weightsPath);
+        }
+        console.log('Lc0 simulation engine initialized successfully');
+      }
+    } catch (error) {
+      console.error('Failed to initialize Lc0 engine:', error);
+      // Fallback to built-in engine
+      this.engineType = 'built-in';
+      this.initializeBuiltInEngine(1000);
+      throw new Error(`Lc0 initialization failed: ${error}. Falling back to built-in engine.`);
+    }
+  }
+
+  async setEngineType(engineType: EngineType): Promise<void> {
+    if (this.engineType === engineType) return;
+
+    // Cleanup current engines
+    if (this.lc0Engine) {
+      await this.lc0Engine.shutdown();
+      this.lc0Engine = null;
+    }
+    if (this.lc0BackendEngine) {
+      await this.lc0BackendEngine.shutdown();
+      this.lc0BackendEngine = null;
+    }
+
+    this.engineType = engineType;
+
+    if (engineType === 'lc0') {
+      await this.initializeLc0();
+    } else {
+      this.initializeBuiltInEngine(1000);
     }
   }
 
   setDifficulty(difficulty: DifficultyLevel) {
     this.difficulty = difficulty;
-    if (this.engine instanceof AdvancedChessAI) {
-      this.engine.setDifficulty(difficulty);
-    } else {
-      this.engine = new AdvancedChessAI(difficulty);
+    
+    if (this.engineType === 'built-in' && this.engine) {
+      if (this.engine instanceof AdvancedChessAI) {
+        this.engine.setDifficulty(difficulty);
+      } else {
+        this.engine = new AdvancedChessAI(difficulty);
+      }
     }
+    // For Lc0, difficulty changes require re-initialization
+    // This could be optimized by changing time limits instead
   }
 
   getDifficulty(): DifficultyLevel {
     return this.difficulty;
   }
 
+  getEngineType(): EngineType {
+    return this.engineType;
+  }
+
+  isLc0Ready(): boolean {
+    return this.engineType === 'lc0' && (this.lc0Engine !== null || this.lc0BackendEngine !== null);
+  }
+
   async getBestMove(game: Chess): Promise<Move | null> {
-    return this.engine.getBestMove(game);
+    try {
+      if (this.engineType === 'lc0') {
+        if (this.lc0BackendEngine) {
+          // Use real Lc0 backend engine
+          const timeLimit = this.getLc0TimeLimit();
+          console.log(`Using Lc0 backend engine (${this.difficulty}) with ${timeLimit}ms time limit`);
+          return await this.lc0BackendEngine.getBestMove(game, timeLimit);
+        } else if (this.lc0Engine) {
+          // Use Lc0 simulation engine
+          const timeLimit = this.getLc0TimeLimit();
+          return await this.lc0Engine.getBestMove(game, timeLimit);
+        } else {
+          throw new Error('No Lc0 engine available');
+        }
+      } else if (this.engine) {
+        // Use built-in engine
+        return await this.engine.getBestMove(game);
+      } else {
+        throw new Error('No engine available');
+      }
+    } catch (error) {
+      console.error('Error getting best move:', error);
+      
+      // Fallback to built-in engine if Lc0 fails
+      if (this.engineType === 'lc0') {
+        console.log('Falling back to built-in engine due to error');
+        this.engineType = 'built-in';
+        this.initializeBuiltInEngine(1000);
+        return this.engine ? await this.engine.getBestMove(game) : null;
+      }
+      
+      return null;
+    }
+  }
+
+  private getLc0TimeLimit(): number {
+    switch (this.difficulty) {
+      case 'beginner': return 500;
+      case 'easy': return 1000;
+      case 'medium': return 2000;
+      case 'hard': return 3000;
+      case 'expert': return 5000;
+      default: return 1000;
+    }
+  }
+
+  async shutdown(): Promise<void> {
+    if (this.lc0Engine) {
+      await this.lc0Engine.shutdown();
+      this.lc0Engine = null;
+    }
+    if (this.lc0BackendEngine) {
+      await this.lc0BackendEngine.shutdown();
+      this.lc0BackendEngine = null;
+    }
   }
 }
 
-export type { DifficultyLevel };
+export type { DifficultyLevel, EngineType };
