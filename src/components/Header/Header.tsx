@@ -3,9 +3,17 @@ import { useAuth } from '../../hooks/useAuth';
 import { AuthModal, UserProfile } from '../Auth';
 
 export const Header: React.FC = () => {
-  const { user, profile, isAuthenticated, isGuest } = useAuth();
+  const { profile, isAuthenticated, isGuest, signOut } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  };
 
   return (
     <>
@@ -47,6 +55,15 @@ export const Header: React.FC = () => {
                       className="w-8 h-8 bg-blue-500 hover:bg-blue-600 text-white rounded-full flex items-center justify-center font-medium transition-colors"
                     >
                       {(profile?.username || 'U').charAt(0).toUpperCase()}
+                    </button>
+                    
+                    {/* Logout Button */}
+                    <button
+                      onClick={handleSignOut}
+                      className="text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 px-3 py-2 text-sm font-medium transition-colors"
+                      title="Sign Out"
+                    >
+                      Sign Out
                     </button>
                   </div>
                 </>
