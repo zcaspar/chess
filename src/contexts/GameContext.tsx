@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
 import { Chess, Move, Square } from 'chess.js';
 import { ChessAI, DifficultyLevel } from '../utils/chessAI';
+import { useAuth } from '../hooks/useAuth';
 
 interface TimeControl {
   initial: number; // Initial time in seconds
@@ -52,6 +53,7 @@ interface GameContextType {
   undoMove: () => void;
   redoMove: () => void;
   resetGame: () => void;
+  clearAllGameData: () => void;
   resign: (color: 'w' | 'b') => void;
   offerDraw: (color: 'w' | 'b') => void;
   acceptDraw: () => void;
@@ -117,8 +119,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     aiDifficulty: 'medium',
   });
 
-  // Get auth context - temporarily disabled to fix compilation issues
-  const authContext: any = null;
+  // Get auth context for user stats updates
+  const authContext = useAuth();
 
   // Helper function to get player key by color
   const getPlayerKeyByColor = (color: 'w' | 'b', colorAssignment: ColorAssignment): 'player1' | 'player2' => {
@@ -222,9 +224,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       }
 
       await updateStats(statUpdate);
-      console.log('📊 User stats updated:', statUpdate);
     } catch (error) {
-      console.error('Error updating user stats:', error);
+      console.error('❌ Error updating user stats:', error);
     }
   }, [authContext, gameState.gameMode, gameState.aiColor]);
 
@@ -559,6 +560,51 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     });
   }, [gameState]);
 
+  const clearAllGameData = useCallback(() => {
+    // Reset AI thinking state
+    isAiThinking.current = false;
+    
+    // Clear all completed games tracking
+    completedGamesRef.current.clear();
+    
+    // Clear any active timers
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
+    // Reset to completely fresh state - no preserved settings
+    setGameState({
+      game: new Chess(),
+      history: [],
+      currentMoveIndex: -1,
+      gameResult: '',
+      gameId: Math.random().toString(36).substr(2, 9),
+      statsUpdated: false,
+      drawOffer: { offered: false, by: null },
+      timeControl: null,
+      whiteTime: 0,
+      blackTime: 0,
+      activeColor: null,
+      startTime: null,
+      players: {
+        player1: 'Player 1',
+        player2: 'Player 2',
+      },
+      colorAssignment: {
+        white: 'player1',
+        black: 'player2',
+      },
+      gameStats: {
+        player1: { wins: 0, draws: 0, losses: 0 },
+        player2: { wins: 0, draws: 0, losses: 0 },
+      },
+      gameMode: 'human-vs-human',
+      aiColor: null,
+      aiDifficulty: 'medium',
+    });
+  }, []);
+
   const resign = useCallback((color: 'w' | 'b') => {
     const winningColor = color === 'w' ? 'b' : 'w';
     const winnerPlayerKey = getPlayerKeyByColor(winningColor, gameState.colorAssignment);
@@ -709,6 +755,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     undoMove,
     redoMove,
     resetGame,
+    clearAllGameData,
     resign,
     offerDraw,
     acceptDraw,

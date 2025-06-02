@@ -1,14 +1,19 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { useGame } from '../../contexts/GameContext';
 import { AuthModal, UserProfile } from '../Auth';
 
 export const Header: React.FC = () => {
   const { profile, isAuthenticated, isGuest, signOut } = useAuth();
+  const { clearAllGameData } = useGame();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
 
   const handleSignOut = async () => {
     try {
+      // Clear all game data first (stats, history, etc.)
+      clearAllGameData();
+      // Then sign out the user
       await signOut();
     } catch (error) {
       console.error('Sign out error:', error);

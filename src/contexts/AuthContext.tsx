@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import {
   User as FirebaseUser,
   signInWithEmailAndPassword,
@@ -24,6 +24,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
 
   // Authentication methods
   const signInWithEmail = async (email: string, password: string): Promise<void> => {
@@ -212,7 +213,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const fetchUserProfile = async (firebaseUser: FirebaseUser): Promise<UserProfile | null> => {
+  const fetchUserProfile = useCallback(async (firebaseUser: FirebaseUser): Promise<UserProfile | null> => {
     try {
       const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/users/profile`, {
         headers: {
@@ -228,9 +229,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('Error fetching user profile:', err);
       return null;
     }
-  };
+  }, []);
 
-  const loadUserProfile = async (firebaseUser: FirebaseUser): Promise<void> => {
+  const loadUserProfile = useCallback(async (firebaseUser: FirebaseUser): Promise<void> => {
     try {
       const profileData = await fetchUserProfile(firebaseUser);
       setProfile(profileData);
@@ -238,7 +239,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (err) {
       console.error('Error loading user profile:', err);
     }
-  };
+  }, [fetchUserProfile]);
 
   // Auth state listener
   useEffect(() => {
