@@ -12,6 +12,7 @@
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
     "chess.js": "^1.2.0",
+    "firebase": "^11.8.1",
     "react": "^19.1.0",
     "react-chessboard": "^4.7.3",
     "react-dom": "^19.1.0",

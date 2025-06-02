@@ -83,6 +83,43 @@ interface GameProviderProps {
 }
 
 export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
+  // Initialize state first
+  const [gameState, setGameState] = useState<GameState>({
+    game: new Chess(),
+    history: [],
+    currentMoveIndex: -1,
+    gameResult: '',
+    gameId: Math.random().toString(36).substr(2, 9),
+    statsUpdated: false,
+    drawOffer: {
+      offered: false,
+      by: null,
+    },
+    timeControl: null,
+    whiteTime: 0,
+    blackTime: 0,
+    activeColor: null,
+    startTime: null,
+    players: {
+      player1: 'Player 1',
+      player2: 'Player 2',
+    },
+    colorAssignment: {
+      white: 'player1',
+      black: 'player2',
+    },
+    gameStats: {
+      player1: { wins: 0, draws: 0, losses: 0 },
+      player2: { wins: 0, draws: 0, losses: 0 },
+    },
+    gameMode: 'human-vs-human',
+    aiColor: null,
+    aiDifficulty: 'medium',
+  });
+
+  // Get auth context - temporarily disabled to fix compilation issues
+  const authContext: any = null;
+
   // Helper function to get player key by color
   const getPlayerKeyByColor = (color: 'w' | 'b', colorAssignment: ColorAssignment): 'player1' | 'player2' => {
     return color === 'w' ? colorAssignment.white : colorAssignment.black;
@@ -91,8 +128,12 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   // Track completed games to prevent double counting
   const completedGamesRef = useRef<Set<string>>(new Set());
 
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const aiRef = useRef<ChessAI>(new ChessAI('medium', 1000));
+  const isAiThinking = useRef<boolean>(false);
+
   // Helper function to update game stats based on result
-  const updateGameStats = (result: string, currentStats: GameStats, colorAssignment: ColorAssignment, players: PlayerInfo, winningColor?: 'w' | 'b', statsAlreadyUpdated: boolean = false, gameId?: string): GameStats => {
+  const updateGameStats = useCallback((result: string, currentStats: GameStats, colorAssignment: ColorAssignment, players: PlayerInfo, winningColor?: 'w' | 'b', statsAlreadyUpdated: boolean = false, gameId?: string): GameStats => {
     // Don't update stats if already updated for this game (prevents double counting)
     if (statsAlreadyUpdated) {
       console.log('🚫 Stats update blocked - already updated for this game');
@@ -140,44 +181,52 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
     
     return newStats;
-  };
+  }, []);
 
-  const [gameState, setGameState] = useState<GameState>({
-    game: new Chess(),
-    history: [],
-    currentMoveIndex: -1,
-    gameResult: '',
-    gameId: Math.random().toString(36).substr(2, 9),
-    statsUpdated: false,
-    drawOffer: {
-      offered: false,
-      by: null,
-    },
-    timeControl: null,
-    whiteTime: 0,
-    blackTime: 0,
-    activeColor: null,
-    startTime: null,
-    players: {
-      player1: 'Player 1',
-      player2: 'Player 2',
-    },
-    colorAssignment: {
-      white: 'player1',
-      black: 'player2',
-    },
-    gameStats: {
-      player1: { wins: 0, draws: 0, losses: 0 },
-      player2: { wins: 0, draws: 0, losses: 0 },
-    },
-    gameMode: 'human-vs-human',
-    aiColor: null,
-    aiDifficulty: 'medium',
-  });
+  // Function to update user statistics when game ends
+  const updateUserStats = useCallback(async (result: string, winningColor?: 'w' | 'b') => {
+    if (!authContext?.profile || !authContext?.updateStats) {
+      return; // No authenticated user or auth not available
+    }
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const aiRef = useRef<ChessAI>(new ChessAI('medium', 1000));
-  const isAiThinking = useRef<boolean>(false);
+    try {
+      const { profile, updateStats } = authContext;
+      const currentStats = profile.stats;
+      
+      let statUpdate: { wins?: number; losses?: number; draws?: number; gamesPlayed?: number; winStreak?: number; bestWinStreak?: number } = {
+        gamesPlayed: currentStats.gamesPlayed + 1,
+      };
+
+      if (result.includes('Draw') || result.includes('draw')) {
+        // Draw
+        statUpdate.draws = currentStats.draws + 1;
+        statUpdate.winStreak = 0; // Reset win streak on draw
+      } else if (result.includes('wins')) {
+        // For AI games, determine if user won or lost
+        if (gameState.gameMode === 'human-vs-ai' && winningColor) {
+          const userWon = (gameState.aiColor === 'w' && winningColor === 'b') || 
+                          (gameState.aiColor === 'b' && winningColor === 'w');
+          
+          if (userWon) {
+            statUpdate.wins = currentStats.wins + 1;
+            statUpdate.winStreak = currentStats.winStreak + 1;
+            statUpdate.bestWinStreak = Math.max(currentStats.bestWinStreak, currentStats.winStreak + 1);
+          } else {
+            statUpdate.losses = currentStats.losses + 1;
+            statUpdate.winStreak = 0;
+          }
+        } else {
+          // For human vs human, we can't determine user win/loss easily, so we'll track it as a game played
+          // In the future, this could be enhanced with player identification
+        }
+      }
+
+      await updateStats(statUpdate);
+      console.log('📊 User stats updated:', statUpdate);
+    } catch (error) {
+      console.error('Error updating user stats:', error);
+    }
+  }, [authContext, gameState.gameMode, gameState.aiColor]);
 
   // Clock ticker
   useEffect(() => {
@@ -214,6 +263,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
               intervalRef.current = null;
             }
             
+            // Update user statistics for time expiration
+            updateUserStats(result, winningColor);
+            
             return {
               ...prev,
               [timeKey]: 0,
@@ -245,7 +297,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [gameState.activeColor, gameState.startTime, gameState.gameResult]);
+  }, [gameState.activeColor, gameState.startTime, gameState.gameResult, gameState.timeControl, updateGameStats, updateUserStats]);
 
   // AI move effect
   useEffect(() => {
@@ -306,7 +358,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
       makeAIMove();
     }
-  }, [gameState.game, gameState.gameMode, gameState.aiColor, gameState.gameResult]);
+  }, [gameState.game, gameState.gameMode, gameState.aiColor, gameState.gameResult, gameState.gameId]);
 
   const setTimeControl = useCallback((minutes: number | null, increment: number = 0) => {
     if (minutes === null) {
@@ -360,9 +412,6 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       
       if (!move) return false;
 
-      // Start clock on first move if time control is set
-      const shouldStartClock = gameState.timeControl && !gameState.activeColor && gameState.currentMoveIndex === -1;
-
       // If we're not at the end of history, remove future moves
       const newHistory = gameState.history.slice(0, gameState.currentMoveIndex + 1);
       newHistory.push(move);
@@ -407,6 +456,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         
         if (result) {
           console.log('🏁 Game ended in makeMove:', result, 'gameId:', prev.gameId);
+          // Update user statistics for game completion
+          updateUserStats(result, winningColor);
         }
 
         return {
@@ -429,7 +480,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     } catch {
       return false;
     }
-  }, [gameState]);
+  }, [gameState, updateGameStats, updateUserStats]);
 
   const undoMove = useCallback(() => {
     if (gameState.currentMoveIndex < 0) return;
@@ -515,6 +566,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     const result = `${winnerName} wins by resignation!`;
     const updatedStats = updateGameStats(result, gameState.gameStats, gameState.colorAssignment, gameState.players, winningColor, gameState.statsUpdated, gameState.gameId);
     
+    // Update user statistics for resignation
+    updateUserStats(result, winningColor);
+    
     setGameState({
       ...gameState,
       gameResult: result,
@@ -523,7 +577,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       gameStats: updatedStats,
       statsUpdated: true,
     });
-  }, [gameState]);
+  }, [gameState, updateGameStats, updateUserStats]);
 
   const offerDraw = useCallback((color: 'w' | 'b') => {
     setGameState({
@@ -536,6 +590,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     const result = 'Draw by agreement!';
     const updatedStats = updateGameStats(result, gameState.gameStats, gameState.colorAssignment, gameState.players, undefined, gameState.statsUpdated, gameState.gameId);
     
+    // Update user statistics for draw
+    updateUserStats(result);
+    
     setGameState({
       ...gameState,
       gameResult: result,
@@ -545,7 +602,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       gameStats: updatedStats,
       statsUpdated: true,
     });
-  }, [gameState]);
+  }, [gameState, updateGameStats, updateUserStats]);
 
   const declineDraw = useCallback(() => {
     setGameState({

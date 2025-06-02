@@ -1,0 +1,19 @@
+i  emulators: Starting emulators: auth
+i  emulators: Detected demo project ID "demo-project", emulated services will use a demo configuration and attempts to access non-emulated services for this project will fail.
+⚠  emulators: It seems that you are running multiple instances of the emulator suite for project demo-project. This may result in unexpected behavior.
+
+[90m┌─────────────────────────────────────────────────────────────┐[39m
+[90m│[39m ✔  All emulators ready! It is now safe to connect your app. [90m│[39m
+[90m│[39m i  View Emulator UI at http://127.0.0.1:4000/               [90m│[39m
+[90m└─────────────────────────────────────────────────────────────┘[39m
+
+[90m┌────────────────[39m[90m┬────────────────[39m[90m┬────────────────────────────┐[39m
+[90m│[39m[33m Emulator       [39m[90m│[39m[33m Host:Port      [39m[90m│[39m[33m View in Emulator UI        [39m[90m│[39m
+[90m├────────────────[39m[90m┼────────────────[39m[90m┼────────────────────────────┤[39m
+[90m│[39m Authentication [90m│[39m 127.0.0.1:9099 [90m│[39m http://127.0.0.1:4000/auth [90m│[39m
+[90m└────────────────[39m[90m┴────────────────[39m[90m┴────────────────────────────┘[39m
+  Emulator Hub host: 127.0.0.1 port: 4400
+  Other reserved ports: 4500
+
+Issues? Report them at https://github.com/firebase/firebase-tools/issues and attach the *-debug.log files.
+ 
