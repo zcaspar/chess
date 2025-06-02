@@ -189,7 +189,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
             return prev;
           }
           
-          // Timer should always count down for the active player
+          // For AI turns, let the timer run normally
+          // The AI computation time is separate from game time
           
           const elapsed = (Date.now() - prev.startTime) / 1000;
           const timeKey = prev.activeColor === 'w' ? 'whiteTime' : 'blackTime';
@@ -204,6 +205,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
             const loserName = prev.players[loserPlayerKey];
             const winnerName = prev.players[winnerPlayerKey];
             const result = `${winnerName} wins on time! ${loserName} ran out of time.`;
+            console.log('⏰ TIME EXPIRED:', { losingColor, loserName, result });
             const updatedStats = updateGameStats(result, prev.gameStats, prev.colorAssignment, prev.players, winningColor, prev.statsUpdated, prev.gameId);
             
             // Clear the timer interval immediately when game ends
@@ -280,11 +282,21 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           console.log('🤖 AI found move:', aiMove, 'for gameId:', gameState.gameId);
           
           // Check again after AI thinking - game might have ended during thinking
-          if (aiMove && !gameState.gameResult) {
-            // Make sure we're still in the same game state
-            console.log('🤖 AI making move for gameId:', gameState.gameId);
-            makeMove(aiMove.from as Square, aiMove.to as Square, aiMove.promotion);
-          }
+          setGameState(currentState => {
+            // Double-check the game hasn't ended due to time expiration or other reasons
+            if (aiMove && !currentState.gameResult && currentState.gameId === gameState.gameId) {
+              // Game is still valid, make the move
+              console.log('🤖 AI making move for gameId:', currentState.gameId);
+              makeMove(aiMove.from as Square, aiMove.to as Square, aiMove.promotion);
+            } else {
+              console.log('🤖 AI move cancelled - game ended or changed:', {
+                hasMove: !!aiMove,
+                gameResult: currentState.gameResult,
+                gameIdMatch: currentState.gameId === gameState.gameId
+              });
+            }
+            return currentState;
+          });
         } catch (error) {
           console.error('AI move error:', error);
         } finally {
