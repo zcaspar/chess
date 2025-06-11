@@ -96,7 +96,13 @@ export class Lc0EngineBackend {
         (data.move!.promotion ? m.promotion === data.move!.promotion : !m.promotion)
       );
 
-      return move || null;
+      if (!move) {
+        console.log(`❌ Backend returned invalid move: ${data.move.from}-${data.move.to}`);
+        console.log(`   Legal moves: ${legalMoves.map(m => `${m.from}-${m.to} (${m.san})`).join(', ')}`);
+        return null;
+      }
+
+      return move;
     } catch (error) {
       console.error('Error getting move from backend:', error);
       throw error;

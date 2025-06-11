@@ -338,15 +338,18 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           setGameState(currentState => {
             // Double-check the game hasn't ended due to time expiration or other reasons
             if (aiMove && !currentState.gameResult && currentState.gameId === gameState.gameId) {
-              // Game is still valid, make the move
-              console.log('🤖 AI making move for gameId:', currentState.gameId);
-              makeMove(aiMove.from as Square, aiMove.to as Square, aiMove.promotion);
+              // Validate the move is still legal on current board
+              const testGame = new Chess(currentState.game.fen());
+              const testMove = testGame.move({ from: aiMove.from as Square, to: aiMove.to as Square, promotion: aiMove.promotion });
+              
+              if (testMove) {
+                console.log('🤖 Applying valid AI move:', aiMove.san || `${aiMove.from}-${aiMove.to}`);
+                makeMove(aiMove.from as Square, aiMove.to as Square, aiMove.promotion);
+              } else {
+                console.log(`🤖 AI move ${aiMove.from}-${aiMove.to} is no longer valid on current board`);
+              }
             } else {
-              console.log('🤖 AI move cancelled - game ended or changed:', {
-                hasMove: !!aiMove,
-                gameResult: currentState.gameResult,
-                gameIdMatch: currentState.gameId === gameState.gameId
-              });
+              console.log('🤖 AI move cancelled - game ended or changed');
             }
             return currentState;
           });
@@ -359,6 +362,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
       makeAIMove();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.game, gameState.gameMode, gameState.aiColor, gameState.gameResult, gameState.gameId]);
 
   const setTimeControl = useCallback((minutes: number | null, increment: number = 0) => {
@@ -411,7 +415,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const gameCopy = new Chess(gameState.game.fen());
       const move = gameCopy.move({ from, to, promotion });
       
-      if (!move) return false;
+      if (!move) {
+        console.log('❌ Move validation failed:', from, to);
+        return false;
+      }
 
       // If we're not at the end of history, remove future moves
       const newHistory = gameState.history.slice(0, gameState.currentMoveIndex + 1);

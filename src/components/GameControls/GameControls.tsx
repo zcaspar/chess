@@ -17,7 +17,6 @@ const GameControls: React.FC = () => {
 
   const currentPlayer = gameState.game.turn();
   const isGameOver = gameState.game.isGameOver() || gameState.gameResult !== '';
-  const hasTimeControl = gameState.timeControl !== null;
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 space-y-3">
