@@ -1,85 +1,87 @@
-# Chess Frontend Deployment Guide
+# Chess Backend Deployment Guide
 
-## Vercel Deployment
+## Railway Deployment
 
 ### Prerequisites
 1. GitHub account with this repository
-2. Vercel account (https://vercel.com)
-3. Backend deployed to Railway
+2. Railway account (https://railway.app)
+3. Firebase project with Admin SDK credentials
 
-### Environment Variables for Vercel
+### Environment Variables for Railway
 
-Set these in Vercel dashboard → Project Settings → Environment Variables:
+Set these environment variables in Railway dashboard:
 
 ```bash
-# Firebase Configuration (from Firebase Console > Project Settings > Config)
-REACT_APP_FIREBASE_API_KEY=your_api_key_here
-REACT_APP_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
-REACT_APP_FIREBASE_PROJECT_ID=your_project_id
-REACT_APP_FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com
-REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-REACT_APP_FIREBASE_APP_ID=your_app_id
+# Server Config
+PORT=3005
+NODE_ENV=production
 
-# Backend URL (from Railway deployment)
-REACT_APP_BACKEND_URL=https://your-railway-service.railway.app
+# Firebase Admin SDK (from Firebase Console > Project Settings > Service Accounts)
+FIREBASE_PROJECT_ID=your_firebase_project_id
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYour_Private_Key_Here\n-----END PRIVATE KEY-----\n"
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
 
-# Frontend URL (will be your Vercel domain)
-REACT_APP_FRONTEND_URL=https://your-chess-app.vercel.app
+# CORS and Frontend URL (update after Vercel deployment)
+CORS_ORIGIN=https://your-chess-app.vercel.app
+FRONTEND_URL=https://your-chess-app.vercel.app
 
-# Development flag
-REACT_APP_USE_FIREBASE_EMULATOR=false
+# Database (Railway PostgreSQL addon)
+# These will be automatically set by Railway when you add PostgreSQL
+# DB_HOST=containers-us-west-xxx.railway.app
+# DB_PORT=5432
+# DB_NAME=railway
+# DB_USER=postgres
+# DB_PASSWORD=auto_generated_password
+
+# Security
+JWT_SECRET=your_very_long_and_random_jwt_secret_here
+
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
 ```
 
 ### Deployment Steps
 
-1. **Connect to Vercel:**
-   - Go to https://vercel.com
+1. **Connect to Railway:**
+   - Go to https://railway.app
    - Sign up/Login with GitHub
-   - Click "New Project"
-   - Import your chess repository
-   - Select the `chess-app` folder as root directory
+   - Click "New Project" → "Deploy from GitHub repo"
+   - Select your chess repository
+   - Choose the `chess-backend` folder
 
-2. **Configure Build Settings:**
-   - Framework Preset: Create React App
-   - Build Command: `npm run build`
-   - Output Directory: `build`
-   - Install Command: `npm install`
+2. **Add PostgreSQL Database:**
+   - In Railway dashboard, click "Add Service" → "Database" → "PostgreSQL"
+   - This will automatically set database environment variables
 
-3. **Set Environment Variables:**
-   - Go to Project Settings → Environment Variables
-   - Add all variables listed above
-   - Set for Production, Preview, and Development
+3. **Configure Environment Variables:**
+   - Go to your service → Variables tab
+   - Add all the environment variables listed above
+   - **Important**: Get Firebase credentials from Firebase Console
 
-4. **Deploy:**
-   - Click "Deploy"
-   - Vercel will automatically build and deploy
-   - Your app will be available at `https://your-project-name.vercel.app`
+4. **Initialize Database:**
+   - Once PostgreSQL is running, connect to it
+   - Run the SQL from `database/init.sql` to create tables
 
-### Getting Firebase Web Config
+5. **Deploy:**
+   - Railway will automatically deploy when you push to GitHub
+   - Check the deployment logs for any issues
+
+### Getting Firebase Credentials
 
 1. Go to Firebase Console → Your Project
-2. Settings → General → Your apps
-3. If no web app exists, click "Add app" → Web
-4. Copy the config object values to environment variables
+2. Settings → Service Accounts
+3. Click "Generate New Private Key"
+4. Download the JSON file
+5. Use the values from JSON:
+   - `project_id` → `FIREBASE_PROJECT_ID`
+   - `private_key` → `FIREBASE_PRIVATE_KEY` (keep the \n characters)
+   - `client_email` → `FIREBASE_CLIENT_EMAIL`
 
-### Custom Domain (Optional)
+### Health Check
 
-1. In Vercel dashboard → Project → Settings → Domains
-2. Add your custom domain
-3. Update environment variables with new domain
-4. Update Firebase authorized domains in Authentication → Settings
+Once deployed, your backend will be available at:
+`https://your-service-name.railway.app`
 
-### Post-Deployment
-
-1. **Update Backend CORS:**
-   - Update `CORS_ORIGIN` and `FRONTEND_URL` in Railway
-   - Redeploy backend if needed
-
-2. **Update Firebase Settings:**
-   - Add your Vercel domain to Firebase authorized domains
-   - Authentication → Settings → Authorized domains
-
-3. **Test Multiplayer:**
-   - Create a game room
-   - Share the room code with friends
-   - Test real-time gameplay
+Test the health endpoint:
+`https://your-service-name.railway.app/health`

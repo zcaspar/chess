@@ -1,0 +1,422 @@
+
+> chess-backend@1.0.0 start
+> ts-node src/server.ts
+
+Firebase Admin SDK initialized successfully
+Initializing Lc0 engines...
+Initializing Lc0 engine with config: {
+  nodes: 100,
+  movetime: 500,
+  weightsPath: '/home/caspar/Documents/Coding/Chess/lc0/lc0/build/release/weights.pb',
+  backend: 'eigen'
+}
+Sending to Lc0: uci
+Lc0 info: [1m[31m       _
+|   _ | |
+|_ |_ |_|[0m v0.32.0-dev+git.ace6774 built May 31 2025
+Lc0 info: Search algorithm: classic
+Lc0: id name Lc0 v0.32.0-dev+git.ace6774
+Lc0: id author The LCZero Authors.
+Lc0: option name LogFile type string default
+Lc0: option name ConfigFile type string default lc0.config
+Lc0: option name Ponder type check default false
+Lc0: option name SyzygyPath type string default
+Lc0: option name Threads type spin default 0 min 0 max 128
+Lc0: option name MinibatchSize type spin default 0 min 0 max 1024
+Lc0: option name MaxPrefetch type spin default 32 min 0 max 1024
+Lc0: option name CPuct type string default 1.745000
+Lc0: option name CPuctBase type string default 38739.000000
+Lc0: option name CPuctFactor type string default 3.894000
+Lc0: option name TwoFoldDraws type check default true
+Lc0: option name VerboseMoveStats type check default true
+Lc0: option name FpuStrategy type combo default reduction var reduction var absolute
+Lc0: option name FpuValue type string default 0.330000
+Lc0: option name CacheHistoryLength type spin default 0 min 0 max 7
+Lc0: option name MaxCollisionEvents type spin default 917 min 1 max 65536
+Lc0: option name MaxCollisionVisits type spin default 80000 min 1 max 100000000
+Lc0: option name MaxCollisionVisitsScalingStart type spin default 28 min 1 max 100000
+Lc0: option name MaxCollisionVisitsScalingEnd type spin default 145000 min 0 max 100000000
+Lc0: option name MaxCollisionVisitsScalingPower type string default 1.250000
+Lc0: option name OutOfOrderEval type check default true
+Lc0: option name MaxOutOfOrderEvalsFactor type string default 2.400000
+Lc0: option name StickyEndgames type check default true
+Lc0: option name SyzygyFastPlay type check default false
+Lc0: option name MultiPV type spin default 1 min 1 max 500
+Lc0: option name PerPVCounters type check default false
+Lc0: option name ScoreType type combo default WDL_mu var centipawn var centipawn_with_drawscore var centipawn_2019 var centipawn_2018 var win_percentage var Q var W-L var WDL_mu
+Lc0: option name MovesLeftMaxEffect type string default 0.034500
+Lc0: option name MovesLeftThreshold type string default 0.800000
+Lc0: option name MovesLeftSlope type string default 0.002700
+Lc0: option name MovesLeftConstantFactor type string default 0.000000
+Lc0: option name MovesLeftScaledFactor type string default 1.652100
+Lc0: option name MovesLeftQuadraticFactor type string default -0.652100
+Lc0: option name MaxConcurrentSearchers type spin default 1 min 0 max 128
+Lc0: option name DrawScore type string default 0.000000
+Lc0: option name ContemptMode type combo default play var play var white_side_analysis var black_side_analysis var disable
+Lc0: option name Contempt type string default
+Lc0: option name WDLCalibrationElo type string default 0.000000
+Lc0: option name WDLEvalObjectivity type string default 1.000000
+Lc0: option name WDLDrawRateReference type string default 0.500000
+Lc0: option name NodesPerSecondLimit type string default 0.000000
+Lc0: option name SolidTreeThreshold type spin default 100 min 1 max 2000000000
+Lc0: option name TaskWorkers type spin default -1 min -1 max 128
+Lc0: option name MinimumProcessingWork type spin default 20 min 2 max 100000
+Lc0: option name MinimumPickingWork type spin default 1 min 1 max 100000
+Lc0: option name MinimumRemainingPickingWork type spin default 20 min 0 max 100000
+Lc0: option name MinimumPerTaskProcessing type spin default 8 min 1 max 100000
+Lc0: option name IdlingMinimumWork type spin default 0 min 0 max 10000
+Lc0: option name ThreadIdlingThreshold type spin default 1 min 0 max 128
+Lc0: option name UCI_Opponent type string default
+Lc0: option name UCI_RatingAdv type string default 0.000000
+Lc0: option name SearchSpinBackoff type check default false
+Lc0: option name SmartPruningFactor type string default 1.330000
+Lc0: option name SmartPruningMinimumBatches type spin default 0 min 0 max 10000
+Lc0: option name RamLimitMb type spin default 0 min 0 max 100000000
+Lc0: option name MoveOverheadMs type spin default 200 min 0 max 100000000
+Lc0: option name TimeManager type string default legacy
+Lc0: option name UCI_Chess960 type check default false
+Lc0: option name UCI_ShowWDL type check default true
+Lc0: option name UCI_ShowMovesLeft type check default false
+Lc0: option name PolicyTemperature type string default 1.359000
+Lc0: option name HistoryFill type combo default fen_only var no var fen_only var always
+Lc0: option name WeightsFile type string default /home/caspar/Documents/Coding/Chess/lc0/lc0/build/release/weights.pb
+Lc0: option name Backend type combo default eigen var cuda-auto var cuda var cuda-fp16 var eigen var trivial var random var check var recordreplay var roundrobin var multiplexing var demux
+Lc0: option name BackendOptions type string default
+Lc0: option name NNCacheSize type spin default 2000000 min 0 max 999999999
+Lc0: uciok
+Lc0 engine ready!
+Initializing Lc0 engine with config: {
+  nodes: 1000,
+  movetime: 2000,
+  weightsPath: '/home/caspar/Documents/Coding/Chess/lc0/lc0/build/release/weights.pb',
+  backend: 'eigen'
+}
+Sending to Lc0: uci
+Lc0 info: [1m[31m       _
+|   _ | |
+|_ |_ |_|[0m v0.32.0-dev+git.ace6774 built May 31 2025
+Lc0 info: Search algorithm: classic
+Lc0: id name Lc0 v0.32.0-dev+git.ace6774
+Lc0: id author The LCZero Authors.
+Lc0: option name LogFile type string default
+Lc0: option name ConfigFile type string default lc0.config
+Lc0: option name Ponder type check default false
+Lc0: option name SyzygyPath type string default
+Lc0: option name Threads type spin default 0 min 0 max 128
+Lc0: option name MinibatchSize type spin default 0 min 0 max 1024
+Lc0: option name MaxPrefetch type spin default 32 min 0 max 1024
+Lc0: option name CPuct type string default 1.745000
+Lc0: option name CPuctBase type string default 38739.000000
+Lc0: option name CPuctFactor type string default 3.894000
+Lc0: option name TwoFoldDraws type check default true
+Lc0: option name VerboseMoveStats type check default true
+Lc0: option name FpuStrategy type combo default reduction var reduction var absolute
+Lc0: option name FpuValue type string default 0.330000
+Lc0: option name CacheHistoryLength type spin default 0 min 0 max 7
+Lc0: option name MaxCollisionEvents type spin default 917 min 1 max 65536
+Lc0: option name MaxCollisionVisits type spin default 80000 min 1 max 100000000
+Lc0: option name MaxCollisionVisitsScalingStart type spin default 28 min 1 max 100000
+Lc0: option name MaxCollisionVisitsScalingEnd type spin default 145000 min 0 max 100000000
+Lc0: option name MaxCollisionVisitsScalingPower type string default 1.250000
+Lc0: option name OutOfOrderEval type check default true
+Lc0: option name MaxOutOfOrderEvalsFactor type string default 2.400000
+Lc0: option name StickyEndgames type check default true
+Lc0: option name SyzygyFastPlay type check default false
+Lc0: option name MultiPV type spin default 1 min 1 max 500
+Lc0: option name PerPVCounters type check default false
+Lc0: option name ScoreType type combo default WDL_mu var centipawn var centipawn_with_drawscore var centipawn_2019 var centipawn_2018 var win_percentage var Q var W-L var WDL_mu
+Lc0: option name MovesLeftMaxEffect type string default 0.034500
+Lc0: option name MovesLeftThreshold type string default 0.800000
+Lc0: option name MovesLeftSlope type string default 0.002700
+Lc0: option name MovesLeftConstantFactor type string default 0.000000
+Lc0: option name MovesLeftScaledFactor type string default 1.652100
+Lc0: option name MovesLeftQuadraticFactor type string default -0.652100
+Lc0: option name MaxConcurrentSearchers type spin default 1 min 0 max 128
+Lc0: option name DrawScore type string default 0.000000
+Lc0: option name ContemptMode type combo default play var play var white_side_analysis var black_side_analysis var disable
+Lc0: option name Contempt type string default
+Lc0: option name WDLCalibrationElo type string default 0.000000
+Lc0: option name WDLEvalObjectivity type string default 1.000000
+Lc0: option name WDLDrawRateReference type string default 0.500000
+Lc0: option name NodesPerSecondLimit type string default 0.000000
+Lc0: option name SolidTreeThreshold type spin default 100 min 1 max 2000000000
+Lc0: option name TaskWorkers type spin default -1 min -1 max 128
+Lc0: option name MinimumProcessingWork type spin default 20 min 2 max 100000
+Lc0: option name MinimumPickingWork type spin default 1 min 1 max 100000
+Lc0: option name MinimumRemainingPickingWork type spin default 20 min 0 max 100000
+Lc0: option name MinimumPerTaskProcessing type spin default 8 min 1 max 100000
+Lc0: option name IdlingMinimumWork type spin default 0 min 0 max 10000
+Lc0: option name ThreadIdlingThreshold type spin default 1 min 0 max 128
+Lc0: option name UCI_Opponent type string default
+Lc0: option name UCI_RatingAdv type string default 0.000000
+Lc0: option name SearchSpinBackoff type check default false
+Lc0: option name SmartPruningFactor type string default 1.330000
+Lc0: option name SmartPruningMinimumBatches type spin default 0 min 0 max 10000
+Lc0: option name RamLimitMb type spin default 0 min 0 max 100000000
+Lc0: option name MoveOverheadMs type spin default 200 min 0 max 100000000
+Lc0: option name TimeManager type string default legacy
+Lc0: option name UCI_Chess960 type check default false
+Lc0: option name UCI_ShowWDL type check default true
+Lc0: option name UCI_ShowMovesLeft type check default false
+Lc0: option name PolicyTemperature type string default 1.359000
+Lc0: option name HistoryFill type combo default fen_only var no var fen_only var always
+Lc0: option name WeightsFile type string default /home/caspar/Documents/Coding/Chess/lc0/lc0/build/release/weights.pb
+Lc0: option name Backend type combo default eigen var cuda-auto var cuda var cuda-fp16 var eigen var trivial var random var check var recordreplay var roundrobin var multiplexing var demux
+Lc0: option name BackendOptions type string default
+Lc0: option name NNCacheSize type spin default 2000000 min 0 max 999999999
+Lc0: uciok
+Lc0 engine ready!
+Initializing Lc0 engine with config: {
+  nodes: 1000,
+  movetime: 2000,
+  weightsPath: '/home/caspar/Documents/Coding/Chess/lc0/lc0/build/release/weights.pb',
+  backend: 'eigen'
+}
+Sending to Lc0: uci
+Lc0 info: [1m[31m       _
+|   _ | |
+|_ |_ |_|[0m v0.32.0-dev+git.ace6774 built May 31 2025
+Lc0 info: Search algorithm: classic
+Lc0: id name Lc0 v0.32.0-dev+git.ace6774
+Lc0: id author The LCZero Authors.
+Lc0: option name LogFile type string default
+Lc0: option name ConfigFile type string default lc0.config
+Lc0: option name Ponder type check default false
+Lc0: option name SyzygyPath type string default
+Lc0: option name Threads type spin default 0 min 0 max 128
+Lc0: option name MinibatchSize type spin default 0 min 0 max 1024
+Lc0: option name MaxPrefetch type spin default 32 min 0 max 1024
+Lc0: option name CPuct type string default 1.745000
+Lc0: option name CPuctBase type string default 38739.000000
+Lc0: option name CPuctFactor type string default 3.894000
+Lc0: option name TwoFoldDraws type check default true
+Lc0: option name VerboseMoveStats type check default true
+Lc0: option name FpuStrategy type combo default reduction var reduction var absolute
+Lc0: option name FpuValue type string default 0.330000
+Lc0: option name CacheHistoryLength type spin default 0 min 0 max 7
+Lc0: option name MaxCollisionEvents type spin default 917 min 1 max 65536
+Lc0: option name MaxCollisionVisits type spin default 80000 min 1 max 100000000
+Lc0: option name MaxCollisionVisitsScalingStart type spin default 28 min 1 max 100000
+Lc0: option name MaxCollisionVisitsScalingEnd type spin default 145000 min 0 max 100000000
+Lc0: option name MaxCollisionVisitsScalingPower type string default 1.250000
+Lc0: option name OutOfOrderEval type check default true
+Lc0: option name MaxOutOfOrderEvalsFactor type string default 2.400000
+Lc0: option name StickyEndgames type check default true
+Lc0: option name SyzygyFastPlay type check default false
+Lc0: option name MultiPV type spin default 1 min 1 max 500
+Lc0: option name PerPVCounters type check default false
+Lc0: option name ScoreType type combo default WDL_mu var centipawn var centipawn_with_drawscore var centipawn_2019 var centipawn_2018 var win_percentage var Q var W-L var WDL_mu
+Lc0: option name MovesLeftMaxEffect type string default 0.034500
+Lc0: option name MovesLeftThreshold type string default 0.800000
+Lc0: option name MovesLeftSlope type string default 0.002700
+Lc0: option name MovesLeftConstantFactor type string default 0.000000
+Lc0: option name MovesLeftScaledFactor type string default 1.652100
+Lc0: option name MovesLeftQuadraticFactor type string default -0.652100
+Lc0: option name MaxConcurrentSearchers type spin default 1 min 0 max 128
+Lc0: option name DrawScore type string default 0.000000
+Lc0: option name ContemptMode type combo default play var play var white_side_analysis var black_side_analysis var disable
+Lc0: option name Contempt type string default
+Lc0: option name WDLCalibrationElo type string default 0.000000
+Lc0: option name WDLEvalObjectivity type string default 1.000000
+Lc0: option name WDLDrawRateReference type string default 0.500000
+Lc0: option name NodesPerSecondLimit type string default 0.000000
+Lc0: option name SolidTreeThreshold type spin default 100 min 1 max 2000000000
+Lc0: option name TaskWorkers type spin default -1 min -1 max 128
+Lc0: option name MinimumProcessingWork type spin default 20 min 2 max 100000
+Lc0: option name MinimumPickingWork type spin default 1 min 1 max 100000
+Lc0: option name MinimumRemainingPickingWork type spin default 20 min 0 max 100000
+Lc0: option name MinimumPerTaskProcessing type spin default 8 min 1 max 100000
+Lc0: option name IdlingMinimumWork type spin default 0 min 0 max 10000
+Lc0: option name ThreadIdlingThreshold type spin default 1 min 0 max 128
+Lc0: option name UCI_Opponent type string default
+Lc0: option name UCI_RatingAdv type string default 0.000000
+Lc0: option name SearchSpinBackoff type check default false
+Lc0: option name SmartPruningFactor type string default 1.330000
+Lc0: option name SmartPruningMinimumBatches type spin default 0 min 0 max 10000
+Lc0: option name RamLimitMb type spin default 0 min 0 max 100000000
+Lc0: option name MoveOverheadMs type spin default 200 min 0 max 100000000
+Lc0: option name TimeManager type string default legacy
+Lc0: option name UCI_Chess960 type check default false
+Lc0: option name UCI_ShowWDL type check default true
+Lc0: option name UCI_ShowMovesLeft type check default false
+Lc0: option name PolicyTemperature type string default 1.359000
+Lc0: option name HistoryFill type combo default fen_only var no var fen_only var always
+Lc0: option name WeightsFile type string default /home/caspar/Documents/Coding/Chess/lc0/lc0/build/release/weights.pb
+Lc0: option name Backend type combo default eigen var cuda-auto var cuda var cuda-fp16 var eigen var trivial var random var check var recordreplay var roundrobin var multiplexing var demux
+Lc0: option name BackendOptions type string default
+Lc0: option name NNCacheSize type spin default 2000000 min 0 max 999999999
+Lc0: uciok
+Lc0 engine ready!
+Initializing Lc0 engine with config: {
+  nodes: 5000,
+  movetime: 5000,
+  weightsPath: '/home/caspar/Documents/Coding/Chess/lc0/lc0/build/release/weights.pb',
+  backend: 'eigen'
+}
+Sending to Lc0: uci
+Lc0 info: [1m[31m       _
+|   _ | |
+|_ |_ |_|[0m v0.32.0-dev+git.ace6774 built May 31 2025
+Lc0 info: Search algorithm: classic
+Lc0: id name Lc0 v0.32.0-dev+git.ace6774
+Lc0: id author The LCZero Authors.
+Lc0: option name LogFile type string default
+Lc0: option name ConfigFile type string default lc0.config
+Lc0: option name Ponder type check default false
+Lc0: option name SyzygyPath type string default
+Lc0: option name Threads type spin default 0 min 0 max 128
+Lc0: option name MinibatchSize type spin default 0 min 0 max 1024
+Lc0: option name MaxPrefetch type spin default 32 min 0 max 1024
+Lc0: option name CPuct type string default 1.745000
+Lc0: option name CPuctBase type string default 38739.000000
+Lc0: option name CPuctFactor type string default 3.894000
+Lc0: option name TwoFoldDraws type check default true
+Lc0: option name VerboseMoveStats type check default true
+Lc0: option name FpuStrategy type combo default reduction var reduction var absolute
+Lc0: option name FpuValue type string default 0.330000
+Lc0: option name CacheHistoryLength type spin default 0 min 0 max 7
+Lc0: option name MaxCollisionEvents type spin default 917 min 1 max 65536
+Lc0: option name MaxCollisionVisits type spin default 80000 min 1 max 100000000
+Lc0: option name MaxCollisionVisitsScalingStart type spin default 28 min 1 max 100000
+Lc0: option name MaxCollisionVisitsScalingEnd type spin default 145000 min 0 max 100000000
+Lc0: option name MaxCollisionVisitsScalingPower type string default 1.250000
+Lc0: option name OutOfOrderEval type check default true
+Lc0: option name MaxOutOfOrderEvalsFactor type string default 2.400000
+Lc0: option name StickyEndgames type check default true
+Lc0: option name SyzygyFastPlay type check default false
+Lc0: option name MultiPV type spin default 1 min 1 max 500
+Lc0: option name PerPVCounters type check default false
+Lc0: option name ScoreType type combo default WDL_mu var centipawn var centipawn_with_drawscore var centipawn_2019 var centipawn_2018 var win_percentage var Q var W-L var WDL_mu
+Lc0: option name MovesLeftMaxEffect type string default 0.034500
+Lc0: option name MovesLeftThreshold type string default 0.800000
+Lc0: option name MovesLeftSlope type string default 0.002700
+Lc0: option name MovesLeftConstantFactor type string default 0.000000
+Lc0: option name MovesLeftScaledFactor type string default 1.652100
+Lc0: option name MovesLeftQuadraticFactor type string default -0.652100
+Lc0: option name MaxConcurrentSearchers type spin default 1 min 0 max 128
+Lc0: option name DrawScore type string default 0.000000
+Lc0: option name ContemptMode type combo default play var play var white_side_analysis var black_side_analysis var disable
+Lc0: option name Contempt type string default
+Lc0: option name WDLCalibrationElo type string default 0.000000
+Lc0: option name WDLEvalObjectivity type string default 1.000000
+Lc0: option name WDLDrawRateReference type string default 0.500000
+Lc0: option name NodesPerSecondLimit type string default 0.000000
+Lc0: option name SolidTreeThreshold type spin default 100 min 1 max 2000000000
+Lc0: option name TaskWorkers type spin default -1 min -1 max 128
+Lc0: option name MinimumProcessingWork type spin default 20 min 2 max 100000
+Lc0: option name MinimumPickingWork type spin default 1 min 1 max 100000
+Lc0: option name MinimumRemainingPickingWork type spin default 20 min 0 max 100000
+Lc0: option name MinimumPerTaskProcessing type spin default 8 min 1 max 100000
+Lc0: option name IdlingMinimumWork type spin default 0 min 0 max 10000
+Lc0: option name ThreadIdlingThreshold type spin default 1 min 0 max 128
+Lc0: option name UCI_Opponent type string default
+Lc0: option name UCI_RatingAdv type string default 0.000000
+Lc0: option name SearchSpinBackoff type check default false
+Lc0: option name SmartPruningFactor type string default 1.330000
+Lc0: option name SmartPruningMinimumBatches type spin default 0 min 0 max 10000
+Lc0: option name RamLimitMb type spin default 0 min 0 max 100000000
+Lc0: option name MoveOverheadMs type spin default 200 min 0 max 100000000
+Lc0: option name TimeManager type string default legacy
+Lc0: option name UCI_Chess960 type check default false
+Lc0: option name UCI_ShowWDL type check default true
+Lc0: option name UCI_ShowMovesLeft type check default false
+Lc0: option name PolicyTemperature type string default 1.359000
+Lc0: option name HistoryFill type combo default fen_only var no var fen_only var always
+Lc0: option name WeightsFile type string default /home/caspar/Documents/Coding/Chess/lc0/lc0/build/release/weights.pb
+Lc0: option name Backend type combo default eigen var cuda-auto var cuda var cuda-fp16 var eigen var trivial var random var check var recordreplay var roundrobin var multiplexing var demux
+Lc0: option name BackendOptions type string default
+Lc0: option name NNCacheSize type spin default 2000000 min 0 max 999999999
+Lc0: uciok
+Lc0 engine ready!
+Initializing Lc0 engine with config: {
+  nodes: 10000,
+  movetime: 10000,
+  weightsPath: '/home/caspar/Documents/Coding/Chess/lc0/lc0/build/release/weights.pb',
+  backend: 'eigen'
+}
+Sending to Lc0: uci
+Lc0 info: [1m[31m       _
+|   _ | |
+|_ |_ |_|[0m v0.32.0-dev+git.ace6774 built May 31 2025
+Lc0 info: Search algorithm: classic
+Lc0: id name Lc0 v0.32.0-dev+git.ace6774
+Lc0: id author The LCZero Authors.
+Lc0: option name LogFile type string default
+Lc0: option name ConfigFile type string default lc0.config
+Lc0: option name Ponder type check default false
+Lc0: option name SyzygyPath type string default
+Lc0: option name Threads type spin default 0 min 0 max 128
+Lc0: option name MinibatchSize type spin default 0 min 0 max 1024
+Lc0: option name MaxPrefetch type spin default 32 min 0 max 1024
+Lc0: option name CPuct type string default 1.745000
+Lc0: option name CPuctBase type string default 38739.000000
+Lc0: option name CPuctFactor type string default 3.894000
+Lc0: option name TwoFoldDraws type check default true
+Lc0: option name VerboseMoveStats type check default true
+Lc0: option name FpuStrategy type combo default reduction var reduction var absolute
+Lc0: option name FpuValue type string default 0.330000
+Lc0: option name CacheHistoryLength type spin default 0 min 0 max 7
+Lc0: option name MaxCollisionEvents type spin default 917 min 1 max 65536
+Lc0: option name MaxCollisionVisits type spin default 80000 min 1 max 100000000
+Lc0: option name MaxCollisionVisitsScalingStart type spin default 28 min 1 max 100000
+Lc0: option name MaxCollisionVisitsScalingEnd type spin default 145000 min 0 max 100000000
+Lc0: option name MaxCollisionVisitsScalingPower type string default 1.250000
+Lc0: option name OutOfOrderEval type check default true
+Lc0: option name MaxOutOfOrderEvalsFactor type string default 2.400000
+Lc0: option name StickyEndgames type check default true
+Lc0: option name SyzygyFastPlay type check default false
+Lc0: option name MultiPV type spin default 1 min 1 max 500
+Lc0: option name PerPVCounters type check default false
+Lc0: option name ScoreType type combo default WDL_mu var centipawn var centipawn_with_drawscore var centipawn_2019 var centipawn_2018 var win_percentage var Q var W-L var WDL_mu
+Lc0: option name MovesLeftMaxEffect type string default 0.034500
+Lc0: option name MovesLeftThreshold type string default 0.800000
+Lc0: option name MovesLeftSlope type string default 0.002700
+Lc0: option name MovesLeftConstantFactor type string default 0.000000
+Lc0: option name MovesLeftScaledFactor type string default 1.652100
+Lc0: option name MovesLeftQuadraticFactor type string default -0.652100
+Lc0: option name MaxConcurrentSearchers type spin default 1 min 0 max 128
+Lc0: option name DrawScore type string default 0.000000
+Lc0: option name ContemptMode type combo default play var play var white_side_analysis var black_side_analysis var disable
+Lc0: option name Contempt type string default
+Lc0: option name WDLCalibrationElo type string default 0.000000
+Lc0: option name WDLEvalObjectivity type string default 1.000000
+Lc0: option name WDLDrawRateReference type string default 0.500000
+Lc0: option name NodesPerSecondLimit type string default 0.000000
+Lc0: option name SolidTreeThreshold type spin default 100 min 1 max 2000000000
+Lc0: option name TaskWorkers type spin default -1 min -1 max 128
+Lc0: option name MinimumProcessingWork type spin default 20 min 2 max 100000
+Lc0: option name MinimumPickingWork type spin default 1 min 1 max 100000
+Lc0: option name MinimumRemainingPickingWork type spin default 20 min 0 max 100000
+Lc0: option name MinimumPerTaskProcessing type spin default 8 min 1 max 100000
+Lc0: option name IdlingMinimumWork type spin default 0 min 0 max 10000
+Lc0: option name ThreadIdlingThreshold type spin default 1 min 0 max 128
+Lc0: option name UCI_Opponent type string default
+Lc0: option name UCI_RatingAdv type string default 0.000000
+Lc0: option name SearchSpinBackoff type check default false
+Lc0: option name SmartPruningFactor type string default 1.330000
+Lc0: option name SmartPruningMinimumBatches type spin default 0 min 0 max 10000
+Lc0: option name RamLimitMb type spin default 0 min 0 max 100000000
+Lc0: option name MoveOverheadMs type spin default 200 min 0 max 100000000
+Lc0: option name TimeManager type string default legacy
+Lc0: option name UCI_Chess960 type check default false
+Lc0: option name UCI_ShowWDL type check default true
+Lc0: option name UCI_ShowMovesLeft type check default false
+Lc0: option name PolicyTemperature type string default 1.359000
+Lc0: option name HistoryFill type combo default fen_only var no var fen_only var always
+Lc0: option name WeightsFile type string default /home/caspar/Documents/Coding/Chess/lc0/lc0/build/release/weights.pb
+Lc0: option name Backend type combo default eigen var cuda-auto var cuda var cuda-fp16 var eigen var trivial var random var check var recordreplay var roundrobin var multiplexing var demux
+Lc0: option name BackendOptions type string default
+Lc0: option name NNCacheSize type spin default 2000000 min 0 max 999999999
+Lc0: uciok
+Lc0 engine ready!
+All Lc0 engines initialized successfully!
+🚀 Chess Engine Backend Server running on port 3005
+💻 Health check: http://localhost:3005/health
+🧠 API endpoint: http://localhost:3005/api/chess/move
+🔧 Test endpoint: http://localhost:3005/api/chess/test
+Received SIGTERM, shutting down gracefully...
+Lc0 process exited with code 0
+Lc0 process exited with code 0
+Lc0 process exited with code 0
+Lc0 process exited with code 0
+Lc0 process exited with code 0
