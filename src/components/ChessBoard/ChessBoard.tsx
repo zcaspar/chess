@@ -2,9 +2,13 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { Square } from 'chess.js';
 import { useGame } from '../../contexts/GameContext';
+import { useSocket } from '../../contexts/SocketContext';
+import { useOnlineGame } from '../../hooks/useOnlineGame';
 
 const ChessBoard: React.FC = () => {
   const { gameState, makeMove } = useGame();
+  const { roomCode, assignedColor, makeMove: socketMakeMove } = useSocket();
+  const { isOnlineGame } = useOnlineGame();
   const [moveFrom, setMoveFrom] = useState<Square | null>(null);
   const [rightClickedSquares, setRightClickedSquares] = useState<Square[]>([]);
   const [optionSquares, setOptionSquares] = useState<Partial<Record<Square, { background: string }>>>({});
@@ -66,7 +70,18 @@ const ChessBoard: React.FC = () => {
     }
 
     // Try to make the move
-    const moveSuccessful = makeMove(moveFrom, square);
+    let moveSuccessful = false;
+    
+    if (isOnlineGame && roomCode) {
+      // For online games, check if it's our turn
+      if (assignedColor && gameState.game.turn() === assignedColor.charAt(0)) {
+        socketMakeMove(moveFrom, square);
+        moveSuccessful = true; // Optimistically assume success
+      }
+    } else {
+      // For local games, use the regular makeMove
+      moveSuccessful = makeMove(moveFrom, square);
+    }
     
     if (moveSuccessful) {
       setMoveFrom(null);
@@ -97,7 +112,19 @@ const ChessBoard: React.FC = () => {
       return false;
     }
     
-    const moveSuccessful = makeMove(sourceSquare, targetSquare);
+    let moveSuccessful = false;
+    
+    if (isOnlineGame && roomCode) {
+      // For online games, check if it's our turn
+      if (assignedColor && gameState.game.turn() === assignedColor.charAt(0)) {
+        socketMakeMove(sourceSquare, targetSquare);
+        moveSuccessful = true; // Optimistically assume success
+      }
+    } else {
+      // For local games, use the regular makeMove
+      moveSuccessful = makeMove(sourceSquare, targetSquare);
+    }
+    
     setMoveFrom(null);
     setOptionSquares({});
     return moveSuccessful;

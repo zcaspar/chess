@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useGame } from '../../contexts/GameContext';
 import { DifficultyLevel } from '../../utils/chessAI';
+import { OnlineGameModal } from '../OnlineGameModal';
 
 const GameModeSelector: React.FC = () => {
   const { gameState, setGameMode, setAIDifficulty } = useGame();
   const { gameMode, aiColor, aiDifficulty } = gameState;
+  const [showOnlineModal, setShowOnlineModal] = useState(false);
 
   const handleModeChange = async (mode: 'human-vs-human' | 'human-vs-ai') => {
     if (mode === 'human-vs-ai') {
@@ -131,6 +133,19 @@ const GameModeSelector: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Online Multiplayer */}
+        <div className="pt-3 mt-3 border-t border-gray-200">
+          <button
+            onClick={() => setShowOnlineModal(true)}
+            className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+            </svg>
+            Play Online with Friends
+          </button>
+        </div>
       </div>
 
       {/* Current Mode Display */}
@@ -138,12 +153,18 @@ const GameModeSelector: React.FC = () => {
         <div className="text-xs text-gray-600">
           Current: <span className="font-semibold">
             {gameMode === 'human-vs-human' 
-              ? 'Human vs Human' 
+              ? 'Human vs Human (Local)' 
               : `Human vs AI (${difficultyLabels[aiDifficulty].name}, AI plays ${aiColor === 'w' ? 'White' : 'Black'})`
             }
           </span>
         </div>
       </div>
+
+      {/* Online Game Modal */}
+      <OnlineGameModal 
+        isOpen={showOnlineModal} 
+        onClose={() => setShowOnlineModal(false)} 
+      />
     </div>
   );
 };
