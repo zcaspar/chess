@@ -27,8 +27,11 @@
     "src/hooks/**/*",
     "src/styles/**/*",
     "src/utils/client/**/*",
+    "src/config/firebase.client.ts",
     "src/App.tsx",
     "src/index.tsx",
-    "src/main.tsx"
+    "src/main.tsx",
+    "**/*.test.ts",
+    "**/*.spec.ts"
   ]
 }
