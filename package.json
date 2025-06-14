@@ -6,15 +6,15 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "start": "ts-node src/server.ts",
+    "start": "node dist/server.js",
     "dev": "ts-node --transpile-only src/server.ts",
-    "build": "tsc",
+    "build": "rm -rf dist && tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": ["chess", "multiplayer", "socketio", "react"],
   "author": "",
   "license": "ISC",
-  "description": "Chess multiplayer backend with Socket.io and Firebase auth",
+  "description": "Chess multiplayer backend with Socket.io and Firebase authentication",
   "dependencies": {
     "@types/cors": "^2.8.18",
     "@types/express": "^5.0.2",
