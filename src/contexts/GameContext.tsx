@@ -344,7 +344,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
               
               if (testMove) {
                 console.log('🤖 Applying valid AI move:', aiMove.san || `${aiMove.from}-${aiMove.to}`);
-                makeMove(aiMove.from as Square, aiMove.to as Square, aiMove.promotion);
+                // Use the makeMove function which now includes game-end checking
+                const moveResult = makeMove(aiMove.from as Square, aiMove.to as Square, aiMove.promotion);
+                if (!moveResult) {
+                  console.log('🤖 AI move rejected - game has ended');
+                }
               } else {
                 console.log(`🤖 AI move ${aiMove.from}-${aiMove.to} is no longer valid on current board`);
               }
@@ -411,6 +415,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   const makeMove = useCallback((from: Square, to: Square, promotion: string = 'q'): boolean => {
     console.log('🎯 makeMove called:', from, to, 'gameId:', gameState.gameId);
+    
+    // Prevent moves if game has already ended
+    if (gameState.gameResult) {
+      console.log('❌ Move blocked - game has ended:', gameState.gameResult);
+      return false;
+    }
+    
     try {
       const gameCopy = new Chess(gameState.game.fen());
       const move = gameCopy.move({ from, to, promotion });

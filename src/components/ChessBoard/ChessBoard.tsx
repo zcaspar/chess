@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { Square } from 'chess.js';
 import { useGame } from '../../contexts/GameContext';
@@ -8,6 +8,15 @@ const ChessBoard: React.FC = () => {
   const [moveFrom, setMoveFrom] = useState<Square | null>(null);
   const [rightClickedSquares, setRightClickedSquares] = useState<Square[]>([]);
   const [optionSquares, setOptionSquares] = useState<Partial<Record<Square, { background: string }>>>({});
+  
+  // Clear selections when game ends
+  useEffect(() => {
+    if (gameState.gameResult) {
+      setMoveFrom(null);
+      setOptionSquares({});
+      setRightClickedSquares([]);
+    }
+  }, [gameState.gameResult]);
 
   const getMoveOptions = (square: Square) => {
     const moves = gameState.game.moves({
@@ -30,6 +39,11 @@ const ChessBoard: React.FC = () => {
   };
 
   const onSquareClick = (square: Square) => {
+    // Don't allow any interaction if game has ended
+    if (gameState.gameResult) {
+      return;
+    }
+    
     // Clear right-clicked squares
     setRightClickedSquares([]);
 
@@ -78,6 +92,11 @@ const ChessBoard: React.FC = () => {
   };
 
   const onDrop = (sourceSquare: Square, targetSquare: Square) => {
+    // Don't allow drag and drop if game has ended
+    if (gameState.gameResult) {
+      return false;
+    }
+    
     const moveSuccessful = makeMove(sourceSquare, targetSquare);
     setMoveFrom(null);
     setOptionSquares({});
