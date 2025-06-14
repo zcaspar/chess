@@ -206,9 +206,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchT
         <div className="text-center">
           <p className="text-xs text-gray-500 dark:text-gray-400">
             By creating an account, you agree to our{' '}
-            <a href="#" className="text-blue-600 dark:text-blue-400 hover:underline">Terms of Service</a>
+            <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline bg-transparent border-none cursor-pointer">Terms of Service</button>
             {' '}and{' '}
-            <a href="#" className="text-blue-600 dark:text-blue-400 hover:underline">Privacy Policy</a>
+            <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline bg-transparent border-none cursor-pointer">Privacy Policy</button>
           </p>
         </div>
       </form>
