@@ -1,4 +1,11 @@
-import { User as FirebaseUser } from 'firebase/auth';
+// Remove Firebase client SDK dependency for backend compilation
+export interface FirebaseUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  emailVerified: boolean;
+}
 
 export interface UserProfile {
   id: string;
