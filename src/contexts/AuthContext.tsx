@@ -10,7 +10,7 @@ import {
   signInWithPopup,
   updateProfile as updateFirebaseProfile,
 } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { auth } from '../config/firebase-client';
 import { AuthContextType, AuthUser, UserProfile, UserPreferences, UserStats } from '../types/auth';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

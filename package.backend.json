@@ -1,0 +1,34 @@
+{
+  "name": "chess-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node dist/server.js",
+    "dev": "ts-node --transpile-only src/server.ts",
+    "build": "rm -rf dist && tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["chess", "multiplayer", "socketio", "react"],
+  "author": "",
+  "license": "ISC",
+  "description": "Chess multiplayer backend with Socket.io and Firebase authentication",
+  "dependencies": {
+    "@types/cors": "^2.8.18",
+    "@types/express": "^5.0.2",
+    "@types/node": "^22.15.29",
+    "@types/pg": "^8.15.4",
+    "@types/socket.io": "^3.0.1",
+    "chess.js": "^1.3.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "firebase-admin": "^13.4.0",
+    "pg": "^8.16.0",
+    "socket.io": "^4.8.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}
