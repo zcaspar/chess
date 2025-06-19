@@ -1,6 +1,7 @@
 import { Chess, Move } from 'chess.js';
+import { BackendAI, DifficultyLevel } from './backendAI';
 
-type DifficultyLevel = 'beginner' | 'easy' | 'medium' | 'hard' | 'expert';
+const backendAI = new BackendAI();
 
 interface AISettings {
   depth: number;
@@ -37,6 +38,20 @@ export class SimpleChessAI {
   async getBestMove(game: Chess): Promise<Move | null> {
     const moves = game.moves({ verbose: true });
     if (moves.length === 0) return null;
+
+    // Try backend AI first (for stronger play)
+    try {
+      const backendMove = await backendAI.getBestMove(game.fen(), this.difficulty);
+      if (backendMove) {
+        console.log(`🎯 Using backend AI for ${this.difficulty} difficulty`);
+        return backendMove;
+      }
+    } catch (error) {
+      console.log('Backend AI unavailable, using frontend AI');
+    }
+
+    // Fallback to frontend AI
+    console.log(`🎲 Using frontend AI for ${this.difficulty} difficulty`);
 
     // For beginner level, just pick a random move
     if (this.difficulty === 'beginner') {
