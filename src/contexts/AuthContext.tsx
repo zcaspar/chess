@@ -65,6 +65,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setError(null);
       setLoading(true);
       const provider = new GoogleAuthProvider();
+      console.log('🔥 Attempting Google Sign-In...');
       const result = await signInWithPopup(auth, provider);
       
       // Check if user profile exists, create if not
@@ -73,6 +74,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         await createUserProfile(result.user, result.user.displayName || 'User', false);
       }
     } catch (err: any) {
+      console.error('🔥 Google Sign-In Error:', err);
+      console.error('Error code:', err.code);
+      console.error('Error message:', err.message);
       setError(err.message);
       throw err;
     } finally {
