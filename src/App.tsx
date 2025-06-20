@@ -7,6 +7,7 @@ import { GameApp } from './components/GameApp';
 import './App.css';
 
 function App() {
+  // Deployment trigger - Dec 20 2024
   return (
     <AuthProvider>
       <SocketProvider>

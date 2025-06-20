@@ -15,10 +15,6 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Debug: Log the auth domain being used (remove in production)
-console.log('🔥 Firebase Auth Domain:', firebaseConfig.authDomain);
-console.log('🔥 Current URL:', window.location.href);
-
 // Initialize Firebase Authentication and get a reference to the service
 export const auth = getAuth(app);
 
