@@ -110,6 +110,15 @@ export class SimpleChessAI {
     this.difficulty = difficulty;
     this.settings = DIFFICULTY_SETTINGS[difficulty];
   }
+
+  getEngineType(): string {
+    return 'lc0'; // Indicates we use backend LC0 when available
+  }
+
+  async initializeLc0(): Promise<void> {
+    // For frontend AI, this is a no-op since we delegate to backend
+    console.log('Frontend AI initialized (uses backend LC0)');
+  }
 }
 
 // Legacy export for compatibility

@@ -1,0 +1,27 @@
+ INFO  Accepting connections at http://localhost:3000
+ HTTP  6/22/2025 8:54:57 PM ::1 GET /
+ HTTP  6/22/2025 8:54:57 PM ::1 Returned 200 in 16 ms
+ HTTP  6/22/2025 8:55:15 PM ::1 GET /
+ HTTP  6/22/2025 8:55:15 PM ::1 Returned 200 in 2 ms
+ HTTP  6/22/2025 8:55:15 PM ::1 GET /static/js/main.ccfec94d.js
+ HTTP  6/22/2025 8:55:15 PM ::1 GET /static/css/main.ce6deeb2.css
+ HTTP  6/22/2025 8:55:15 PM ::1 Returned 200 in 5 ms
+ HTTP  6/22/2025 8:55:15 PM ::1 Returned 200 in 11 ms
+ HTTP  6/22/2025 8:55:15 PM ::1 GET /manifest.json
+ HTTP  6/22/2025 8:55:15 PM ::1 Returned 200 in 3 ms
+ HTTP  6/22/2025 8:55:15 PM ::1 GET /favicon.ico
+ HTTP  6/22/2025 8:55:15 PM ::1 Returned 200 in 4 ms
+ HTTP  6/22/2025 8:55:15 PM ::1 GET /logo192.png
+ HTTP  6/22/2025 8:55:15 PM ::1 Returned 200 in 2 ms
+ HTTP  6/22/2025 9:14:42 PM ::1 GET /
+ HTTP  6/22/2025 9:14:42 PM ::1 Returned 304 in 2 ms
+ HTTP  6/22/2025 9:14:42 PM ::1 GET /static/js/main.ccfec94d.js
+ HTTP  6/22/2025 9:14:42 PM ::1 GET /static/css/main.ce6deeb2.css
+ HTTP  6/22/2025 9:14:42 PM ::1 Returned 304 in 3 ms
+ HTTP  6/22/2025 9:14:42 PM ::1 Returned 304 in 2 ms
+ HTTP  6/22/2025 9:14:42 PM ::1 GET /manifest.json
+ HTTP  6/22/2025 9:14:42 PM ::1 Returned 304 in 1 ms
+ HTTP  6/22/2025 9:14:43 PM ::1 GET /favicon.ico
+ HTTP  6/22/2025 9:14:43 PM ::1 Returned 304 in 0 ms
+ HTTP  6/22/2025 9:14:43 PM ::1 GET /logo192.png
+ HTTP  6/22/2025 9:14:43 PM ::1 Returned 304 in 1 ms

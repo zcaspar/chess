@@ -1,5 +1,40 @@
+node:internal/modules/cjs/loader:1404
+  throw err;
+  ^
 
-> chess-app@0.1.0 start
-> react-scripts start
+Error: Cannot find module './ToBoolean'
+Require stack:
+- /home/caspar/Documents/Coding/Chess/chess-app/node_modules/es-abstract/2024/IsRegExp.js
+- /home/caspar/Documents/Coding/Chess/chess-app/node_modules/string.prototype.matchall/implementation.js
+- /home/caspar/Documents/Coding/Chess/chess-app/node_modules/string.prototype.matchall/index.js
+- /home/caspar/Documents/Coding/Chess/chess-app/node_modules/@surma/rollup-plugin-off-main-thread/index.js
+- /home/caspar/Documents/Coding/Chess/chess-app/node_modules/workbox-build/build/lib/bundle.js
+- /home/caspar/Documents/Coding/Chess/chess-app/node_modules/workbox-webpack-plugin/build/generate-sw.js
+- /home/caspar/Documents/Coding/Chess/chess-app/node_modules/workbox-webpack-plugin/build/index.js
+- /home/caspar/Documents/Coding/Chess/chess-app/node_modules/react-scripts/config/webpack.config.js
+- /home/caspar/Documents/Coding/Chess/chess-app/node_modules/react-scripts/scripts/start.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+    at Function._load (node:internal/modules/cjs/loader:1211:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.require (node:internal/modules/cjs/loader:1487:12)
+    at require (node:internal/modules/helpers:135:16)
+    at Object.<anonymous> (/home/caspar/Documents/Coding/Chess/chess-app/node_modules/es-abstract/2024/IsRegExp.js:10:17)
+    at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/home/caspar/Documents/Coding/Chess/chess-app/node_modules/es-abstract/2024/IsRegExp.js',
+    '/home/caspar/Documents/Coding/Chess/chess-app/node_modules/string.prototype.matchall/implementation.js',
+    '/home/caspar/Documents/Coding/Chess/chess-app/node_modules/string.prototype.matchall/index.js',
+    '/home/caspar/Documents/Coding/Chess/chess-app/node_modules/@surma/rollup-plugin-off-main-thread/index.js',
+    '/home/caspar/Documents/Coding/Chess/chess-app/node_modules/workbox-build/build/lib/bundle.js',
+    '/home/caspar/Documents/Coding/Chess/chess-app/node_modules/workbox-webpack-plugin/build/generate-sw.js',
+    '/home/caspar/Documents/Coding/Chess/chess-app/node_modules/workbox-webpack-plugin/build/index.js',
+    '/home/caspar/Documents/Coding/Chess/chess-app/node_modules/react-scripts/config/webpack.config.js',
+    '/home/caspar/Documents/Coding/Chess/chess-app/node_modules/react-scripts/scripts/start.js'
+  ]
+}
 
-Something is already running on port 3000.
+Node.js v22.16.0
