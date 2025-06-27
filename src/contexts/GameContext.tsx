@@ -344,10 +344,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
               
               if (testMove) {
                 console.log('🤖 Applying valid AI move:', aiMove.san || `${aiMove.from}-${aiMove.to}`);
+                console.log('🤖 Board before AI move:', currentState.game.fen());
                 // Use the makeMove function which now includes game-end checking
                 const moveResult = makeMove(aiMove.from as Square, aiMove.to as Square, aiMove.promotion);
                 if (!moveResult) {
                   console.log('🤖 AI move rejected - game has ended');
+                } else {
+                  console.log('🤖 AI move applied successfully, board should update');
                 }
               } else {
                 console.log(`🤖 AI move ${aiMove.from}-${aiMove.to} is no longer valid on current board`);

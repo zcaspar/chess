@@ -2,12 +2,7 @@ import { Move } from 'chess.js';
 
 export type DifficultyLevel = 'beginner' | 'easy' | 'medium' | 'hard' | 'expert';
 
-interface BackendAIMove {
-  from: string;
-  to: string;
-  promotion?: string;
-  san: string;
-}
+// Removed unused BackendAIMove interface - moves come as Move objects from chess.js
 
 export class BackendAI {
   private baseUrl: string;
