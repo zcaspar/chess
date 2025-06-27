@@ -366,8 +366,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
       makeAIMove();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState.game, gameState.gameMode, gameState.aiColor, gameState.gameResult, gameState.gameId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps  
+  }, [gameState.game.fen(), gameState.gameMode, gameState.aiColor, gameState.gameResult, gameState.gameId]);
 
   const setTimeControl = useCallback((minutes: number | null, increment: number = 0) => {
     if (minutes === null) {
