@@ -1,7 +1,7 @@
 {
-  "buildCommand": "cd chess-app && npm run build",
-  "outputDirectory": "chess-app/build", 
-  "installCommand": "cd chess-app && npm install",
+  "buildCommand": "cd chess-app && npm ci && npm run build",
+  "outputDirectory": "chess-app/build",
+  "installCommand": "echo Dependencies installed in build command",
   "env": {
     "REACT_APP_BACKEND_URL": "https://chess-production-c94f.up.railway.app"
   }
