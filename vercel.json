@@ -1,19 +1,8 @@
 {
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/static/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    }
-  ]
+  "buildCommand": "cd chess-app && npm run build",
+  "outputDirectory": "chess-app/build", 
+  "installCommand": "cd chess-app && npm install",
+  "env": {
+    "REACT_APP_BACKEND_URL": "https://chess-production-c94f.up.railway.app"
+  }
 }
