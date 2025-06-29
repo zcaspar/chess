@@ -126,4 +126,4 @@ chess-app/
 
 ## License
 
-This project is open source and available under the MIT License.
+This project is open source and available under the MIT License.# Vercel deployment restored to working structure
