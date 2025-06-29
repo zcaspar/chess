@@ -1,0 +1,9 @@
+{
+  "framework": "create-react-app",
+  "buildCommand": "cd chess-app && npm install && npm run build",
+  "outputDirectory": "chess-app/build",
+  "installCommand": "npm install --prefix chess-app",
+  "env": {
+    "REACT_APP_BACKEND_URL": "https://chess-production-c94f.up.railway.app"
+  }
+}
