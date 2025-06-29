@@ -337,31 +337,27 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           console.log('🤖 AI found move:', aiMove, 'for gameId:', gameState.gameId);
           
           // Check again after AI thinking - game might have ended during thinking
-          setGameState(currentState => {
-            // Double-check the game hasn't ended due to time expiration or other reasons
-            if (aiMove && !currentState.gameResult && currentState.gameId === gameState.gameId) {
-              // Validate the move is still legal on current board
-              const testGame = new Chess(currentState.game.fen());
-              const testMove = testGame.move({ from: aiMove.from as Square, to: aiMove.to as Square, promotion: aiMove.promotion });
-              
-              if (testMove) {
-                console.log('🤖 Applying valid AI move:', aiMove.san || `${aiMove.from}-${aiMove.to}`);
-                console.log('🤖 Board before AI move:', currentState.game.fen());
-                // Use the makeMove function which now includes game-end checking
-                const moveResult = makeMove(aiMove.from as Square, aiMove.to as Square, aiMove.promotion);
-                if (!moveResult) {
-                  console.log('🤖 AI move rejected - game has ended');
-                } else {
-                  console.log('🤖 AI move applied successfully, board should update');
-                }
+          if (aiMove && !gameState.gameResult) {
+            // Validate the move is still legal on current board
+            const testGame = new Chess(gameState.game.fen());
+            const testMove = testGame.move({ from: aiMove.from as Square, to: aiMove.to as Square, promotion: aiMove.promotion });
+            
+            if (testMove) {
+              console.log('🤖 Applying valid AI move:', aiMove.san || `${aiMove.from}-${aiMove.to}`);
+              console.log('🤖 Board before AI move:', gameState.game.fen());
+              // Use the makeMove function which properly updates the game state
+              const moveResult = makeMove(aiMove.from as Square, aiMove.to as Square, aiMove.promotion);
+              if (!moveResult) {
+                console.log('🤖 AI move rejected - game has ended');
               } else {
-                console.log(`🤖 AI move ${aiMove.from}-${aiMove.to} is no longer valid on current board`);
+                console.log('🤖 AI move applied successfully, board should update');
               }
             } else {
-              console.log('🤖 AI move cancelled - game ended or changed');
+              console.log(`🤖 AI move ${aiMove.from}-${aiMove.to} is no longer valid on current board`);
             }
-            return currentState;
-          });
+          } else {
+            console.log('🤖 AI move cancelled - game ended or no move found');
+          }
         } catch (error) {
           console.error('AI move error:', error);
         } finally {
