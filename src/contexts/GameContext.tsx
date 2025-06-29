@@ -302,16 +302,18 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   // AI move effect
   useEffect(() => {
+    const currentTurn = gameState.game.turn();
     const shouldAIMove = 
       gameState.gameMode === 'human-vs-ai' &&
-      gameState.aiColor === gameState.game.turn() &&
+      gameState.aiColor !== null &&
+      gameState.aiColor === currentTurn &&
       !gameState.gameResult &&
       !isAiThinking.current;
 
     console.log('🤖 AI effect triggered:', {
       gameMode: gameState.gameMode,
       aiColor: gameState.aiColor,
-      currentTurn: gameState.game.turn(),
+      currentTurn: currentTurn,
       gameResult: gameState.gameResult,
       isAiThinking: isAiThinking.current,
       shouldAIMove,
@@ -704,6 +706,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   }, [gameState.colorAssignment, gameState.players]);
 
   const setGameMode = useCallback(async (mode: 'human-vs-human' | 'human-vs-ai', aiColor: 'w' | 'b' = 'b') => {
+    console.log('🎮 Setting game mode:', mode, 'AI color:', mode === 'human-vs-ai' ? aiColor : 'N/A');
     setGameState(prev => {
       const newState = {
         ...prev,
