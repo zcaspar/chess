@@ -24,7 +24,6 @@
 - 🎯 **Phase 7**: Game Analysis & Historical Games Database
 - 🔮 **Future**: Tournaments, mobile apps, chess variants
 
-See [chess-app-development-plan.md](./chess-app-development-plan.md) for detailed phase descriptions and implementation roadmap.
 
 ## 📊 Project Status Summary
 - **Local Development**: ✅ COMPLETE - App runs perfectly on localhost
