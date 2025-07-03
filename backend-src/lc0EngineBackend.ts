@@ -38,7 +38,7 @@ export class Lc0EngineBackend {
         throw new Error('Backend server not available');
       }
       
-      const healthData = await response.json();
+      const healthData = await response.json() as { status?: string };
       console.log('Backend health check:', healthData);
       
       this.isInitialized = true;
@@ -74,11 +74,11 @@ export class Lc0EngineBackend {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Backend error: ${errorData.error}`);
+        const errorData = await response.json() as { error?: string };
+        throw new Error(`Backend error: ${errorData.error || 'Unknown error'}`);
       }
 
-      const data: BackendResponse = await response.json();
+      const data = await response.json() as BackendResponse;
       const totalTime = Date.now() - startTime;
 
       if (!data.move) {
@@ -120,7 +120,7 @@ export class Lc0EngineBackend {
       const response = await fetch(`${this.config.backendUrl}/api/chess/engines`);
       if (!response.ok) return false;
       
-      const data = await response.json();
+      const data = await response.json() as any;
       return data.engines[this.config.difficulty] === true;
     } catch (error) {
       console.error('Error checking engine status:', error);
@@ -200,7 +200,7 @@ export class Lc0EngineBackend {
 
       if (!response.ok) return false;
       
-      const data = await response.json();
+      const data = await response.json() as any;
       console.log('Backend test result:', data);
       return data.success === true;
     } catch (error) {

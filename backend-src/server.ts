@@ -53,7 +53,7 @@ async function initializeEngines() {
       engines.easy = await Lc0Engine.createIntermediate(WEIGHTS_PATH);
       engines.medium = await Lc0Engine.createIntermediate(WEIGHTS_PATH);
       engines.hard = await Lc0Engine.createAdvanced(WEIGHTS_PATH);
-      engines.expert = await Lc0Engine.createExpert(WEIGHTS_PATH);
+      engines.expert = await Lc0Engine.createAdvanced(WEIGHTS_PATH);
       console.log('All Lc0 engines initialized successfully!');
     } else {
       console.log('⚠️  Lc0 engines not available in production. AI vs Human mode will be limited.');

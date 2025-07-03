@@ -1,4 +1,6 @@
 import { Chess, Move } from 'chess.js';
+import { Lc0Engine } from './lc0Engine';
+import { Lc0EngineBackend } from './lc0EngineBackend';
 // Note: Advanced engines are handled by the backend in production
 
 type DifficultyLevel = 'beginner' | 'easy' | 'medium' | 'hard' | 'expert';
