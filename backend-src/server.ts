@@ -74,8 +74,11 @@ console.log('✅ User routes registered at /api/users');
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.status(200).json({ 
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    cors_origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
     engines: Object.keys(engines).reduce((acc, key) => {
       acc[key] = engines[key] !== null;
       return acc;
@@ -238,24 +241,50 @@ io.on('connection', (socket) => {
 // Start server
 async function startServer() {
   try {
-    // Test database connection
-    const dbConnected = await testConnection();
-    if (!dbConnected) {
-      console.error('⚠️  Warning: Database connection failed. Online multiplayer features will be limited.');
+    // Test database connection (non-blocking)
+    try {
+      const dbConnected = await testConnection();
+      if (!dbConnected) {
+        console.error('⚠️  Warning: Database connection failed. Online multiplayer features will be limited.');
+      } else {
+        console.log('✅ Database connection successful');
+      }
+    } catch (dbError) {
+      console.error('⚠️  Database connection error:', dbError);
+      console.log('⚠️  Continuing without database. Basic chess features will work.');
     }
     
-    await initializeEngines();
+    // Initialize engines (non-blocking)
+    try {
+      await initializeEngines();
+      console.log('✅ Engine initialization completed');
+    } catch (engineError) {
+      console.error('⚠️  Engine initialization error:', engineError);
+      console.log('⚠️  Continuing without engines. Multiplayer will work without AI.');
+    }
     
+    // Always start the HTTP server
     httpServer.listen(PORT, () => {
       console.log(`🚀 Chess Engine Backend Server running on port ${PORT}`);
       console.log(`💻 Health check: http://localhost:${PORT}/health`);
       console.log(`🧠 API endpoint: http://localhost:${PORT}/api/chess/move`);
       console.log(`🔧 Test endpoint: http://localhost:${PORT}/api/chess/test`);
       console.log(`🔌 Socket.io server ready for multiplayer connections`);
+      console.log(`🌍 CORS origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
+    console.error('Critical server startup error:', error);
+    
+    // Try to start server anyway for health checks
+    try {
+      httpServer.listen(PORT, () => {
+        console.log(`🚨 Emergency server started on port ${PORT} (limited functionality)`);
+        console.log(`💻 Health check available: http://localhost:${PORT}/health`);
+      });
+    } catch (emergencyError) {
+      console.error('Failed to start emergency server:', emergencyError);
+      process.exit(1);
+    }
   }
 }
 
