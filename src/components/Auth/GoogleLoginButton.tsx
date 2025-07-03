@@ -18,8 +18,8 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ onSuccess 
       onSuccess();
     } catch (error: any) {
       console.error('Google sign-in failed:', error);
-      // Show guest fallback if Google auth fails in development mode
-      if (firebaseConfigInfo.isDevelopmentConfig) {
+      // Show guest fallback if Google auth fails and we don't have real credentials
+      if (!firebaseConfigInfo.hasRealCredentials) {
         setShowGuestFallback(true);
       }
     } finally {
@@ -72,13 +72,24 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ onSuccess 
 
   return (
     <div className="space-y-3">
-      {firebaseConfigInfo.isDevelopmentConfig && (
+      {/* Show status messaging based on configuration */}
+      {firebaseConfigInfo.useEmulator && (
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
           <p className="text-xs text-blue-600 dark:text-blue-400">
-            Development Mode: Using Firebase emulator. Authentication may have limited functionality.
+            Development Mode: Using Firebase emulator
           </p>
         </div>
       )}
+      
+      {!firebaseConfigInfo.hasRealCredentials && !firebaseConfigInfo.useEmulator && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+          <p className="text-xs text-yellow-600 dark:text-yellow-400">
+            Demo Mode: Limited authentication functionality
+          </p>
+        </div>
+      )}
+
+      {/* Main Google Sign-In Button */}
       <button
         onClick={handleGoogleSignIn}
         disabled={loading || isGoogleLoading}
@@ -106,11 +117,13 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ onSuccess 
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            Continue with Google
+            {firebaseConfigInfo.hasRealCredentials ? 'Continue with Google' : 'Continue with Google (Demo)'}
           </>
         )}
       </button>
-      {firebaseConfigInfo.isDevelopmentConfig && (
+
+      {/* Guest account option - show when not using real Google auth */}
+      {(!firebaseConfigInfo.hasRealCredentials || firebaseConfigInfo.useEmulator) && (
         <button
           onClick={handleGuestAccount}
           disabled={loading || isGoogleLoading}
@@ -120,7 +133,7 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ onSuccess 
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600 dark:border-gray-300"></div>
           ) : (
             <>
-              🎮 Play as Guest (Development)
+              🎮 Play as Guest
             </>
           )}
         </button>
