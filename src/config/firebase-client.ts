@@ -28,12 +28,9 @@ export const auth = getAuth(app);
 // Connect to Firebase Auth emulator when in development mode
 if (isDevelopmentConfig) {
   try {
-    // Only connect if not already connected
-    if (!auth.config.emulator) {
-      connectAuthEmulator(auth, 'http://localhost:9099');
-      console.log('🔥 Firebase Auth emulator connected (development mode)');
-      console.log('✅ Authentication will work with guest accounts and local development');
-    }
+    connectAuthEmulator(auth, 'http://localhost:9099');
+    console.log('🔥 Firebase Auth emulator connected (development mode)');
+    console.log('✅ Authentication will work with guest accounts and local development');
   } catch (error) {
     console.log('Firebase Auth emulator connection failed, using fallback auth:', error);
     console.log('✅ Guest mode authentication will still work');
@@ -44,8 +41,8 @@ if (isDevelopmentConfig) {
 // Export configuration info for debugging
 export const firebaseConfigInfo = {
   isDevelopmentConfig,
-  hasEmulator: !!auth.config?.emulator,
-  apiKey: firebaseConfig.apiKey.substring(0, 10) + '...',
+  hasEmulator: isDevelopmentConfig, // Simplified - if development config, assume emulator is intended
+  apiKey: firebaseConfig.apiKey ? firebaseConfig.apiKey.substring(0, 10) + '...' : 'undefined',
   projectId: firebaseConfig.projectId
 };
 
