@@ -196,12 +196,12 @@ export class GameSocketHandler {
         const wasWhitePlayer = roomToJoin.whitePlayer?.id === socket.data.userId;
         const wasBlackPlayer = roomToJoin.blackPlayer?.id === socket.data.userId;
 
-        if (wasWhitePlayer) {
+        if (wasWhitePlayer && roomToJoin.whitePlayer) {
           // User is reconnecting as white player
           roomToJoin.whitePlayer.socketId = socket.id;
           assignedColor = 'white';
           console.log(`Reassigned ${socket.id} to WHITE (reconnection of user ${socket.data.userId})`);
-        } else if (wasBlackPlayer) {
+        } else if (wasBlackPlayer && roomToJoin.blackPlayer) {
           // User is reconnecting as black player  
           roomToJoin.blackPlayer.socketId = socket.id;
           assignedColor = 'black';
