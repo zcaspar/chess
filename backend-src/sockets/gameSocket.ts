@@ -152,9 +152,25 @@ export class GameSocketHandler {
 
             this.rooms.set(roomCode, newRoom);
           } catch (dbError) {
-            console.warn('Database unavailable, room not found:', dbError);
-            socket.emit('error', { message: 'Room not found' });
-            return;
+            console.warn('Database unavailable, creating fresh room for reconnection:', dbError);
+            
+            // Create a fresh room to allow players to continue/restart their game
+            // This handles container restart scenarios where game state is lost
+            const freshRoom: GameRoom = {
+              id: roomCode,
+              roomCode,
+              whitePlayer: null,
+              blackPlayer: null,
+              game: new Chess(), // Fresh game state
+              spectators: new Set(),
+              timeControl: null,
+              whiteTime: 0,
+              blackTime: 0,
+              lastMoveTime: Date.now(),
+            };
+
+            this.rooms.set(roomCode, freshRoom);
+            console.log(`Created fresh room ${roomCode} for reconnection (container restart recovery)`);
           }
         }
 
@@ -172,21 +188,38 @@ export class GameSocketHandler {
         let assignedColor: 'white' | 'black' | 'spectator' = 'spectator';
 
         console.log(`Player joining room ${roomCode}:`);
-        console.log(`Current white player: ${roomToJoin.whitePlayer?.socketId || 'none'}`);
-        console.log(`Current black player: ${roomToJoin.blackPlayer?.socketId || 'none'}`);
-        console.log(`New player socket: ${socket.id}`);
+        console.log(`Current white player: ${roomToJoin.whitePlayer?.socketId || 'none'} (userId: ${roomToJoin.whitePlayer?.id || 'none'})`);
+        console.log(`Current black player: ${roomToJoin.blackPlayer?.socketId || 'none'} (userId: ${roomToJoin.blackPlayer?.id || 'none'})`);
+        console.log(`New player socket: ${socket.id} (userId: ${socket.data.userId})`);
 
-        if (!roomToJoin.whitePlayer) {
+        // Check if this user was previously assigned to a color (handle reconnection)
+        const wasWhitePlayer = roomToJoin.whitePlayer?.id === socket.data.userId;
+        const wasBlackPlayer = roomToJoin.blackPlayer?.id === socket.data.userId;
+
+        if (wasWhitePlayer) {
+          // User is reconnecting as white player
+          roomToJoin.whitePlayer.socketId = socket.id;
+          assignedColor = 'white';
+          console.log(`Reassigned ${socket.id} to WHITE (reconnection of user ${socket.data.userId})`);
+        } else if (wasBlackPlayer) {
+          // User is reconnecting as black player  
+          roomToJoin.blackPlayer.socketId = socket.id;
+          assignedColor = 'black';
+          console.log(`Reassigned ${socket.id} to BLACK (reconnection of user ${socket.data.userId})`);
+        } else if (!roomToJoin.whitePlayer) {
+          // New assignment to white
           roomToJoin.whitePlayer = playerData;
           assignedColor = 'white';
-          console.log(`Assigned ${socket.id} to WHITE`);
+          console.log(`Assigned ${socket.id} to WHITE (new user ${socket.data.userId})`);
         } else if (!roomToJoin.blackPlayer) {
+          // New assignment to black
           roomToJoin.blackPlayer = playerData;
           assignedColor = 'black';
-          console.log(`Assigned ${socket.id} to BLACK`);
+          console.log(`Assigned ${socket.id} to BLACK (new user ${socket.data.userId})`);
         } else {
+          // Room is full, user becomes spectator
           roomToJoin.spectators.add(socket.id);
-          console.log(`${socket.id} assigned as SPECTATOR`);
+          console.log(`${socket.id} assigned as SPECTATOR (room full)`);
         }
 
         // Update database with player assignment (if available)

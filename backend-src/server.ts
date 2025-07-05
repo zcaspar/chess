@@ -74,15 +74,13 @@ console.log('✅ User routes registered at /api/users');
 
 // Health check endpoint
 app.get('/health', (req, res) => {
+  // Fast health check - avoid any blocking operations
   res.status(200).json({ 
     status: 'ok',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    cors_origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-    engines: Object.keys(engines).reduce((acc, key) => {
-      acc[key] = engines[key] !== null;
-      return acc;
-    }, {} as { [key: string]: boolean })
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
