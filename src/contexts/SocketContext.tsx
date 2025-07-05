@@ -52,6 +52,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     // Initialize socket connection
     const socketInstance = io(process.env.REACT_APP_BACKEND_URL || 'http://localhost:3005', {
       autoConnect: false,
+      transports: ['websocket', 'polling'], // Try WebSocket first, fallback to polling
+      withCredentials: true,
     });
 
     // Connect and authenticate
@@ -124,6 +126,17 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         socketInstance.on('error', (data) => {
           console.error('Socket error:', data);
           // TODO: Show error to user
+        });
+
+        // Additional error handlers for debugging
+        socketInstance.on('connect_error', (error) => {
+          console.error('Socket connection error:', error.message);
+          console.error('Error type:', error.type);
+          console.error('Error details:', error);
+        });
+
+        socketInstance.on('connect_timeout', () => {
+          console.error('Socket connection timeout');
         });
       } catch (error) {
         console.error('Failed to connect socket:', error);
