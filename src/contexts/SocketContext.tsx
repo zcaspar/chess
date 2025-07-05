@@ -75,7 +75,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           if (data.success) {
             console.log('Socket authenticated successfully');
           } else {
-            console.error('Socket authentication failed');
+            console.error('Socket authentication failed:', data.error);
             socketInstance.disconnect();
           }
         });
@@ -126,6 +126,15 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         socketInstance.on('error', (data) => {
           console.error('Socket error:', data);
           // TODO: Show error to user
+        });
+
+        // Handle room creation response
+        socketInstance.on('roomCreated', (data) => {
+          console.log('Room created successfully:', data);
+        });
+
+        socketInstance.on('roomError', (data) => {
+          console.error('Room creation failed:', data);
         });
 
         // Additional error handlers for debugging

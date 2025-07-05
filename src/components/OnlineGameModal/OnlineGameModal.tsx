@@ -25,8 +25,15 @@ export const OnlineGameModal: React.FC<OnlineGameModalProps> = ({ isOpen, onClos
       return;
     }
 
+    if (!user) {
+      setError('You must be signed in to create a room.');
+      return;
+    }
+
     setIsCreating(true);
     setError('');
+    
+    console.log('Creating room with user:', user.email);
     
     const timeControlSeconds = {
       initial: timeControl.minutes * 60,
@@ -35,14 +42,17 @@ export const OnlineGameModal: React.FC<OnlineGameModalProps> = ({ isOpen, onClos
     
     createRoom(timeControlSeconds);
     
-    // Wait for room creation
+    // Wait for room creation with longer timeout
     setTimeout(() => {
       setIsCreating(false);
       if (currentRoomCode) {
+        console.log('Room created successfully:', currentRoomCode);
         // Room created successfully
         onClose();
+      } else {
+        setError('Failed to create room. Please check the console for details.');
       }
-    }, 2000);
+    }, 5000); // Increased timeout
   };
 
   const handleJoinRoom = () => {
