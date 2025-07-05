@@ -15,11 +15,15 @@ if (!admin.apps.length) {
       console.log('Firebase Admin SDK initialized for emulator');
     } else {
       // Production configuration
+      // Try to use the same project ID from the frontend
+      const projectId = 'chess-multiplayer-10fa8'; // Match frontend Firebase project
+      
       admin.initializeApp({
-        projectId: process.env.FIREBASE_PROJECT_ID || 'chess-app-dev',
-        // In production, add serviceAccountKey configuration
+        projectId: projectId,
+        // Firebase Admin will automatically use Application Default Credentials
+        // or service account key from environment variables if available
       });
-      console.log('Firebase Admin SDK initialized for production');
+      console.log('Firebase Admin SDK initialized for production with project:', projectId);
     }
   } catch (error) {
     console.error('Firebase Admin SDK initialization error:', error);
