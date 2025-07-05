@@ -150,23 +150,36 @@ export class GameSocketHandler {
 
         let assignedColor: 'white' | 'black' | 'spectator' = 'spectator';
 
+        console.log(`Player joining room ${roomCode}:`);
+        console.log(`Current white player: ${roomToJoin.whitePlayer?.socketId || 'none'}`);
+        console.log(`Current black player: ${roomToJoin.blackPlayer?.socketId || 'none'}`);
+        console.log(`New player socket: ${socket.id}`);
+
         if (!roomToJoin.whitePlayer) {
           roomToJoin.whitePlayer = playerData;
           assignedColor = 'white';
+          console.log(`Assigned ${socket.id} to WHITE`);
         } else if (!roomToJoin.blackPlayer) {
           roomToJoin.blackPlayer = playerData;
           assignedColor = 'black';
+          console.log(`Assigned ${socket.id} to BLACK`);
         } else {
           roomToJoin.spectators.add(socket.id);
+          console.log(`${socket.id} assigned as SPECTATOR`);
         }
 
-        // Update database with player assignment
+        // Update database with player assignment (if available)
         if (assignedColor !== 'spectator' && roomToJoin.gameId) {
-          const column = assignedColor === 'white' ? 'white_user_id' : 'black_user_id';
-          await query(
-            `UPDATE games SET ${column} = (SELECT id FROM users WHERE firebase_uid = $1) WHERE id = $2`,
-            [socket.data.userId, roomToJoin.gameId]
-          );
+          try {
+            const column = assignedColor === 'white' ? 'white_user_id' : 'black_user_id';
+            await query(
+              `UPDATE games SET ${column} = (SELECT id FROM users WHERE firebase_uid = $1) WHERE id = $2`,
+              [socket.data.userId, roomToJoin.gameId]
+            );
+          } catch (dbError) {
+            console.warn('Database unavailable for player assignment:', dbError);
+            // Continue without database persistence
+          }
         }
 
         // Send room state to the joining player
@@ -226,13 +239,22 @@ export class GameSocketHandler {
         const isWhitePlayer = room.whitePlayer?.socketId === socket.id;
         const isBlackPlayer = room.blackPlayer?.socketId === socket.id;
         
+        console.log(`Move attempt from socket ${socket.id}:`);
+        console.log(`White player: ${room.whitePlayer?.socketId}, Black player: ${room.blackPlayer?.socketId}`);
+        console.log(`Is white player: ${isWhitePlayer}, Is black player: ${isBlackPlayer}`);
+        console.log(`Current turn: ${room.game.turn()}`);
+        
         if (!isWhitePlayer && !isBlackPlayer) {
+          console.log('Player not found in game');
           socket.emit('error', { message: 'You are not a player in this game' });
           return;
         }
 
         const playerColor = isWhitePlayer ? 'w' : 'b';
+        console.log(`Player color: ${playerColor}, Game turn: ${room.game.turn()}`);
+        
         if (room.game.turn() !== playerColor) {
+          console.log('Not player\'s turn');
           socket.emit('error', { message: 'Not your turn' });
           return;
         }
@@ -270,26 +292,31 @@ export class GameSocketHandler {
           }
         }
 
-        // Save move to database
+        // Save move to database (if available)
         if (room.gameId) {
-          await query(
-            `INSERT INTO moves (game_id, move_number, player_color, move_notation, move_data, time_remaining)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [
-              room.gameId,
-              Math.ceil(room.game.moveNumber() / 2),
-              playerColor,
-              move.san,
-              JSON.stringify(move),
-              playerColor === 'w' ? room.whiteTime : room.blackTime,
-            ]
-          );
+          try {
+            await query(
+              `INSERT INTO moves (game_id, move_number, player_color, move_notation, move_data, time_remaining)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [
+                room.gameId,
+                Math.ceil(room.game.moveNumber() / 2),
+                playerColor,
+                move.san,
+                JSON.stringify(move),
+                playerColor === 'w' ? room.whiteTime : room.blackTime,
+              ]
+            );
 
-          // Update game state in database
-          await query(
-            'UPDATE games SET fen = $1, pgn = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-            [room.game.fen(), room.game.pgn(), room.gameId]
-          );
+            // Update game state in database
+            await query(
+              'UPDATE games SET fen = $1, pgn = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+              [room.game.fen(), room.game.pgn(), room.gameId]
+            );
+          } catch (dbError) {
+            console.warn('Database unavailable for move persistence:', dbError);
+            // Continue without database persistence
+          }
         }
 
         // Broadcast move to all players in the room
