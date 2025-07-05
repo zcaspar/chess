@@ -1,6 +1,6 @@
 {
   "name": "chess-backend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Chess app backend server with Socket.io and Firebase auth",
   "main": "dist/server.js",
   "scripts": {
