@@ -233,13 +233,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const loadUserProfile = useCallback(async (firebaseUser: FirebaseUser): Promise<void> => {
     try {
-      const profileData = await fetchUserProfile(firebaseUser);
+      let profileData = await fetchUserProfile(firebaseUser);
+      
+      // If profile doesn't exist, create one
+      if (!profileData) {
+        console.log('Creating new user profile for:', firebaseUser.email);
+        await createUserProfile({
+          username: firebaseUser.email?.split('@')[0] || `user_${Date.now()}`,
+          email: firebaseUser.email || '',
+          displayName: firebaseUser.displayName,
+          isGuest: false,
+        });
+        
+        // Fetch the newly created profile
+        profileData = await fetchUserProfile(firebaseUser);
+      }
+      
       setProfile(profileData);
       setUser(Object.assign(firebaseUser, { profile: profileData || undefined }));
     } catch (err) {
       console.error('Error loading user profile:', err);
     }
-  }, [fetchUserProfile]);
+  }, [fetchUserProfile, createUserProfile]);
 
   // Auth state listener
   useEffect(() => {
