@@ -30,7 +30,7 @@
 - **Local Development**: ✅ COMPLETE - App runs perfectly on localhost
 - **Backend API**: ✅ DEPLOYED - Railway (https://chess-production-c94f.up.railway.app)
 - **LC0 Server**: ✅ DEPLOYED - Railway (https://web-production-4cc9.up.railway.app)  
-- **Frontend**: ✅ DEPLOYED - Vercel (https://chess-git-master-caspars-projects-ada039ca.vercel.app)
+- **Frontend**: ✅ DEPLOYED - Vercel (https://chess-pu71.vercel.app)
 - **Authentication**: ✅ FIXED - Development mode fallback with guest accounts
 - **AI Integration**: ✅ COMPLETE - LC0 neural network (3200+ ELO) working at superhuman strength
 
@@ -428,7 +428,7 @@ REACT_APP_FIREBASE_PROJECT_ID=chess-app-dev
 ### Final Results:
 - LC0 server successfully deployed: `https://web-production-4cc9.up.railway.app`
 - Main chess backend connected to LC0 server
-- Frontend deployed to Vercel: `https://chess-git-master-caspars-projects-ada039ca.vercel.app`
+- Frontend deployed to Vercel: `https://chess-pu71.vercel.app`
 - Critical AI state bug resolved - moves display immediately
 - Google authentication integrated and working
 - Complete end-to-end production system operational
@@ -447,13 +447,13 @@ REACT_APP_FIREBASE_PROJECT_ID=chess-app-dev
    - Provides AI moves via REST API
 
 3. **Frontend** (Vercel)
-   - URL: https://chess-git-master-caspars-projects-ada039ca.vercel.app
+   - URL: https://chess-pu71.vercel.app
    - Fully functional with Google authentication
    - Real-time AI moves with LC0 neural network
 
 ## 🎮 Complete Production Chess App
 
-**🚀 Live URL**: https://chess-git-master-caspars-projects-ada039ca.vercel.app
+**🚀 Live URL**: https://chess-pu71.vercel.app
 
 ### Features Working:
 - ✅ **Human vs Human** - Local and online multiplayer
@@ -471,8 +471,42 @@ REACT_APP_FIREBASE_PROJECT_ID=chess-app-dev
 - Chess variants (Chess960, King of the Hill, etc.)
 - Social features (friends, clubs, chat)
 
+## 🔧 Development Notes & Troubleshooting
+
+### **Git Push Authentication**
+**Issue**: Sometimes `git push origin master` fails with "could not read Username" error
+**Solution**: Use `git push` without specifying remote/branch explicitly
+- ✅ **Working command**: `git push` 
+- ❌ **May fail**: `git push origin master`
+- **Why**: Credential helper works better with simplified push command
+- **Confirmed working**: 2025-07-03 - Successfully pushed commits `9fbc5d8..3462bbf`
+
+### **Vercel Deployment Sync**
+**Issue**: Vercel showing old commit hash when local commits exist
+**Cause**: Local commits not pushed to GitHub (Vercel deploys from GitHub, not local)
+**Solution**: Push commits to GitHub, Vercel auto-deploys within minutes
+**Verification**: Check that Vercel commit hash matches latest GitHub commit
+
+### **Firebase Authorized Domain Error**
+**Issue**: `Firebase: Error (auth/unauthorized-domain)` when trying to sign in with Google
+**Cause**: Vercel domain not added to Firebase authorized domains list
+**Solution**: 
+1. Go to Firebase Console → Authentication → Settings (or Sign-in method)
+2. Scroll to "Authorized domains" section
+3. Add domain: `chess-pu71.vercel.app`
+4. Changes take effect immediately
+**Current Domain**: https://chess-pu71.vercel.app
+
+#### **Current Status** (2025-07-03)
+- ✅ **Railway Backend**: Successfully deployed with TypeScript fixes
+- ✅ **Health Check**: `/health` endpoint working
+- ✅ **CORS Configuration**: Set to allow Vercel domain
+- ❌ **Firebase Auth**: Still showing unauthorized domain error
+- **Next Steps**: Troubleshoot Firebase domain authorization - may need to verify exact domain being used or check Firebase console configuration
+
 ---
-**Last Updated**: 2025-07-03 15:30 UTC  
-**Status**: ✅ COMPLETE - Full production chess app with LC0 neural network deployed and operational  
-**Recent**: ✅ Firebase authentication fixed with development mode fallback and guest accounts  
-**Live URL**: https://chess-git-master-caspars-projects-ada039ca.vercel.app
+**Last Updated**: 2025-07-03 21:45 UTC  
+**Status**: 🔧 IN PROGRESS - Railway backend deployed, Firebase auth troubleshooting needed  
+**Recent**: ✅ Railway backend successfully deployed with TypeScript fixes, ❌ Firebase unauthorized domain error persists  
+**Live URL**: https://chess-pu71.vercel.app  
+**Backend URL**: https://chess-production-c94f.up.railway.app
