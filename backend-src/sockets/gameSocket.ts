@@ -413,14 +413,30 @@ export class GameSocketHandler {
       if (roomCode) {
         const room = this.rooms.get(roomCode);
         if (room) {
-          // Notify other players
+          let disconnectedColor: 'white' | 'black' | 'spectator' | null = null;
+          
+          // Check if disconnecting player was white or black
+          if (room.whitePlayer?.socketId === socket.id) {
+            console.log(`Removing white player ${socket.id} from room ${roomCode}`);
+            room.whitePlayer = null;
+            disconnectedColor = 'white';
+          } else if (room.blackPlayer?.socketId === socket.id) {
+            console.log(`Removing black player ${socket.id} from room ${roomCode}`);
+            room.blackPlayer = null;
+            disconnectedColor = 'black';
+          } else if (room.spectators.has(socket.id)) {
+            room.spectators.delete(socket.id);
+            disconnectedColor = 'spectator';
+          }
+
+          // Notify other players about the disconnection
           socket.to(roomCode).emit('playerDisconnected', {
             socketId: socket.id,
+            color: disconnectedColor,
           });
 
-          // TODO: Implement reconnection logic with timeout
-          // For now, just remove from spectators
-          room.spectators.delete(socket.id);
+          console.log(`Player ${socket.id} (${disconnectedColor}) disconnected from room ${roomCode}`);
+          console.log(`Room state after disconnect - White: ${room.whitePlayer?.socketId || 'none'}, Black: ${room.blackPlayer?.socketId || 'none'}`);
         }
         
         this.playerRooms.delete(socket.id);
