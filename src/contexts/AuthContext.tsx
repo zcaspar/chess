@@ -238,12 +238,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // If profile doesn't exist, create one
       if (!profileData) {
         console.log('Creating new user profile for:', firebaseUser.email);
-        await createUserProfile({
-          username: firebaseUser.email?.split('@')[0] || `user_${Date.now()}`,
-          email: firebaseUser.email || '',
-          displayName: firebaseUser.displayName,
-          isGuest: false,
-        });
+        const username = firebaseUser.email?.split('@')[0] || `user_${Date.now()}`;
+        await createUserProfile(firebaseUser, username, false);
         
         // Fetch the newly created profile
         profileData = await fetchUserProfile(firebaseUser);
@@ -254,7 +250,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (err) {
       console.error('Error loading user profile:', err);
     }
-  }, [fetchUserProfile, createUserProfile]);
+  }, [fetchUserProfile]);
 
   // Auth state listener
   useEffect(() => {

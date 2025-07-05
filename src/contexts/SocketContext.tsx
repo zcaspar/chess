@@ -52,8 +52,14 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     // Initialize socket connection
     const socketInstance = io(process.env.REACT_APP_BACKEND_URL || 'http://localhost:3005', {
       autoConnect: false,
-      transports: ['websocket', 'polling'], // Try WebSocket first, fallback to polling
+      transports: ['polling', 'websocket'], // Use polling first for Railway compatibility
       withCredentials: true,
+      upgrade: true,
+      forceNew: true,
+      timeout: 20000,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
     });
 
     // Connect and authenticate
@@ -146,6 +152,14 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
         socketInstance.on('connect_timeout', () => {
           console.error('Socket connection timeout');
+        });
+
+        socketInstance.on('upgrade', () => {
+          console.log('Socket upgraded to WebSocket');
+        });
+
+        socketInstance.on('upgradeError', (error) => {
+          console.warn('Socket upgrade failed, staying on polling:', error);
         });
       } catch (error) {
         console.error('Failed to connect socket:', error);
