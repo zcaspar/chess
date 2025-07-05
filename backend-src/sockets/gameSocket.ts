@@ -70,15 +70,20 @@ export class GameSocketHandler {
         socket.join(roomCode);
         this.playerRooms.set(socket.id, roomCode);
 
-        // Create game in database
-        const result = await query(
-          `INSERT INTO games (room_code, time_control, game_mode) 
-           VALUES ($1, $2, 'human-vs-human') 
-           RETURNING id`,
-          [roomCode, JSON.stringify(data.timeControl)]
-        );
-        
-        room.gameId = result.rows[0].id;
+        // Create game in database (if available)
+        try {
+          const result = await query(
+            `INSERT INTO games (room_code, time_control, game_mode) 
+             VALUES ($1, $2, 'human-vs-human') 
+             RETURNING id`,
+            [roomCode, JSON.stringify(data.timeControl)]
+          );
+          
+          room.gameId = result.rows[0].id;
+        } catch (dbError) {
+          console.warn('Database unavailable, continuing without persistence:', dbError);
+          // Continue without database persistence
+        }
 
         socket.emit('roomCreated', { 
           roomCode, 
@@ -96,34 +101,40 @@ export class GameSocketHandler {
         const room = this.rooms.get(roomCode);
         
         if (!room) {
-          // Try to load from database
-          const gameResult = await query(
-            'SELECT * FROM games WHERE room_code = $1 AND result = $2',
-            [roomCode, 'ongoing']
-          );
+          // Try to load from database (if available)
+          try {
+            const gameResult = await query(
+              'SELECT * FROM games WHERE room_code = $1 AND result = $2',
+              [roomCode, 'ongoing']
+            );
 
-          if (gameResult.rows.length === 0) {
+            if (gameResult.rows.length === 0) {
+              socket.emit('error', { message: 'Room not found' });
+              return;
+            }
+
+            // Recreate room from database
+            const gameData = gameResult.rows[0];
+            const newRoom: GameRoom = {
+              id: roomCode,
+              roomCode,
+              whitePlayer: null,
+              blackPlayer: null,
+              game: new Chess(gameData.fen || undefined),
+              spectators: new Set(),
+              timeControl: gameData.time_control,
+              whiteTime: gameData.time_control?.initial || 0,
+              blackTime: gameData.time_control?.initial || 0,
+              lastMoveTime: Date.now(),
+              gameId: gameData.id,
+            };
+
+            this.rooms.set(roomCode, newRoom);
+          } catch (dbError) {
+            console.warn('Database unavailable, room not found:', dbError);
             socket.emit('error', { message: 'Room not found' });
             return;
           }
-
-          // Recreate room from database
-          const gameData = gameResult.rows[0];
-          const newRoom: GameRoom = {
-            id: roomCode,
-            roomCode,
-            whitePlayer: null,
-            blackPlayer: null,
-            game: new Chess(gameData.fen || undefined),
-            spectators: new Set(),
-            timeControl: gameData.time_control,
-            whiteTime: gameData.time_control?.initial || 0,
-            blackTime: gameData.time_control?.initial || 0,
-            lastMoveTime: Date.now(),
-            gameId: gameData.id,
-          };
-
-          this.rooms.set(roomCode, newRoom);
         }
 
         const roomToJoin = this.rooms.get(roomCode)!;
