@@ -201,32 +201,74 @@ app.post('/api/chess/test', async (req: any, res: any) => {
   }
 });
 
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('Shutting down server...');
+// Memory monitoring and cleanup
+setInterval(() => {
+  const memUsage = process.memoryUsage();
+  const memUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
   
-  // Shutdown all engines
-  for (const [difficulty, engine] of Object.entries(engines)) {
-    if (engine) {
-      console.log(`Shutting down ${difficulty} engine...`);
-      await engine.shutdown();
-    }
+  // Log memory usage periodically
+  if (memUsedMB > 100) { // Log if using more than 100MB
+    console.log(`📊 Memory usage: ${memUsedMB}MB heap, ${Math.round(memUsage.rss / 1024 / 1024)}MB RSS`);
   }
   
-  process.exit(0);
+  // Force garbage collection if memory is high (Railway limit is typically 512MB)
+  if (memUsedMB > 256 && global.gc) {
+    console.log('🧹 Running garbage collection to free memory');
+    global.gc();
+  }
+}, 30000); // Check every 30 seconds
+
+// Enhanced graceful shutdown handling
+process.on('SIGINT', async () => {
+  console.log('Received SIGINT, shutting down server...');
+  await gracefulShutdown('SIGINT');
 });
 
 process.on('SIGTERM', async () => {
-  console.log('Received SIGTERM, shutting down gracefully...');
-  
-  for (const [difficulty, engine] of Object.entries(engines)) {
-    if (engine) {
-      await engine.shutdown();
-    }
-  }
-  
-  process.exit(0);
+  console.log('Received SIGTERM from Railway, shutting down gracefully...');
+  await gracefulShutdown('SIGTERM');
 });
+
+// Handle uncaught exceptions to prevent crashes
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  console.log('Attempting graceful shutdown...');
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  console.log('Continuing operation...');
+});
+
+async function gracefulShutdown(signal: string) {
+  console.log(`Graceful shutdown initiated by ${signal}`);
+  
+  try {
+    // Close HTTP server
+    httpServer.close(() => {
+      console.log('HTTP server closed');
+    });
+    
+    // Shutdown all engines
+    for (const [difficulty, engine] of Object.entries(engines)) {
+      if (engine) {
+        console.log(`Shutting down ${difficulty} engine...`);
+        try {
+          await engine.shutdown();
+        } catch (error) {
+          console.error(`Error shutting down ${difficulty} engine:`, error);
+        }
+      }
+    }
+    
+    console.log('Graceful shutdown completed');
+    process.exit(0);
+  } catch (error) {
+    console.error('Error during graceful shutdown:', error);
+    process.exit(1);
+  }
+}
 
 // Initialize Socket.io handler
 const gameSocketHandler = new GameSocketHandler(io);
