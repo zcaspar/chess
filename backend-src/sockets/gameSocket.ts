@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { Chess } from 'chess.js';
 import { query } from '../config/database';
 import { verifyToken } from '../middleware/auth';
+import { RoomPersistence } from '../utils/roomPersistence';
 
 interface GameRoom {
   id: string;
@@ -30,6 +31,39 @@ export class GameSocketHandler {
 
   constructor(io: Server) {
     this.io = io;
+    
+    // Restore rooms from persistence on startup
+    this.restorePersistedRooms();
+    
+    // Save rooms periodically
+    setInterval(() => {
+      RoomPersistence.saveRooms(this.rooms);
+    }, 30000); // Every 30 seconds
+  }
+  
+  private restorePersistedRooms() {
+    try {
+      const persistedRooms = RoomPersistence.loadRooms();
+      for (const roomData of persistedRooms) {
+        const room: GameRoom = {
+          id: roomData.roomCode,
+          roomCode: roomData.roomCode,
+          whitePlayer: roomData.whitePlayerId ? { id: roomData.whitePlayerId, username: 'Reconnecting...', socketId: '' } : null,
+          blackPlayer: roomData.blackPlayerId ? { id: roomData.blackPlayerId, username: 'Reconnecting...', socketId: '' } : null,
+          game: new Chess(roomData.fen),
+          spectators: new Set(),
+          timeControl: null,
+          whiteTime: 0,
+          blackTime: 0,
+          lastMoveTime: new Date(roomData.lastActivity).getTime(),
+        };
+        
+        this.rooms.set(roomData.roomCode, room);
+        console.log(`🔄 Restored room ${roomData.roomCode} from persistence`);
+      }
+    } catch (error) {
+      console.error('Failed to restore persisted rooms:', error);
+    }
   }
 
   handleConnection(socket: Socket) {
@@ -90,6 +124,9 @@ export class GameSocketHandler {
         this.rooms.set(roomCode, room);
         socket.join(roomCode);
         this.playerRooms.set(socket.id, roomCode);
+        
+        // Save room state immediately after creation
+        RoomPersistence.saveRooms(this.rooms);
 
         // Create game in database (if available)
         try {
@@ -393,6 +430,9 @@ export class GameSocketHandler {
           whiteTime: room.whiteTime,
           blackTime: room.blackTime,
         });
+        
+        // Save room state after move
+        RoomPersistence.saveRooms(this.rooms);
 
         // Check for game over
         if (room.game.isGameOver()) {
