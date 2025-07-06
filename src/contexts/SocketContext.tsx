@@ -131,7 +131,18 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
         socketInstance.on('error', (data) => {
           console.error('Socket error:', data);
-          // TODO: Show error to user
+          
+          // Reset room state on room not found error
+          if (data.code === 'ROOM_NOT_FOUND') {
+            setRoomCode(null);
+            setAssignedColor(null);
+            setPlayers({ white: null, black: null });
+          }
+          
+          // Notify user of error (you might want to use a toast library here)
+          if (data.message) {
+            alert(`Error: ${data.message}`);
+          }
         });
 
         // Handle room creation response

@@ -195,25 +195,14 @@ export class GameSocketHandler {
 
             this.rooms.set(roomCode, newRoom);
           } catch (dbError) {
-            console.warn('Database unavailable, creating fresh room for reconnection:', dbError);
+            console.warn('Database unavailable, checking for persisted room:', dbError);
             
-            // Create a fresh room to allow players to continue/restart their game
-            // This handles container restart scenarios where game state is lost
-            const freshRoom: GameRoom = {
-              id: roomCode,
-              roomCode,
-              whitePlayer: null,
-              blackPlayer: null,
-              game: new Chess(), // Fresh game state
-              spectators: new Set(),
-              timeControl: null,
-              whiteTime: 0,
-              blackTime: 0,
-              lastMoveTime: Date.now(),
-            };
-
-            this.rooms.set(roomCode, freshRoom);
-            console.log(`Created fresh room ${roomCode} for reconnection (container restart recovery)`);
+            // Don't auto-create rooms - force proper create/join flow
+            socket.emit('error', { 
+              message: 'Room not found. Please create a new room or check the room code.',
+              code: 'ROOM_NOT_FOUND'
+            });
+            return;
           }
         }
 

@@ -6,6 +6,7 @@ import GameStatus from '../GameStatus';
 import ChessClock from '../ChessClock';
 import PlayerInfo from '../PlayerInfo';
 import GameModeSelector from '../GameModeSelector';
+import { OnlineGameStatus } from '../OnlineGameStatus';
 
 export const GameApp: React.FC = () => {
   return (
@@ -15,6 +16,7 @@ export const GameApp: React.FC = () => {
         <div className="order-2 lg:order-1 space-y-4">
           <PlayerInfo />
           <GameModeSelector />
+          <OnlineGameStatus />
           <GameStatus />
           <GameControls />
         </div>
