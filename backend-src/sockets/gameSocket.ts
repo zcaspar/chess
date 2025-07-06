@@ -72,6 +72,8 @@ export class GameSocketHandler {
     socket.on('createRoom', async (data: { timeControl?: { initial: number; increment: number } }) => {
       try {
         const roomCode = this.generateRoomCode();
+        console.log(`🎮 Creating new room ${roomCode} for socket ${socket.id} (${socket.data.username})`);
+        
         const room: GameRoom = {
           id: roomCode,
           roomCode,
@@ -104,9 +106,12 @@ export class GameSocketHandler {
           // Continue without database persistence
         }
 
+        const shareLink = `${process.env.FRONTEND_URL}/game/${roomCode}`;
+        console.log(`✅ Room ${roomCode} created successfully. Share link: ${shareLink}`);
+        
         socket.emit('roomCreated', { 
           roomCode, 
-          shareLink: `${process.env.FRONTEND_URL}/game/${roomCode}` 
+          shareLink
         });
       } catch (error) {
         console.error('Error creating room:', error);
@@ -117,8 +122,9 @@ export class GameSocketHandler {
     // Join an existing room
     socket.on('joinRoom', async (roomCode: string) => {
       try {
-        console.log(`Socket ${socket.id} attempting to join room ${roomCode}`);
+        console.log(`🔗 Socket ${socket.id} (${socket.data.username}) attempting to join room ${roomCode}`);
         console.log(`Socket auth data: userId=${socket.data.userId}, username=${socket.data.username}`);
+        console.log(`Current active rooms: [${Array.from(this.rooms.keys()).join(', ')}]`);
         const room = this.rooms.get(roomCode);
         
         if (!room) {
