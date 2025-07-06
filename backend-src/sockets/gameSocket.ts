@@ -121,6 +121,16 @@ export class GameSocketHandler {
           lastMoveTime: Date.now(),
         };
 
+        // Auto-join creator to the room as white player
+        const creatorData: PlayerData = {
+          id: socket.data.userId,
+          username: socket.data.username,
+          socketId: socket.id,
+        };
+        
+        room.whitePlayer = creatorData;
+        console.log(`Auto-assigned creator ${socket.id} to WHITE in room ${roomCode}`);
+
         this.rooms.set(roomCode, room);
         socket.join(roomCode);
         this.playerRooms.set(socket.id, roomCode);
@@ -138,6 +148,12 @@ export class GameSocketHandler {
           );
           
           room.gameId = result.rows[0].id;
+          
+          // Update database with creator as white player
+          await query(
+            `UPDATE games SET white_user_id = (SELECT id FROM users WHERE firebase_uid = $1) WHERE id = $2`,
+            [socket.data.userId, room.gameId]
+          );
         } catch (dbError) {
           console.warn('Database unavailable, continuing without persistence:', dbError);
           // Continue without database persistence
@@ -146,9 +162,29 @@ export class GameSocketHandler {
         const shareLink = `${process.env.FRONTEND_URL}/game/${roomCode}`;
         console.log(`✅ Room ${roomCode} created successfully. Share link: ${shareLink}`);
         
+        // Emit both roomCreated and roomJoined events
         socket.emit('roomCreated', { 
           roomCode, 
           shareLink
+        });
+        
+        // Also emit roomJoined so the creator knows they're in the game
+        socket.emit('roomJoined', {
+          roomCode,
+          assignedColor: 'white',
+          gameState: {
+            fen: room.game.fen(),
+            pgn: room.game.pgn(),
+            turn: room.game.turn(),
+            isGameOver: room.game.isGameOver(),
+          },
+          players: {
+            white: room.whitePlayer,
+            black: room.blackPlayer,
+          },
+          timeControl: room.timeControl,
+          whiteTime: room.whiteTime,
+          blackTime: room.blackTime,
         });
       } catch (error) {
         console.error('Error creating room:', error);

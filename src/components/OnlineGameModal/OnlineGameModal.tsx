@@ -42,17 +42,13 @@ export const OnlineGameModal: React.FC<OnlineGameModalProps> = ({ isOpen, onClos
     
     createRoom(timeControlSeconds);
     
-    // Wait for room creation with longer timeout
+    // Close modal after a short delay to allow socket events to process
     setTimeout(() => {
       setIsCreating(false);
-      if (currentRoomCode) {
-        console.log('Room created successfully:', currentRoomCode);
-        // Room created successfully
-        onClose();
-      } else {
-        setError('Failed to create room. Please check the console for details.');
-      }
-    }, 5000); // Increased timeout
+      // The room creation will trigger both roomCreated and roomJoined events
+      // which will update the currentRoomCode in SocketContext
+      onClose();
+    }, 500); // Short delay to ensure socket events are processed
   };
 
   const handleJoinRoom = () => {
