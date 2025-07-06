@@ -121,15 +121,23 @@ export class GameSocketHandler {
           lastMoveTime: Date.now(),
         };
 
-        // Auto-join creator to the room as white player
+        // Auto-join creator to the room with random color assignment
         const creatorData: PlayerData = {
           id: socket.data.userId,
           username: socket.data.username,
           socketId: socket.id,
         };
         
-        room.whitePlayer = creatorData;
-        console.log(`Auto-assigned creator ${socket.id} to WHITE in room ${roomCode}`);
+        // Randomly assign creator to white or black
+        const assignedColor = Math.random() < 0.5 ? 'white' : 'black';
+        
+        if (assignedColor === 'white') {
+          room.whitePlayer = creatorData;
+        } else {
+          room.blackPlayer = creatorData;
+        }
+        
+        console.log(`Auto-assigned creator ${socket.id} to ${assignedColor.toUpperCase()} in room ${roomCode}`);
 
         this.rooms.set(roomCode, room);
         socket.join(roomCode);
@@ -149,9 +157,10 @@ export class GameSocketHandler {
           
           room.gameId = result.rows[0].id;
           
-          // Update database with creator as white player
+          // Update database with creator's assigned color
+          const column = assignedColor === 'white' ? 'white_user_id' : 'black_user_id';
           await query(
-            `UPDATE games SET white_user_id = (SELECT id FROM users WHERE firebase_uid = $1) WHERE id = $2`,
+            `UPDATE games SET ${column} = (SELECT id FROM users WHERE firebase_uid = $1) WHERE id = $2`,
             [socket.data.userId, room.gameId]
           );
         } catch (dbError) {
@@ -171,7 +180,7 @@ export class GameSocketHandler {
         // Also emit roomJoined so the creator knows they're in the game
         socket.emit('roomJoined', {
           roomCode,
-          assignedColor: 'white',
+          assignedColor: assignedColor,
           gameState: {
             fen: room.game.fen(),
             pgn: room.game.pgn(),
