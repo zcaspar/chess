@@ -541,16 +541,40 @@ game_history table:
 4. Changes take effect immediately
 **Current Domain**: https://chess-pu71.vercel.app
 
-#### **Current Status** (2025-07-05)
+#### **Current Status** (2025-07-07)
 - ✅ **Railway Backend**: Successfully deployed and operational
 - ✅ **Health Check**: `/health` endpoint working
 - ✅ **CORS Configuration**: Fixed - Updated to allow `chess-pu71.vercel.app`
 - ✅ **Firebase Auth**: WORKING! Google authentication fully operational
 - ✅ **Production System**: Complete chess app with auth, AI, and multiplayer
+- ✅ **PostgreSQL Database**: Connected and operational on Railway
+- 🔧 **Game History**: Implementation complete, JSONB handling issue being debugged
+
+### **Game History Database Issue** (2025-07-07)
+**Problem**: Game history failing with 500 errors despite database being connected
+**Error**: "Unexpected token o in JSON at position 1" - JSONB double-conversion issue
+**Status**: 
+- ✅ Database connected (using DATABASE_PUBLIC_URL from Railway)
+- ✅ Tables created successfully
+- ✅ JSONB fix deployed (removed double JSON.stringify/parse)
+- ❌ Still getting 500 errors when saving/fetching games
+- 🔍 Enhanced debugging deployed (commit 7c88cfa)
+
+**Next Steps**:
+1. Check Railway logs after deployment completes
+2. Run `/debug/db-test` endpoint to verify JSONB handling
+3. Identify specific error from enhanced logging
+4. May need to check user profile creation (404 on /api/users/profile)
+
+**Debug Endpoints Available**:
+- `/health/db` - Database connection status
+- `/debug/env` - Environment variables check
+- `/debug/game-history` - Game history table status
+- `/debug/db-test` - JSONB handling test (newly added)
 
 ---
-**Last Updated**: 2025-07-07 16:30 UTC  
-**Status**: ✅ COMPLETE - Full production system with graceful game history degradation  
-**Recent**: ✅ Game history system implemented with graceful database fallback (PostgreSQL setup needed on Railway for persistence)  
+**Last Updated**: 2025-07-07 20:00 UTC  
+**Status**: 🔧 DEBUGGING - Game history database integration (PostgreSQL connected, JSONB issue)
+**Recent**: Enhanced error logging deployed, waiting for Railway deployment to diagnose 500 errors  
 **Live URL**: https://chess-pu71.vercel.app  
 **Backend URL**: https://chess-production-c94f.up.railway.app
