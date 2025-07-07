@@ -13,15 +13,6 @@ const ChessBoard: React.FC = () => {
   const [rightClickedSquares, setRightClickedSquares] = useState<Square[]>([]);
   const [optionSquares, setOptionSquares] = useState<Partial<Record<Square, { background: string }>>>({});
   
-  // Debug logging
-  useEffect(() => {
-    console.log('ChessBoard state:', { 
-      roomCode, 
-      assignedColor, 
-      isOnlineGame, 
-      gameMode: gameState.gameMode 
-    });
-  }, [roomCode, assignedColor, isOnlineGame, gameState.gameMode]);
   
   // Clear selections when game ends
   useEffect(() => {
@@ -82,26 +73,14 @@ const ChessBoard: React.FC = () => {
     // Try to make the move
     let moveSuccessful = false;
     
-    console.log('Move attempt:', { 
-      isOnlineGame, 
-      roomCode, 
-      gameMode: gameState.gameMode,
-      from: moveFrom, 
-      to: square 
-    });
-    
     if (isOnlineGame && roomCode) {
       // For online games, check if it's our turn
       if (assignedColor && gameState.game.turn() === assignedColor.charAt(0)) {
-        console.log('Making online move via socket');
         socketMakeMove(moveFrom, square);
         moveSuccessful = true; // Optimistically assume success
-      } else {
-        console.log('Not your turn in online game');
       }
     } else {
       // For local games, use the regular makeMove
-      console.log('Making local move');
       moveSuccessful = makeMove(moveFrom, square);
     }
     
