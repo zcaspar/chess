@@ -403,8 +403,29 @@ async function startServer() {
         // Initialize game history tables if they don't exist
         try {
           const { GameHistoryModel } = await import('./models/GameHistory');
-          await GameHistoryModel.initializeTables();
-          console.log('✅ Game history tables initialized');
+          
+          // Try multiple times with delays for Railway startup timing
+          let tableInitialized = false;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              console.log(`🔄 Attempt ${attempt}/3: Initializing game history tables...`);
+              await GameHistoryModel.initializeTables();
+              console.log('✅ Game history tables initialized successfully');
+              tableInitialized = true;
+              break;
+            } catch (attemptError: any) {
+              console.error(`❌ Attempt ${attempt} failed:`, attemptError.message);
+              if (attempt < 3) {
+                console.log(`⏳ Waiting 5 seconds before retry...`);
+                await new Promise(resolve => setTimeout(resolve, 5000));
+              }
+            }
+          }
+          
+          if (!tableInitialized) {
+            console.error('⚠️  Failed to initialize game history tables after 3 attempts');
+            console.log('⚠️  Game history features will be disabled until tables are created manually');
+          }
         } catch (tableError) {
           console.error('⚠️  Warning: Could not initialize game history tables:', tableError);
           console.log('⚠️  Game history features may not work properly.');

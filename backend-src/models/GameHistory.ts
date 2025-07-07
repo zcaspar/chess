@@ -83,11 +83,22 @@ export class GameHistoryModel {
       
       // Check if it's a table doesn't exist error
       if (error.code === '42P01') {
-        console.error('Game history table does not exist. Run GameHistoryModel.initializeTables() to create it.');
-        throw new Error('Database tables not initialized. Please contact support.');
+        console.log('🔄 Table does not exist, attempting to create it...');
+        
+        try {
+          // Try to create the table and retry the insert
+          await this.initializeTables();
+          console.log('✅ Tables created, retrying insert...');
+          
+          const retryResult = await query(insertQuery, values);
+          return this.mapRowToGameHistory(retryResult.rows[0]);
+        } catch (retryError: any) {
+          console.error('❌ Failed to create table and retry insert:', retryError);
+          throw new Error(`Failed to initialize database tables: ${retryError.message}`);
+        }
       }
       
-      throw new Error('Failed to save game to history');
+      throw new Error(`Failed to save game to history: ${error.message}`);
     }
   }
 
@@ -246,7 +257,7 @@ export class GameHistoryModel {
         console.log('📁 Schema loaded from file');
       } catch (fileError) {
         console.log('📝 Using inline schema (file not found)');
-        // Inline schema as fallback
+        // Simplified inline schema as fallback - minimal setup for production
         schema = `
           CREATE TABLE IF NOT EXISTS game_history (
               id SERIAL PRIMARY KEY,
@@ -267,24 +278,6 @@ export class GameHistoryModel {
               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
               updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           );
-          
-          CREATE INDEX IF NOT EXISTS idx_game_history_player_id ON game_history(player_id);
-          CREATE INDEX IF NOT EXISTS idx_game_history_created_at ON game_history(created_at DESC);
-          CREATE INDEX IF NOT EXISTS idx_game_history_player_outcome ON game_history(player_id, game_outcome);
-          CREATE INDEX IF NOT EXISTS idx_game_history_game_mode ON game_history(game_mode);
-          
-          CREATE OR REPLACE FUNCTION update_updated_at_column()
-          RETURNS TRIGGER AS $$
-          BEGIN
-              NEW.updated_at = CURRENT_TIMESTAMP;
-              RETURN NEW;
-          END;
-          $$ language 'plpgsql';
-          
-          CREATE TRIGGER update_game_history_updated_at 
-              BEFORE UPDATE ON game_history 
-              FOR EACH ROW 
-              EXECUTE FUNCTION update_updated_at_column();
         `;
       }
       
