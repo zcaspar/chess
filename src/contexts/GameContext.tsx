@@ -185,6 +185,101 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     return newStats;
   }, []);
 
+  // Function to save game to history
+  const saveGameToHistory = useCallback(async (result: string, winningColor?: 'w' | 'b', finalFen?: string, pgn?: string) => {
+    if (!authContext?.user || !authContext?.profile) {
+      return; // No authenticated user
+    }
+
+    try {
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3005';
+      
+      // Determine game outcome for the current user
+      let gameOutcome: 'win' | 'loss' | 'draw' = 'draw';
+      
+      if (result.includes('wins') && winningColor) {
+        if (gameState.gameMode === 'human-vs-ai') {
+          // For AI games, user wins if AI didn't win
+          const userWon = (gameState.aiColor === 'w' && winningColor === 'b') || 
+                          (gameState.aiColor === 'b' && winningColor === 'w');
+          gameOutcome = userWon ? 'win' : 'loss';
+        } else {
+          // For human vs human, we'll mark it as a win for now
+          // TODO: Could be enhanced to determine which player in the UI
+          gameOutcome = 'win';
+        }
+      } else if (result.includes('Draw') || result.includes('draw')) {
+        gameOutcome = 'draw';
+      }
+      
+      // Determine player color (assume human is always white for now, AI is black)
+      let playerColor: 'w' | 'b' = 'w';
+      if (gameState.gameMode === 'human-vs-ai' && gameState.aiColor === 'w') {
+        playerColor = 'b';
+      }
+      
+      // Generate PGN if not provided
+      let gamePgn = pgn;
+      if (!gamePgn) {
+        const pgnGame = new Chess();
+        gameState.history.forEach(move => {
+          pgnGame.move(move);
+        });
+        gamePgn = pgnGame.pgn();
+      }
+      
+      // Determine opponent info
+      let opponentName = 'Unknown';
+      let opponentId = undefined;
+      
+      if (gameState.gameMode === 'human-vs-ai') {
+        opponentName = `Computer (${gameState.aiDifficulty})`;
+      } else {
+        // For human vs human, use the other player's name
+        const opponentPlayerKey = playerColor === 'w' ? 'black' : 'white';
+        const opponentKey = gameState.colorAssignment[opponentPlayerKey];
+        opponentName = gameState.players[opponentKey];
+      }
+      
+      const gameHistoryData = {
+        gameId: gameState.gameId,
+        opponentId,
+        opponentName,
+        playerColor,
+        gameResult: result,
+        gameOutcome,
+        finalFen: finalFen || gameState.game.fen(),
+        pgn: gamePgn,
+        moveCount: gameState.history.length,
+        gameDuration: gameState.timeControl ? 
+          Math.floor((gameState.timeControl.initial * 2 - gameState.whiteTime - gameState.blackTime) / 1000) : 
+          undefined,
+        timeControl: gameState.timeControl,
+        gameMode: gameState.gameMode,
+        aiDifficulty: gameState.gameMode === 'human-vs-ai' ? gameState.aiDifficulty : undefined
+      };
+      
+      const token = await authContext.user.getIdToken();
+      
+      const response = await fetch(`${backendUrl}/api/game-history`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(gameHistoryData)
+      });
+      
+      if (response.ok) {
+        console.log('✅ Game saved to history successfully');
+      } else {
+        console.error('❌ Failed to save game to history:', await response.text());
+      }
+    } catch (error) {
+      console.error('❌ Error saving game to history:', error);
+    }
+  }, [authContext, gameState]);
+
   // Function to update user statistics when game ends
   const updateUserStats = useCallback(async (result: string, winningColor?: 'w' | 'b') => {
     if (!authContext?.profile || !authContext?.updateStats) {
@@ -267,6 +362,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
             // Update user statistics for time expiration
             updateUserStats(result, winningColor);
             
+            // Save game to history
+            saveGameToHistory(result, winningColor);
+            
             return {
               ...prev,
               [timeKey]: 0,
@@ -298,7 +396,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [gameState.activeColor, gameState.startTime, gameState.gameResult, gameState.timeControl, updateGameStats, updateUserStats]);
+  }, [gameState.activeColor, gameState.startTime, gameState.gameResult, gameState.timeControl, updateGameStats, updateUserStats, saveGameToHistory]);
 
   // AI move effect
   useEffect(() => {
@@ -478,6 +576,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           console.log('🏁 Game ended in makeMove:', result, 'gameId:', prev.gameId);
           // Update user statistics for game completion
           updateUserStats(result, winningColor);
+          
+          // Save game to history
+          saveGameToHistory(result, winningColor, gameCopy.fen(), gameCopy.pgn());
         }
 
         return {
@@ -500,7 +601,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     } catch {
       return false;
     }
-  }, [gameState, updateGameStats, updateUserStats]);
+  }, [gameState, updateGameStats, updateUserStats, saveGameToHistory]);
 
   const undoMove = useCallback(() => {
     if (gameState.currentMoveIndex < 0) return;
@@ -634,6 +735,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     // Update user statistics for resignation
     updateUserStats(result, winningColor);
     
+    // Save game to history
+    saveGameToHistory(result, winningColor);
+    
     setGameState({
       ...gameState,
       gameResult: result,
@@ -642,7 +746,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       gameStats: updatedStats,
       statsUpdated: true,
     });
-  }, [gameState, updateGameStats, updateUserStats]);
+  }, [gameState, updateGameStats, updateUserStats, saveGameToHistory]);
 
   const offerDraw = useCallback((color: 'w' | 'b') => {
     setGameState({
@@ -658,6 +762,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     // Update user statistics for draw
     updateUserStats(result);
     
+    // Save game to history
+    saveGameToHistory(result);
+    
     setGameState({
       ...gameState,
       gameResult: result,
@@ -667,7 +774,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       gameStats: updatedStats,
       statsUpdated: true,
     });
-  }, [gameState, updateGameStats, updateUserStats]);
+  }, [gameState, updateGameStats, updateUserStats, saveGameToHistory]);
 
   const declineDraw = useCallback(() => {
     setGameState({

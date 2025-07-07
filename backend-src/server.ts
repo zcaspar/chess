@@ -6,6 +6,7 @@ import { Server } from 'socket.io';
 import { Chess } from 'chess.js';
 import { Lc0Engine } from './lc0Engine';
 import userRoutes from './routes/users';
+import gameHistoryRoutes from './routes/gameHistory';
 import { GameSocketHandler } from './sockets/gameSocket';
 import { testConnection } from './config/database';
 
@@ -71,6 +72,10 @@ async function initializeEngines() {
 console.log('🔗 Registering user routes...');
 app.use('/api/users', userRoutes);
 console.log('✅ User routes registered at /api/users');
+
+console.log('🔗 Registering game history routes...');
+app.use('/api/game-history', gameHistoryRoutes);
+console.log('✅ Game history routes registered at /api/game-history');
 
 // Health check endpoint
 app.get('/health', (req, res) => {

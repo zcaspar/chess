@@ -106,4 +106,7 @@ export const optionalAuth = async (
   }
 };
 
+// Alias for backward compatibility
+export const authenticateToken = verifyFirebaseToken;
+
 export type { AuthenticatedRequest };

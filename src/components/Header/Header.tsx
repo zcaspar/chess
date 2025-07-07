@@ -3,7 +3,12 @@ import { useAuth } from '../../hooks/useAuth';
 import { useGame } from '../../contexts/GameContext';
 import { AuthModal, UserProfile } from '../Auth';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  onShowHistory?: () => void;
+  currentView?: 'game' | 'history';
+}
+
+export const Header: React.FC<HeaderProps> = ({ onShowHistory, currentView = 'game' }) => {
   const { profile, isAuthenticated, isGuest, signOut } = useAuth();
   const { clearAllGameData } = useGame();
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -26,10 +31,26 @@ export const Header: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo and Title */}
-            <div className="flex items-center">
+            <div className="flex items-center space-x-6">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                 ♛ Chess App
               </h1>
+              
+              {/* Navigation */}
+              {(isAuthenticated || isGuest) && onShowHistory && (
+                <nav className="flex space-x-4">
+                  <button
+                    onClick={() => currentView === 'history' ? undefined : onShowHistory()}
+                    className={`px-3 py-2 text-sm font-medium transition-colors ${
+                      currentView === 'history'
+                        ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    Game History
+                  </button>
+                </nav>
+              )}
             </div>
 
             {/* User Authentication Controls */}
