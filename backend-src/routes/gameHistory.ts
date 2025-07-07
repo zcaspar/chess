@@ -111,8 +111,18 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
       }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching game history:', error);
+    
+    // Check if it's a table doesn't exist error
+    if (error.code === '42P01') {
+      res.status(503).json({
+        error: 'Game history feature is being set up',
+        message: 'Database tables are being initialized. Please try again in a moment.'
+      });
+      return;
+    }
+    
     res.status(500).json({
       error: 'Failed to fetch game history',
       message: error instanceof Error ? error.message : 'Unknown error'

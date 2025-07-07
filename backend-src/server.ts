@@ -293,6 +293,16 @@ async function startServer() {
         console.error('⚠️  Warning: Database connection failed. Online multiplayer features will be limited.');
       } else {
         console.log('✅ Database connection successful');
+        
+        // Initialize game history tables if they don't exist
+        try {
+          const { GameHistoryModel } = await import('./models/GameHistory');
+          await GameHistoryModel.initializeTables();
+          console.log('✅ Game history tables initialized');
+        } catch (tableError) {
+          console.error('⚠️  Warning: Could not initialize game history tables:', tableError);
+          console.log('⚠️  Game history features may not work properly.');
+        }
       }
     } catch (dbError) {
       console.error('⚠️  Database connection error:', dbError);
