@@ -89,6 +89,112 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Database health check endpoint
+app.get('/health/db', async (req, res) => {
+  try {
+    const { testConnection } = await import('./config/database');
+    const dbConnected = await testConnection();
+    
+    if (dbConnected) {
+      res.status(200).json({ 
+        status: 'ok',
+        database: 'connected',
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      res.status(503).json({ 
+        status: 'error',
+        database: 'disconnected',
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'error',
+      database: 'error',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Game history debug endpoint
+app.get('/debug/game-history', async (req, res) => {
+  try {
+    console.log('🔍 Debug: Testing game history functionality...');
+    
+    // Test database connection
+    const { testConnection, query } = await import('./config/database');
+    const dbConnected = await testConnection();
+    
+    if (!dbConnected) {
+      return res.status(503).json({
+        status: 'error',
+        step: 'database_connection',
+        message: 'Database connection failed'
+      });
+    }
+    
+    // Test if game_history table exists
+    try {
+      await query("SELECT COUNT(*) FROM game_history WHERE 1=0");
+      console.log('✅ Debug: game_history table exists');
+      
+      res.status(200).json({
+        status: 'ok',
+        steps: {
+          database_connection: 'ok',
+          table_exists: 'ok'
+        },
+        message: 'Game history functionality appears to be working'
+      });
+    } catch (tableError: any) {
+      console.log('❌ Debug: game_history table does not exist');
+      console.log('Table error:', tableError);
+      
+      // Try to initialize tables
+      try {
+        console.log('🔄 Debug: Attempting to initialize tables...');
+        const { GameHistoryModel } = await import('./models/GameHistory');
+        await GameHistoryModel.initializeTables();
+        
+        res.status(200).json({
+          status: 'ok',
+          steps: {
+            database_connection: 'ok',
+            table_exists: 'created',
+            table_initialization: 'ok'
+          },
+          message: 'Game history tables were created successfully'
+        });
+      } catch (initError: any) {
+        console.error('❌ Debug: Failed to initialize tables:', initError);
+        
+        res.status(503).json({
+          status: 'error',
+          steps: {
+            database_connection: 'ok',
+            table_exists: 'no',
+            table_initialization: 'failed'
+          },
+          error: {
+            message: initError.message,
+            code: initError.code,
+            detail: initError.detail
+          }
+        });
+      }
+    }
+  } catch (error: any) {
+    console.error('❌ Debug endpoint error:', error);
+    res.status(500).json({
+      status: 'error',
+      step: 'unknown',
+      error: error.message || 'Unknown error'
+    });
+  }
+});
+
 // Get best move endpoint
 app.post('/api/chess/move', async (req: any, res: any) => {
   try {

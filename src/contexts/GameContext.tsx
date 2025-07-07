@@ -276,7 +276,20 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       if (response.ok) {
         console.log('✅ Game saved to history successfully');
       } else {
-        console.error('❌ Failed to save game to history:', await response.text());
+        const errorText = await response.text();
+        console.error('❌ Failed to save game to history:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        
+        // Try to parse the error response for more details
+        try {
+          const errorData = JSON.parse(errorText);
+          console.error('❌ Error details:', errorData);
+        } catch (parseError) {
+          console.error('❌ Could not parse error response');
+        }
       }
     } catch (error) {
       console.error('❌ Error saving game to history:', error);

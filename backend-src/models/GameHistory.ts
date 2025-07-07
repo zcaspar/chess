@@ -224,22 +224,127 @@ export class GameHistoryModel {
    */
   static async initializeTables(): Promise<void> {
     try {
-      // Read and execute the schema file
-      const fs = require('fs');
-      const path = require('path');
-      const schemaPath = path.join(__dirname, '../db/schema.sql');
-      const schema = fs.readFileSync(schemaPath, 'utf8');
+      console.log('🔄 Starting database table initialization...');
+      
+      // Test database connection first
+      try {
+        await query('SELECT 1');
+        console.log('✅ Database connection confirmed');
+      } catch (connectionError: any) {
+        console.error('❌ Database connection failed during initialization:', connectionError);
+        throw new Error(`Database connection failed: ${connectionError.message}`);
+      }
+      
+      // Try to read the schema file, if it fails, use inline SQL
+      let schema: string;
+      
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const schemaPath = path.join(__dirname, '../db/schema.sql');
+        schema = fs.readFileSync(schemaPath, 'utf8');
+        console.log('📁 Schema loaded from file');
+      } catch (fileError) {
+        console.log('📝 Using inline schema (file not found)');
+        // Inline schema as fallback
+        schema = `
+          CREATE TABLE IF NOT EXISTS game_history (
+              id SERIAL PRIMARY KEY,
+              player_id VARCHAR(255) NOT NULL,
+              game_id VARCHAR(255) NOT NULL,
+              opponent_id VARCHAR(255),
+              opponent_name VARCHAR(255) NOT NULL,
+              player_color VARCHAR(1) NOT NULL CHECK (player_color IN ('w', 'b')),
+              game_result VARCHAR(50) NOT NULL,
+              game_outcome VARCHAR(10) CHECK (game_outcome IN ('win', 'loss', 'draw')),
+              final_fen TEXT NOT NULL,
+              pgn TEXT NOT NULL,
+              move_count INTEGER NOT NULL DEFAULT 0,
+              game_duration INTEGER,
+              time_control JSONB,
+              game_mode VARCHAR(20) NOT NULL CHECK (game_mode IN ('human-vs-human', 'human-vs-ai')),
+              ai_difficulty VARCHAR(20),
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+          
+          CREATE INDEX IF NOT EXISTS idx_game_history_player_id ON game_history(player_id);
+          CREATE INDEX IF NOT EXISTS idx_game_history_created_at ON game_history(created_at DESC);
+          CREATE INDEX IF NOT EXISTS idx_game_history_player_outcome ON game_history(player_id, game_outcome);
+          CREATE INDEX IF NOT EXISTS idx_game_history_game_mode ON game_history(game_mode);
+          
+          CREATE OR REPLACE FUNCTION update_updated_at_column()
+          RETURNS TRIGGER AS $$
+          BEGIN
+              NEW.updated_at = CURRENT_TIMESTAMP;
+              RETURN NEW;
+          END;
+          $$ language 'plpgsql';
+          
+          CREATE TRIGGER update_game_history_updated_at 
+              BEFORE UPDATE ON game_history 
+              FOR EACH ROW 
+              EXECUTE FUNCTION update_updated_at_column();
+        `;
+      }
       
       // Split by semicolon and execute each statement
       const statements = schema.split(';').filter((stmt: string) => stmt.trim().length > 0);
       
-      for (const statement of statements) {
-        await query(statement);
+      console.log(`🔄 Executing ${statements.length} SQL statements...`);
+      
+      for (let i = 0; i < statements.length; i++) {
+        const statement = statements[i].trim();
+        if (statement) {
+          try {
+            console.log(`🔄 Executing statement ${i + 1}/${statements.length}: ${statement.substring(0, 50)}...`);
+            await query(statement);
+            console.log(`✅ Statement ${i + 1} executed successfully`);
+          } catch (statementError: any) {
+            console.error(`❌ Error executing statement ${i + 1}:`, statementError);
+            console.error('Statement was:', statement);
+            console.error('Error details:', {
+              code: statementError.code,
+              message: statementError.message,
+              detail: statementError.detail,
+              position: statementError.position
+            });
+            throw statementError;
+          }
+        }
+      }
+      
+      // Test that the table was created successfully
+      try {
+        const result = await query('SELECT COUNT(*) FROM game_history WHERE 1=0');
+        console.log('✅ Table validation successful');
+      } catch (validationError: any) {
+        console.error('❌ Table validation failed:', validationError);
+        throw new Error(`Table creation validation failed: ${validationError.message}`);
       }
       
       console.log('✅ Database tables initialized successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error initializing database tables:', error);
+      console.error('Full error object:', JSON.stringify(error, null, 2));
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        detail: error.detail,
+        hint: error.hint,
+        position: error.position,
+        internalPosition: error.internalPosition,
+        internalQuery: error.internalQuery,
+        where: error.where,
+        schema: error.schema,
+        table: error.table,
+        column: error.column,
+        dataType: error.dataType,
+        constraint: error.constraint,
+        file: error.file,
+        line: error.line,
+        routine: error.routine
+      });
       throw error;
     }
   }

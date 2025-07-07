@@ -72,11 +72,31 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
       game: savedGame
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving game to history:', error);
+    
+    // Check if it's a table doesn't exist error
+    if (error.code === '42P01') {
+      res.status(503).json({
+        error: 'Database tables not initialized',
+        message: 'Game history tables are being created. Please try again in a moment.',
+        details: error.message
+      });
+      return;
+    }
+    
+    // Log the full error for debugging
+    console.error('Full error details:', {
+      code: error.code,
+      message: error.message,
+      detail: error.detail,
+      stack: error.stack
+    });
+    
     res.status(500).json({
       error: 'Failed to save game to history',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      message: error.message || 'Unknown error',
+      code: error.code
     });
   }
 });
