@@ -70,7 +70,7 @@ export class GameHistoryModel {
       gameData.pgn,
       gameData.moveCount,
       gameData.gameDuration || null,
-      gameData.timeControl ? JSON.stringify(gameData.timeControl) : null,
+      gameData.timeControl || null, // PostgreSQL JSONB handles JSON automatically
       gameData.gameMode,
       gameData.aiDifficulty || null
     ];
@@ -359,7 +359,7 @@ export class GameHistoryModel {
       pgn: row.pgn,
       moveCount: row.move_count,
       gameDuration: row.game_duration,
-      timeControl: row.time_control ? JSON.parse(row.time_control) : undefined,
+      timeControl: row.time_control || undefined, // PostgreSQL JSONB returns parsed object
       gameMode: row.game_mode,
       aiDifficulty: row.ai_difficulty,
       createdAt: row.created_at,
