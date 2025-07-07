@@ -8,11 +8,11 @@ const poolConfig: PoolConfig = {
   ...(process.env.DATABASE_URL 
     ? { connectionString: process.env.DATABASE_URL }
     : {
-        host: process.env.DB_HOST || 'localhost',
-        port: parseInt(process.env.DB_PORT || '5432'),
-        database: process.env.DB_NAME || 'chess_app',
-        user: process.env.DB_USER || 'chess_user',
-        password: process.env.DB_PASSWORD || 'chess_password',
+        host: process.env.PGHOST || process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.PGPORT || process.env.DB_PORT || '5432'),
+        database: process.env.PGDATABASE || process.env.DB_NAME || 'railway',
+        user: process.env.PGUSER || process.env.DB_USER || 'postgres',
+        password: process.env.PGPASSWORD || process.env.DB_PASSWORD || 'chess_password',
       }),
   
   // Connection pool settings
@@ -46,11 +46,11 @@ export const testConnection = async (): Promise<boolean> => {
         'DATABASE_URL is set but format unclear';
       console.log('📊 Using DATABASE_URL:', sanitizedUrl);
     } else {
-      console.log('📊 Using individual DB variables:', {
-        host: process.env.DB_HOST || 'localhost',
-        port: process.env.DB_PORT || '5432',
-        database: process.env.DB_NAME || 'chess_app',
-        user: process.env.DB_USER || 'chess_user',
+      console.log('📊 Using individual PG/DB variables:', {
+        host: process.env.PGHOST || process.env.DB_HOST || 'localhost',
+        port: process.env.PGPORT || process.env.DB_PORT || '5432',
+        database: process.env.PGDATABASE || process.env.DB_NAME || 'railway',
+        user: process.env.PGUSER || process.env.DB_USER || 'postgres',
         ssl: process.env.NODE_ENV === 'production'
       });
     }
