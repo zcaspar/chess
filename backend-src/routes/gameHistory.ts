@@ -10,6 +10,18 @@ const router = express.Router();
  */
 router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
+    // First check if database is available
+    const { testConnection } = await import('../config/database');
+    const dbConnected = await testConnection();
+    
+    if (!dbConnected) {
+      return res.status(503).json({
+        error: 'Game history feature temporarily unavailable',
+        message: 'Database connection is not available. Your game was completed but not saved to history.',
+        details: 'Game history will be available once database service is configured.'
+      });
+    }
+
     const {
       gameId,
       opponentId,
@@ -107,6 +119,19 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
  */
 router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
+    // First check if database is available
+    const { testConnection } = await import('../config/database');
+    const dbConnected = await testConnection();
+    
+    if (!dbConnected) {
+      return res.status(503).json({
+        error: 'Game history feature temporarily unavailable',
+        message: 'Database connection is not available. Game history will be available once database service is configured.',
+        games: [],
+        pagination: { limit: 0, offset: 0, count: 0 }
+      });
+    }
+
     const limit = parseInt(req.query.limit as string) || 50;
     const offset = parseInt(req.query.offset as string) || 0;
 

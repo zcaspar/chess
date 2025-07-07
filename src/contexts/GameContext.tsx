@@ -277,18 +277,22 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         console.log('✅ Game saved to history successfully');
       } else {
         const errorText = await response.text();
-        console.error('❌ Failed to save game to history:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText
-        });
         
         // Try to parse the error response for more details
         try {
           const errorData = JSON.parse(errorText);
-          console.error('❌ Error details:', errorData);
+          if (response.status === 503) {
+            console.warn('⚠️ Game history feature temporarily unavailable:', errorData.message);
+            // Don't log this as an error since it's expected when database is not configured
+            return;
+          }
+          console.error('❌ Failed to save game to history:', errorData);
         } catch (parseError) {
-          console.error('❌ Could not parse error response');
+          console.error('❌ Failed to save game to history:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText
+          });
         }
       }
     } catch (error) {

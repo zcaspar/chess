@@ -64,7 +64,7 @@ const GameHistory: React.FC<GameHistoryProps> = ({ onReplayGame }) => {
         try {
           const errorData = JSON.parse(errorText);
           if (response.status === 503) {
-            throw new Error(errorData.message || 'Game history feature is being set up. Please try again in a moment.');
+            throw new Error(errorData.message || 'Game history feature is temporarily unavailable.');
           }
           throw new Error(errorData.message || `Failed to fetch game history: ${response.status}`);
         } catch (parseError) {
