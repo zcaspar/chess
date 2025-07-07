@@ -102,13 +102,31 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
       code: error.code,
       message: error.message,
       detail: error.detail,
-      stack: error.stack
+      stack: error.stack,
+      hint: error.hint,
+      position: error.position,
+      internalPosition: error.internalPosition,
+      internalQuery: error.internalQuery,
+      where: error.where,
+      schema: error.schema,
+      table: error.table,
+      column: error.column,
+      dataType: error.dataType,
+      constraint: error.constraint
     });
+    
+    // Special handling for JSONB errors
+    if (error.message && error.message.includes('JSON')) {
+      console.error('JSONB error detected. Request body:', req.body);
+      console.error('timeControl value:', req.body.timeControl);
+      console.error('timeControl type:', typeof req.body.timeControl);
+    }
     
     res.status(500).json({
       error: 'Failed to save game to history',
       message: error.message || 'Unknown error',
-      code: error.code
+      code: error.code,
+      detail: error.detail
     });
   }
 });
@@ -119,6 +137,8 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
  */
 router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
+    console.log('📖 Fetching game history for user:', req.user?.uid);
+    
     // First check if database is available
     const { testConnection } = await import('../config/database');
     const dbConnected = await testConnection();

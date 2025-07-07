@@ -150,6 +150,54 @@ app.get('/debug/env', (req, res) => {
   });
 });
 
+// Database test endpoint
+app.get('/debug/db-test', async (req, res) => {
+  try {
+    const { pool } = await import('./config/database');
+    
+    // Test basic query
+    const basicTest = await pool.query('SELECT 1 as test');
+    
+    // Test game_history table
+    let tableTest = { exists: false, error: null };
+    try {
+      const result = await pool.query('SELECT COUNT(*) as count FROM game_history');
+      tableTest = { exists: true, count: result.rows[0].count };
+    } catch (e: any) {
+      tableTest = { exists: false, error: e.message };
+    }
+    
+    // Test JSONB insert
+    let jsonbTest = { success: false, error: null };
+    try {
+      const testData = { initial: 300, increment: 5 };
+      const result = await pool.query(
+        'SELECT $1::jsonb as test_json',
+        [JSON.stringify(testData)]
+      );
+      jsonbTest = { 
+        success: true, 
+        input: testData,
+        output: result.rows[0].test_json,
+        outputType: typeof result.rows[0].test_json
+      };
+    } catch (e: any) {
+      jsonbTest = { success: false, error: e.message };
+    }
+    
+    res.json({
+      basicConnection: 'ok',
+      tableTest,
+      jsonbTest
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'Database test failed',
+      message: error.message
+    });
+  }
+});
+
 // Game history debug endpoint
 app.get('/debug/game-history', async (req, res) => {
   try {
