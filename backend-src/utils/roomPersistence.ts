@@ -7,7 +7,16 @@ interface PersistedRoom {
   roomCode: string;
   whitePlayerId?: string;
   blackPlayerId?: string;
+  whitePlayerUsername?: string;
+  blackPlayerUsername?: string;
   fen: string;
+  pgn: string;
+  turn: 'w' | 'b';
+  isGameOver: boolean;
+  gameResult?: string;
+  timeControl?: { initial: number; increment: number };
+  whiteTime?: number;
+  blackTime?: number;
   createdAt: string;
   lastActivity: string;
 }
@@ -18,14 +27,23 @@ export class RoomPersistence {
       const persistedRooms: PersistedRoom[] = [];
       
       for (const [roomCode, room] of rooms) {
-        // Only persist rooms that have been active in the last hour
-        const oneHourAgo = Date.now() - 60 * 60 * 1000;
-        if (room.lastMoveTime && room.lastMoveTime > oneHourAgo) {
+        // Only persist rooms that have been active in the last 2 hours
+        const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+        if (room.lastMoveTime && room.lastMoveTime > twoHoursAgo) {
           persistedRooms.push({
             roomCode: room.roomCode,
             whitePlayerId: room.whitePlayer?.id,
             blackPlayerId: room.blackPlayer?.id,
+            whitePlayerUsername: room.whitePlayer?.username,
+            blackPlayerUsername: room.blackPlayer?.username,
             fen: room.game.fen(),
+            pgn: room.game.pgn(),
+            turn: room.game.turn(),
+            isGameOver: room.game.isGameOver(),
+            gameResult: room.gameResult,
+            timeControl: room.timeControl,
+            whiteTime: room.whiteTime,
+            blackTime: room.blackTime,
             createdAt: new Date(room.lastMoveTime - 60000).toISOString(), // Approximate
             lastActivity: new Date(room.lastMoveTime).toISOString(),
           });

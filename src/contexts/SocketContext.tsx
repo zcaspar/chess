@@ -18,6 +18,7 @@ interface SocketContextType {
   offerDraw: () => void;
   acceptDraw: () => void;
   declineDraw: () => void;
+  leaveRoom: () => void;
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -227,6 +228,19 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     }
   };
 
+  const leaveRoom = () => {
+    if (socket && isConnected && roomCode) {
+      socket.emit('leaveRoom', roomCode);
+      
+      // Reset local state
+      setRoomCode(null);
+      setAssignedColor(null);
+      setPlayers({ white: null, black: null });
+      
+      console.log('Left room:', roomCode);
+    }
+  };
+
   const value: SocketContextType = {
     socket,
     isConnected,
@@ -240,6 +254,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     offerDraw,
     acceptDraw,
     declineDraw,
+    leaveRoom,
   };
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;

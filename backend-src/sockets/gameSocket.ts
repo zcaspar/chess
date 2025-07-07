@@ -45,21 +45,47 @@ export class GameSocketHandler {
     try {
       const persistedRooms = RoomPersistence.loadRooms();
       for (const roomData of persistedRooms) {
+        // Don't restore finished games
+        if (roomData.isGameOver) {
+          continue;
+        }
+        
         const room: GameRoom = {
           id: roomData.roomCode,
           roomCode: roomData.roomCode,
-          whitePlayer: roomData.whitePlayerId ? { id: roomData.whitePlayerId, username: 'Reconnecting...', socketId: '' } : null,
-          blackPlayer: roomData.blackPlayerId ? { id: roomData.blackPlayerId, username: 'Reconnecting...', socketId: '' } : null,
+          whitePlayer: roomData.whitePlayerId ? { 
+            id: roomData.whitePlayerId, 
+            username: roomData.whitePlayerUsername || 'Reconnecting...', 
+            socketId: '' 
+          } : null,
+          blackPlayer: roomData.blackPlayerId ? { 
+            id: roomData.blackPlayerId, 
+            username: roomData.blackPlayerUsername || 'Reconnecting...', 
+            socketId: '' 
+          } : null,
           game: new Chess(roomData.fen),
           spectators: new Set(),
-          timeControl: null,
-          whiteTime: 0,
-          blackTime: 0,
+          timeControl: roomData.timeControl || null,
+          whiteTime: roomData.whiteTime || 0,
+          blackTime: roomData.blackTime || 0,
           lastMoveTime: new Date(roomData.lastActivity).getTime(),
         };
         
+        // Restore PGN move history
+        if (roomData.pgn) {
+          try {
+            room.game.loadPgn(roomData.pgn);
+          } catch (e) {
+            console.warn(`Failed to load PGN for room ${roomData.roomCode}, using FEN only`);
+          }
+        }
+        
         this.rooms.set(roomData.roomCode, room);
-        console.log(`🔄 Restored room ${roomData.roomCode} from persistence`);
+        console.log(`🔄 Restored room ${roomData.roomCode} from persistence (turn: ${roomData.turn}, moves: ${room.game.history().length})`);
+      }
+      
+      if (persistedRooms.length > 0) {
+        console.log(`✅ Restored ${persistedRooms.length} active rooms from previous session`);
       }
     } catch (error) {
       console.error('Failed to restore persisted rooms:', error);
@@ -322,6 +348,8 @@ export class GameSocketHandler {
             pgn: roomToJoin.game.pgn(),
             turn: roomToJoin.game.turn(),
             isGameOver: roomToJoin.game.isGameOver(),
+            history: roomToJoin.game.history({ verbose: true }),
+            moveNumber: roomToJoin.game.moveNumber(),
           },
           players: {
             white: roomToJoin.whitePlayer,
@@ -331,6 +359,14 @@ export class GameSocketHandler {
           whiteTime: roomToJoin.whiteTime,
           blackTime: roomToJoin.blackTime,
         });
+        
+        // If game is in progress, notify about restoration
+        if (roomToJoin.game.history().length > 0) {
+          socket.emit('gameRestored', {
+            message: 'Game restored from previous session',
+            moveCount: roomToJoin.game.history().length,
+          });
+        }
 
         // Notify other players in the room
         socket.to(roomCode).emit('playerJoined', {
@@ -539,6 +575,16 @@ export class GameSocketHandler {
       await this.endGame(roomCode, 'draw', 'agreement');
     });
 
+    // Handle leaving room
+    socket.on('leaveRoom', (roomCode: string) => {
+      console.log(`Socket ${socket.id} requesting to leave room ${roomCode}`);
+      
+      const currentRoomCode = this.playerRooms.get(socket.id);
+      if (currentRoomCode === roomCode) {
+        this.handlePlayerLeaveRoom(socket, roomCode);
+      }
+    });
+
     // Handle disconnection
     socket.on('disconnect', () => {
       console.log('Socket disconnected:', socket.id);
@@ -576,6 +622,42 @@ export class GameSocketHandler {
         this.playerRooms.delete(socket.id);
       }
     });
+  }
+  
+  private handlePlayerLeaveRoom(socket: Socket, roomCode: string) {
+    const room = this.rooms.get(roomCode);
+    if (!room) return;
+    
+    let leftColor: 'white' | 'black' | 'spectator' | null = null;
+    
+    // Remove player from their assigned slot
+    if (room.whitePlayer?.socketId === socket.id) {
+      console.log(`White player ${socket.id} leaving room ${roomCode}`);
+      room.whitePlayer = null;
+      leftColor = 'white';
+    } else if (room.blackPlayer?.socketId === socket.id) {
+      console.log(`Black player ${socket.id} leaving room ${roomCode}`);
+      room.blackPlayer = null;
+      leftColor = 'black';
+    } else if (room.spectators.has(socket.id)) {
+      room.spectators.delete(socket.id);
+      leftColor = 'spectator';
+    }
+    
+    // Leave the socket.io room
+    socket.leave(roomCode);
+    this.playerRooms.delete(socket.id);
+    
+    // Notify other players
+    socket.to(roomCode).emit('playerLeft', {
+      socketId: socket.id,
+      color: leftColor,
+    });
+    
+    // Save updated room state
+    RoomPersistence.saveRooms(this.rooms);
+    
+    console.log(`Player ${socket.id} (${leftColor}) left room ${roomCode}`);
   }
 
   private generateRoomCode(): string {

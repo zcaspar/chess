@@ -2,13 +2,20 @@ import React, { useState } from 'react';
 import { useGame } from '../../contexts/GameContext';
 import { DifficultyLevel } from '../../utils/chessAI';
 import { OnlineGameModal } from '../OnlineGameModal';
+import { useSocket } from '../../contexts/SocketContext';
 
 const GameModeSelector: React.FC = () => {
   const { gameState, setGameMode, setAIDifficulty } = useGame();
   const { gameMode, aiColor, aiDifficulty } = gameState;
+  const { roomCode, leaveRoom } = useSocket();
   const [showOnlineModal, setShowOnlineModal] = useState(false);
 
   const handleModeChange = async (mode: 'human-vs-human' | 'human-vs-ai') => {
+    // Leave online room if switching away from online play
+    if (roomCode) {
+      leaveRoom();
+    }
+    
     if (mode === 'human-vs-ai') {
       // Default to AI playing black
       await setGameMode(mode, 'b');
