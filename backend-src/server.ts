@@ -92,20 +92,30 @@ app.get('/health', (req, res) => {
 // Database health check endpoint
 app.get('/health/db', async (req, res) => {
   try {
-    const { testConnection } = await import('./config/database');
-    const dbConnected = await testConnection();
+    const { pool } = await import('./config/database');
     
-    if (dbConnected) {
+    // Try a direct query to get more detailed error
+    try {
+      const result = await pool.query('SELECT NOW()');
       res.status(200).json({ 
         status: 'ok',
         database: 'connected',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        dbTime: result.rows[0].now
       });
-    } else {
+    } catch (queryError: any) {
+      console.error('Database query error in health check:', queryError);
       res.status(503).json({ 
         status: 'error',
         database: 'disconnected',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        error: {
+          message: queryError.message,
+          code: queryError.code,
+          errno: queryError.errno,
+          syscall: queryError.syscall,
+          hostname: queryError.hostname
+        }
       });
     }
   } catch (error) {
