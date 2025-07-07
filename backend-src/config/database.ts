@@ -37,13 +37,38 @@ pool.on('error', (err) => {
 // Test database connection
 export const testConnection = async (): Promise<boolean> => {
   try {
+    // Log connection attempt details (without password)
+    console.log('🔄 Attempting database connection...');
+    if (process.env.DATABASE_URL) {
+      const urlParts = process.env.DATABASE_URL.split('@');
+      const sanitizedUrl = urlParts.length > 1 ? 
+        `${urlParts[0].split(':')[0]}://***:***@${urlParts[1]}` : 
+        'DATABASE_URL is set but format unclear';
+      console.log('📊 Using DATABASE_URL:', sanitizedUrl);
+    } else {
+      console.log('📊 Using individual DB variables:', {
+        host: process.env.DB_HOST || 'localhost',
+        port: process.env.DB_PORT || '5432',
+        database: process.env.DB_NAME || 'chess_app',
+        user: process.env.DB_USER || 'chess_user',
+        ssl: process.env.NODE_ENV === 'production'
+      });
+    }
+    
     const client = await pool.connect();
     await client.query('SELECT NOW()');
     client.release();
     console.log('✅ Database connection successful');
     return true;
-  } catch (error) {
-    console.error('❌ Database connection failed:', error);
+  } catch (error: any) {
+    console.error('❌ Database connection failed:', error.message);
+    console.error('Error code:', error.code);
+    console.error('Error details:', {
+      errno: error.errno,
+      syscall: error.syscall,
+      hostname: error.hostname,
+      port: error.port
+    });
     return false;
   }
 };

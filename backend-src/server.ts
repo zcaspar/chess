@@ -118,6 +118,28 @@ app.get('/health/db', async (req, res) => {
   }
 });
 
+// Environment debug endpoint (sanitized)
+app.get('/debug/env', (req, res) => {
+  const hasDbUrl = !!process.env.DATABASE_URL;
+  const dbUrlFormat = process.env.DATABASE_URL ? 
+    (process.env.DATABASE_URL.startsWith('postgresql://') ? 'postgresql://...' : 'unknown format') : 
+    'not set';
+  
+  res.json({
+    environment: process.env.NODE_ENV || 'not set',
+    port: process.env.PORT || 'not set',
+    cors_origin: process.env.CORS_ORIGIN || 'not set',
+    database: {
+      DATABASE_URL: hasDbUrl ? dbUrlFormat : 'not set',
+      PGHOST: process.env.PGHOST ? 'set' : 'not set',
+      PGUSER: process.env.PGUSER || 'not set',
+      PGPASSWORD: process.env.PGPASSWORD ? 'set' : 'not set',
+      PGDATABASE: process.env.PGDATABASE || 'not set',
+      PGPORT: process.env.PGPORT || 'not set'
+    }
+  });
+});
+
 // Game history debug endpoint
 app.get('/debug/game-history', async (req, res) => {
   try {
