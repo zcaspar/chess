@@ -479,7 +479,7 @@ async function startServer() {
     
     // Always start the HTTP server
     httpServer.listen(PORT, () => {
-      console.log(`🚀 Chess Engine Backend Server with Database running on port ${PORT}`);
+      console.log(`🚀 Chess Engine Backend Server with PostgreSQL running on port ${PORT}`);
       console.log(`💻 Health check: http://localhost:${PORT}/health`);
       console.log(`🧠 API endpoint: http://localhost:${PORT}/api/chess/move`);
       console.log(`🔧 Test endpoint: http://localhost:${PORT}/api/chess/test`);
