@@ -187,7 +187,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   // Function to save game to history
   const saveGameToHistory = useCallback(async (result: string, winningColor?: 'w' | 'b', finalFen?: string, pgn?: string) => {
+    console.log('🎮 Attempting to save game to history:', { result, winningColor, hasUser: !!authContext?.user });
+    
     if (!authContext?.user || !authContext?.profile) {
+      console.log('❌ Cannot save game - no authenticated user');
       return; // No authenticated user
     }
 

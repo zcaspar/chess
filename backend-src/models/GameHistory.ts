@@ -78,8 +78,15 @@ export class GameHistoryModel {
     try {
       const result = await query(insertQuery, values);
       return this.mapRowToGameHistory(result.rows[0]);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving game history:', error);
+      
+      // Check if it's a table doesn't exist error
+      if (error.code === '42P01') {
+        console.error('Game history table does not exist. Run GameHistoryModel.initializeTables() to create it.');
+        throw new Error('Database tables not initialized. Please contact support.');
+      }
+      
       throw new Error('Failed to save game to history');
     }
   }
@@ -102,8 +109,15 @@ export class GameHistoryModel {
     try {
       const result = await query(selectQuery, [playerId, limit, offset]);
       return result.rows.map(row => this.mapRowToGameHistory(row));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching player history:', error);
+      
+      // Check if it's a table doesn't exist error
+      if (error.code === '42P01') {
+        console.error('Game history table does not exist. Returning empty array.');
+        return []; // Return empty array instead of throwing
+      }
+      
       throw new Error('Failed to fetch game history');
     }
   }

@@ -236,4 +236,31 @@ router.get('/admin/recent', authenticateToken, async (req: AuthenticatedRequest,
   }
 });
 
+/**
+ * POST /api/game-history/init-tables
+ * Initialize database tables (development helper)
+ */
+router.post('/init-tables', async (req, res) => {
+  try {
+    // Only allow in development
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ error: 'Table initialization not allowed in production' });
+    }
+
+    await GameHistoryModel.initializeTables();
+    
+    res.json({
+      success: true,
+      message: 'Database tables initialized successfully'
+    });
+
+  } catch (error) {
+    console.error('Error initializing tables:', error);
+    res.status(500).json({
+      error: 'Failed to initialize tables',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

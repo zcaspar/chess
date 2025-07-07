@@ -57,7 +57,9 @@ const GameHistory: React.FC<GameHistoryProps> = ({ onReplayGame }) => {
       );
 
       if (!response.ok) {
-        throw new Error('Failed to fetch game history');
+        const errorText = await response.text();
+        console.error('Game history fetch failed:', response.status, errorText);
+        throw new Error(`Failed to fetch game history: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
