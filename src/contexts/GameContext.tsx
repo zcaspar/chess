@@ -133,6 +133,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const aiRef = useRef<ChessAI>(new ChessAI('medium', 1000));
   const isAiThinking = useRef<boolean>(false);
+  const gameEndedRef = useRef<boolean>(false); // Track game end state to prevent race conditions
 
   // Helper function to update game stats based on result
   const updateGameStats = useCallback((result: string, currentStats: GameStats, colorAssignment: ColorAssignment, players: PlayerInfo, winningColor?: 'w' | 'b', statsAlreadyUpdated: boolean = false, gameId?: string): GameStats => {
@@ -385,6 +386,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
             // Save game to history
             saveGameToHistory(result, winningColor);
             
+            // Mark game as ended in ref to prevent race conditions
+            gameEndedRef.current = true;
+            
             return {
               ...prev,
               [timeKey]: 0,
@@ -444,8 +448,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       
       const makeAIMove = async () => {
         try {
-          // Double-check game hasn't ended before getting AI move
-          if (gameState.gameResult) {
+          // Double-check game hasn't ended before getting AI move (check both state and ref)
+          if (gameState.gameResult || gameEndedRef.current) {
             console.log('🤖 AI cancelled - game already ended');
             isAiThinking.current = false;
             return;
@@ -455,7 +459,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           console.log('🤖 AI found move:', aiMove, 'for gameId:', gameState.gameId);
           
           // Check again after AI thinking - game might have ended during thinking
-          if (aiMove && !gameState.gameResult) {
+          if (aiMove && !gameState.gameResult && !gameEndedRef.current) {
             // Validate the move is still legal on current board
             const testGame = new Chess(gameState.game.fen());
             const testMove = testGame.move({ from: aiMove.from as Square, to: aiMove.to as Square, promotion: aiMove.promotion });
@@ -535,9 +539,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   const makeMove = useCallback((from: Square, to: Square, promotion: string = 'q'): boolean => {
     console.log('🎯 makeMove called:', from, to, 'gameId:', gameState.gameId);
     
-    // Prevent moves if game has already ended
-    if (gameState.gameResult) {
-      console.log('❌ Move blocked - game has ended:', gameState.gameResult);
+    // Prevent moves if game has already ended (check both state and ref)
+    if (gameState.gameResult || gameEndedRef.current) {
+      console.log('❌ Move blocked - game has ended:', gameState.gameResult || 'via ref');
       return false;
     }
     
@@ -594,6 +598,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         
         if (result) {
           console.log('🏁 Game ended in makeMove:', result, 'gameId:', prev.gameId);
+          // Mark game as ended in ref
+          gameEndedRef.current = true;
+          
           // Update user statistics for game completion
           updateUserStats(result, winningColor);
           
@@ -669,8 +676,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     const aiColor = gameState.aiColor;
     const aiDifficulty = gameState.aiDifficulty;
     
-    // Reset AI thinking state
+    // Reset AI thinking state and game ended ref
     isAiThinking.current = false;
+    gameEndedRef.current = false;
     
     // Clear completed games tracking (keep only last few to prevent memory leaks)
     const completedArray = Array.from(completedGamesRef.current);
@@ -701,8 +709,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   }, [gameState]);
 
   const clearAllGameData = useCallback(() => {
-    // Reset AI thinking state
+    // Reset AI thinking state and game ended ref
     isAiThinking.current = false;
+    gameEndedRef.current = false;
     
     // Clear all completed games tracking
     completedGamesRef.current.clear();
@@ -758,6 +767,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     // Save game to history
     saveGameToHistory(result, winningColor);
     
+    // Mark game as ended in ref
+    gameEndedRef.current = true;
+    
     setGameState({
       ...gameState,
       gameResult: result,
@@ -784,6 +796,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     
     // Save game to history
     saveGameToHistory(result);
+    
+    // Mark game as ended in ref
+    gameEndedRef.current = true;
     
     setGameState({
       ...gameState,
