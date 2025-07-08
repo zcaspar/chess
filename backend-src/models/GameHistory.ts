@@ -58,6 +58,18 @@ export class GameHistoryModel {
       RETURNING *
     `;
 
+    // Ensure timeControl is a proper object for JSONB
+    let timeControlValue = gameData.timeControl || null;
+    if (timeControlValue && typeof timeControlValue === 'string') {
+      try {
+        // If it's a string, try to parse it
+        timeControlValue = JSON.parse(timeControlValue);
+      } catch (e) {
+        console.error('Invalid timeControl JSON string:', timeControlValue);
+        timeControlValue = null;
+      }
+    }
+    
     const values = [
       gameData.playerId,
       gameData.gameId,
@@ -70,7 +82,7 @@ export class GameHistoryModel {
       gameData.pgn,
       gameData.moveCount,
       gameData.gameDuration || null,
-      gameData.timeControl || null, // PostgreSQL JSONB handles JSON automatically
+      timeControlValue, // Use the validated timeControl
       gameData.gameMode,
       gameData.aiDifficulty || null
     ];
@@ -358,24 +370,43 @@ export class GameHistoryModel {
    * Map database row to GameHistoryEntry interface
    */
   private static mapRowToGameHistory(row: any): GameHistoryEntry {
-    return {
-      id: row.id,
-      playerId: row.player_id,
-      gameId: row.game_id,
-      opponentId: row.opponent_id,
-      opponentName: row.opponent_name,
-      playerColor: row.player_color,
-      gameResult: row.game_result,
-      gameOutcome: row.game_outcome,
-      finalFen: row.final_fen,
-      pgn: row.pgn,
-      moveCount: row.move_count,
-      gameDuration: row.game_duration,
-      timeControl: row.time_control || undefined, // PostgreSQL JSONB returns parsed object
-      gameMode: row.game_mode,
-      aiDifficulty: row.ai_difficulty,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
-    };
+    try {
+      // Handle timeControl field - PostgreSQL JSONB returns it as an object already
+      let timeControl = row.time_control;
+      
+      // Safety check: if timeControl is a string, parse it
+      if (timeControl && typeof timeControl === 'string') {
+        try {
+          timeControl = JSON.parse(timeControl);
+        } catch (parseError) {
+          console.error('Failed to parse timeControl string:', parseError);
+          timeControl = undefined;
+        }
+      }
+      
+      return {
+        id: row.id,
+        playerId: row.player_id,
+        gameId: row.game_id,
+        opponentId: row.opponent_id,
+        opponentName: row.opponent_name,
+        playerColor: row.player_color,
+        gameResult: row.game_result,
+        gameOutcome: row.game_outcome,
+        finalFen: row.final_fen,
+        pgn: row.pgn,
+        moveCount: row.move_count,
+        gameDuration: row.game_duration,
+        timeControl: timeControl || undefined,
+        gameMode: row.game_mode,
+        aiDifficulty: row.ai_difficulty,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      };
+    } catch (error) {
+      console.error('Error mapping game history row:', error);
+      console.error('Row data:', row);
+      throw error;
+    }
   }
 }
