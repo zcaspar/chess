@@ -178,6 +178,15 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
 
   } catch (error: any) {
     console.error('Error fetching game history:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      code: error.code,
+      message: error.message,
+      detail: error.detail,
+      hint: error.hint,
+      position: error.position,
+      userId: req.user?.uid
+    });
     
     // Check if it's a table doesn't exist error
     if (error.code === '42P01') {
@@ -190,7 +199,9 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
     
     res.status(500).json({
       error: 'Failed to fetch game history',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      message: error instanceof Error ? error.message : 'Unknown error',
+      code: error.code,
+      detail: error.detail
     });
   }
 });
@@ -334,6 +345,76 @@ router.post('/init-tables', async (req, res) => {
     res.status(500).json({
       error: 'Failed to initialize tables',
       message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /api/game-history/debug/test-query
+ * Debug endpoint to test game history query
+ */
+router.get('/debug/test-query', authenticateToken, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.user!.uid;
+    console.log('🔍 Debug: Testing game history query for user:', userId);
+    
+    // First check if database is available
+    const { pool } = await import('../config/database');
+    
+    // Run a simple test query
+    const testResult = await pool.query('SELECT 1 as test');
+    console.log('Test query successful:', testResult.rows[0]);
+    
+    // Check if table exists
+    const tableCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'game_history'
+      );
+    `);
+    console.log('Table exists:', tableCheck.rows[0].exists);
+    
+    // Try to fetch game history
+    const gameQuery = `
+      SELECT * FROM game_history 
+      WHERE player_id = $1 
+      ORDER BY created_at DESC 
+      LIMIT 10
+    `;
+    
+    console.log('Running game query with userId:', userId);
+    const gameResult = await pool.query(gameQuery, [userId]);
+    console.log('Game query result count:', gameResult.rows.length);
+    
+    if (gameResult.rows.length > 0) {
+      const firstRow = gameResult.rows[0];
+      console.log('First row keys:', Object.keys(firstRow));
+      console.log('time_control type:', typeof firstRow.time_control);
+      console.log('time_control value:', firstRow.time_control);
+    }
+    
+    res.json({
+      success: true,
+      userId,
+      tableExists: tableCheck.rows[0].exists,
+      gameCount: gameResult.rows.length,
+      firstGame: gameResult.rows.length > 0 ? {
+        id: gameResult.rows[0].id,
+        timeControlType: typeof gameResult.rows[0].time_control,
+        timeControlValue: gameResult.rows[0].time_control,
+        created_at: gameResult.rows[0].created_at
+      } : null
+    });
+    
+  } catch (error: any) {
+    console.error('Debug query error:', error);
+    res.status(500).json({
+      error: 'Debug query failed',
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      stack: error.stack
     });
   }
 });

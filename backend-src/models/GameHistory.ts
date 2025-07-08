@@ -118,7 +118,19 @@ export class GameHistoryModel {
     `;
 
     try {
+      console.log('📖 Executing getPlayerHistory query for user:', playerId);
+      console.log('Query params:', { playerId, limit, offset });
+      
       const result = await query(selectQuery, [playerId, limit, offset]);
+      console.log('Query result rows:', result.rows.length);
+      
+      // Log the first row structure if any
+      if (result.rows.length > 0) {
+        console.log('First row structure:', Object.keys(result.rows[0]));
+        console.log('time_control field type:', typeof result.rows[0].time_control);
+        console.log('time_control value:', result.rows[0].time_control);
+      }
+      
       return result.rows.map(row => this.mapRowToGameHistory(row));
     } catch (error: any) {
       console.error('Error fetching player history:', error);
