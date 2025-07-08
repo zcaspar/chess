@@ -164,7 +164,27 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ error: 'Invalid limit or offset' });
     }
 
-    const games = await GameHistoryModel.getPlayerHistory(req.user!.uid, limit, offset);
+    let games;
+    try {
+      games = await GameHistoryModel.getPlayerHistory(req.user!.uid, limit, offset);
+    } catch (modelError: any) {
+      console.error('🔴 GameHistoryModel.getPlayerHistory error:', modelError);
+      console.error('Error type:', modelError.name);
+      console.error('Error message:', modelError.message);
+      console.error('Stack trace:', modelError.stack);
+      
+      // Special handling for JSON parsing errors
+      if (modelError.message && modelError.message.includes('Unexpected token')) {
+        console.error('🌳 JSONB parsing error detected');
+        return res.status(500).json({
+          error: 'Database data format error',
+          message: 'There was an issue parsing game data from the database. This is being investigated.',
+          details: modelError.message
+        });
+      }
+      
+      throw modelError; // Re-throw to be handled by outer catch
+    }
     
     res.json({
       success: true,

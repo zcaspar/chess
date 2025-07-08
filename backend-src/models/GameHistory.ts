@@ -1,4 +1,5 @@
 import { pool, query } from '../config/database';
+import { safeJsonParse, prepareForJsonb } from '../utils/jsonHandler';
 
 export interface GameHistoryEntry {
   id: number;
@@ -59,16 +60,7 @@ export class GameHistoryModel {
     `;
 
     // Ensure timeControl is a proper object for JSONB
-    let timeControlValue = gameData.timeControl || null;
-    if (timeControlValue && typeof timeControlValue === 'string') {
-      try {
-        // If it's a string, try to parse it
-        timeControlValue = JSON.parse(timeControlValue);
-      } catch (e) {
-        console.error('Invalid timeControl JSON string:', timeControlValue);
-        timeControlValue = null;
-      }
-    }
+    const timeControlValue = prepareForJsonb(gameData.timeControl);
     
     const values = [
       gameData.playerId,
@@ -371,18 +363,8 @@ export class GameHistoryModel {
    */
   private static mapRowToGameHistory(row: any): GameHistoryEntry {
     try {
-      // Handle timeControl field - PostgreSQL JSONB returns it as an object already
-      let timeControl = row.time_control;
-      
-      // Safety check: if timeControl is a string, parse it
-      if (timeControl && typeof timeControl === 'string') {
-        try {
-          timeControl = JSON.parse(timeControl);
-        } catch (parseError) {
-          console.error('Failed to parse timeControl string:', parseError);
-          timeControl = undefined;
-        }
-      }
+      // Use safe JSON parsing for timeControl field
+      const timeControl = safeJsonParse(row.time_control);
       
       return {
         id: row.id,
@@ -397,7 +379,7 @@ export class GameHistoryModel {
         pgn: row.pgn,
         moveCount: row.move_count,
         gameDuration: row.game_duration,
-        timeControl: timeControl || undefined,
+        timeControl: timeControl,
         gameMode: row.game_mode,
         aiDifficulty: row.ai_difficulty,
         createdAt: row.created_at,
@@ -406,6 +388,8 @@ export class GameHistoryModel {
     } catch (error) {
       console.error('Error mapping game history row:', error);
       console.error('Row data:', row);
+      console.error('Row time_control:', row.time_control);
+      console.error('Type of time_control:', typeof row.time_control);
       throw error;
     }
   }
