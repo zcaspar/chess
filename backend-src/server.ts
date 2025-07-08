@@ -159,16 +159,16 @@ app.get('/debug/db-test', async (req, res) => {
     const basicTest = await pool.query('SELECT 1 as test');
     
     // Test game_history table
-    let tableTest = { exists: false, error: null };
+    let tableTest: any = { exists: false, error: null };
     try {
       const result = await pool.query('SELECT COUNT(*) as count FROM game_history');
-      tableTest = { exists: true, count: result.rows[0].count };
+      tableTest = { exists: true, count: result.rows[0].count, error: null };
     } catch (e: any) {
-      tableTest = { exists: false, error: e.message };
+      tableTest = { exists: false, error: e.message, count: 0 };
     }
     
     // Test JSONB insert
-    let jsonbTest = { success: false, error: null };
+    let jsonbTest: any = { success: false, error: null };
     try {
       const testData = { initial: 300, increment: 5 };
       const result = await pool.query(
@@ -179,10 +179,11 @@ app.get('/debug/db-test', async (req, res) => {
         success: true, 
         input: testData,
         output: result.rows[0].test_json,
-        outputType: typeof result.rows[0].test_json
+        outputType: typeof result.rows[0].test_json,
+        error: null
       };
     } catch (e: any) {
-      jsonbTest = { success: false, error: e.message };
+      jsonbTest = { success: false, error: e.message, input: null, output: null, outputType: null };
     }
     
     res.json({
