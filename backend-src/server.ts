@@ -199,6 +199,58 @@ app.get('/debug/db-test', async (req, res) => {
 });
 
 // Game history debug endpoint
+// Debug endpoint to test game history database directly
+app.get('/debug/test-game-history', async (req, res) => {
+  try {
+    const { pool } = await import('./config/database');
+    
+    // Check if table exists
+    const tableCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'game_history'
+      );
+    `);
+    
+    // Get row count
+    const countResult = await pool.query('SELECT COUNT(*) FROM game_history');
+    
+    // Get sample row
+    const sampleResult = await pool.query('SELECT * FROM game_history LIMIT 1');
+    
+    let sampleRow = null;
+    if (sampleResult.rows.length > 0) {
+      const row = sampleResult.rows[0];
+      sampleRow = {
+        id: row.id,
+        player_id: row.player_id,
+        time_control_type: typeof row.time_control,
+        time_control_value: row.time_control,
+        time_control_is_null: row.time_control === null,
+        all_columns: Object.keys(row)
+      };
+    }
+    
+    res.json({
+      status: 'ok',
+      table_exists: tableCheck.rows[0].exists,
+      total_rows: parseInt(countResult.rows[0].count),
+      sample_row: sampleRow,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error: any) {
+    console.error('Debug test error:', error);
+    res.status(500).json({
+      error: 'Debug test failed',
+      message: error.message,
+      code: error.code,
+      detail: error.detail
+    });
+  }
+});
+
 app.get('/debug/game-history', async (req, res) => {
   try {
     console.log('🔍 Debug: Testing game history functionality...');
