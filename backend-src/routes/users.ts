@@ -198,4 +198,70 @@ router.get('/debug-analysis', (req, res) => {
   });
 });
 
+// Analysis endpoint in users route for testing
+router.post('/analyze-position', async (req, res) => {
+  try {
+    const { fen } = req.body;
+    
+    console.log('🧠 Analysis request received:', { fen });
+    
+    if (!fen) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'FEN position is required'
+      });
+    }
+
+    // Call LC0 server for best move analysis
+    const LC0_SERVER_URL = process.env.LC0_SERVER_URL || 'https://web-production-4cc9.up.railway.app';
+    console.log('🔗 Calling LC0 server:', LC0_SERVER_URL);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    
+    const analysisResponse = await fetch(`${LC0_SERVER_URL}/move`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fen,
+        difficulty: 'expert'
+      }),
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+
+    if (!analysisResponse.ok) {
+      throw new Error(`LC0 server responded with ${analysisResponse.status}: ${analysisResponse.statusText}`);
+    }
+
+    const analysisData = await analysisResponse.json() as any;
+    
+    const formattedAnalysis = {
+      position: fen,
+      engine: 'LC0',
+      depth: 15,
+      analysisTime: analysisData.responseTime || 0,
+      evaluation: null,
+      bestMove: analysisData.move || null,
+      recommendation: analysisData.move ? `Best move: ${analysisData.move.uci}` : null,
+      analysisDate: new Date().toISOString()
+    };
+
+    res.json({
+      success: true,
+      analysis: formattedAnalysis
+    });
+
+  } catch (error) {
+    console.error('Error analyzing position:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Failed to analyze position'
+    });
+  }
+});
+
 export default router;
