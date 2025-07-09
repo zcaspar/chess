@@ -190,4 +190,12 @@ router.delete('/profile', verifyFirebaseToken, async (req: AuthenticatedRequest,
   }
 });
 
+// Debug endpoint to test new route deployment
+router.get('/debug-analysis', (req, res) => {
+  res.json({
+    message: 'New analysis route deployment test - routes are working',
+    timestamp: new Date().toISOString()
+  });
+});
+
 export default router;
