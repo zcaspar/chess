@@ -1,6 +1,6 @@
 # Chess App - Professional Multiplayer Chess Platform
 
-A feature-rich chess application with AI opponents, real-time multiplayer, game history, and comprehensive analytics. Built with React, TypeScript, and Node.js.
+A feature-rich chess application with AI opponents, real-time multiplayer, game history, comprehensive analytics, and **LC0 neural network position analysis**. Built with React, TypeScript, and Node.js.
 
 ## 🎮 Live Demo
 
@@ -77,6 +77,7 @@ Our AI uses the **LC0 (Leela Chess Zero) neural network** engine, providing worl
 - **Drag and drop** or click-to-move interface
 - **Move history** with algebraic notation
 - **Game replay** - Review completed games move by move
+- **LC0 Position Analysis** - Get expert-level analysis of any position during replay
 - **Position evaluation** - See who's winning
 - **Draw offers** and resignation
 - **Automatic game saving** to history
@@ -201,6 +202,14 @@ npm run dev
 3. View your performance trends, win rates, and game statistics
 4. Analyze your performance against different AI difficulties
 
+### Using Position Analysis
+1. Sign in with your Google account
+2. Go to "Game History" and select any completed game
+3. Use the replay controls to navigate to any position
+4. Click "🧠 Analyze Position" to get LC0's expert analysis
+5. The best move will be highlighted in purple on the board
+6. View detailed analysis including engine evaluation and recommended moves
+
 ## 📁 Project Structure
 
 ```
@@ -223,6 +232,7 @@ chess-app/
 
 ## 🔄 Recent Updates
 
+- ✅ **LC0 Position Analysis** - NEW! Get expert-level analysis of any position during game replay
 - ✅ **Analytics Dashboard** - Comprehensive game statistics and performance tracking
 - ✅ **Timer Synchronization** - Fixed real-time timer updates in multiplayer
 - ✅ **Game Outcome Sync** - Both players now see game results immediately
