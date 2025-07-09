@@ -352,11 +352,109 @@ export class AnalyticsModel {
    */
   static async initializeAnalyticsTables(): Promise<void> {
     try {
-      // Read the analytics schema file
-      const fs = require('fs');
-      const path = require('path');
-      const schemaPath = path.join(__dirname, '..', 'db', 'analytics-schema.sql');
-      const schemaSQL = fs.readFileSync(schemaPath, 'utf8');
+      // Instead of reading from file, define schema inline to avoid path issues
+      const schemaSQL = `
+        -- Chess App Analytics Database Schema
+        -- Phase 8: Statistical Dashboard & Game Review Extensions
+
+        -- Game Statistics Table
+        -- Stores aggregated statistics for each game for efficient querying
+        CREATE TABLE IF NOT EXISTS game_statistics (
+            id SERIAL PRIMARY KEY,
+            game_history_id INTEGER REFERENCES game_history(id) ON DELETE CASCADE,
+            player_id VARCHAR(255) NOT NULL,
+            
+            -- Game metrics
+            avg_move_time DECIMAL(10,2), -- Average time per move in seconds
+            longest_think_time DECIMAL(10,2), -- Longest single move time
+            time_pressure_moves INTEGER DEFAULT 0, -- Moves made under time pressure (<10s)
+            
+            -- Opening analysis
+            opening_moves TEXT[], -- First 5 moves for opening classification
+            opening_name VARCHAR(100), -- ECO code or opening name
+            
+            -- Game quality metrics
+            game_quality_score DECIMAL(5,2), -- Overall game quality (0-100)
+            decisive_moments INTEGER DEFAULT 0, -- Number of critical positions
+            
+            -- Performance indicators
+            position_complexity_avg DECIMAL(5,2), -- Average position complexity
+            material_advantage_peak DECIMAL(5,2), -- Peak material advantage
+            
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Player Performance Table
+        -- Tracks historical performance metrics and trends
+        CREATE TABLE IF NOT EXISTS player_performance (
+            id SERIAL PRIMARY KEY,
+            player_id VARCHAR(255) NOT NULL,
+            
+            -- Time period for this performance snapshot
+            period_start DATE NOT NULL,
+            period_end DATE NOT NULL,
+            period_type VARCHAR(20) NOT NULL CHECK (period_type IN ('daily', 'weekly', 'monthly')),
+            
+            -- Game statistics
+            games_played INTEGER DEFAULT 0,
+            wins INTEGER DEFAULT 0,
+            losses INTEGER DEFAULT 0,
+            draws INTEGER DEFAULT 0,
+            win_rate DECIMAL(5,2) DEFAULT 0,
+            
+            -- Average game metrics
+            avg_game_length DECIMAL(10,2), -- Average moves per game
+            avg_game_duration DECIMAL(10,2), -- Average game duration in seconds
+            avg_move_time DECIMAL(10,2), -- Average time per move
+            
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Create indexes for efficient queries
+        CREATE INDEX IF NOT EXISTS idx_game_statistics_player_id ON game_statistics(player_id);
+        CREATE INDEX IF NOT EXISTS idx_game_statistics_game_history_id ON game_statistics(game_history_id);
+        CREATE INDEX IF NOT EXISTS idx_player_performance_player_id ON player_performance(player_id);
+
+        -- Create a view for easy dashboard queries
+        CREATE OR REPLACE VIEW player_dashboard_summary AS
+        SELECT 
+            gh.player_id,
+            COUNT(*) as total_games,
+            SUM(CASE WHEN gh.game_outcome = 'win' THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN gh.game_outcome = 'loss' THEN 1 ELSE 0 END) as losses,
+            SUM(CASE WHEN gh.game_outcome = 'draw' THEN 1 ELSE 0 END) as draws,
+            ROUND(
+                (SUM(CASE WHEN gh.game_outcome = 'win' THEN 1 ELSE 0 END) * 100.0 / COUNT(*)), 2
+            ) as win_rate,
+            AVG(gh.move_count) as avg_moves_per_game,
+            AVG(gh.game_duration) as avg_game_duration,
+            AVG(gs.avg_move_time) as avg_move_time,
+            MAX(gh.created_at) as last_game_date,
+            COUNT(CASE WHEN gh.game_mode = 'human-vs-ai' THEN 1 END) as ai_games,
+            COUNT(CASE WHEN gh.game_mode = 'human-vs-human' THEN 1 END) as human_games
+        FROM game_history gh
+        LEFT JOIN game_statistics gs ON gh.id = gs.game_history_id
+        GROUP BY gh.player_id;
+
+        -- Create a view for recent performance trends
+        CREATE OR REPLACE VIEW player_recent_performance AS
+        SELECT 
+            player_id,
+            DATE_TRUNC('day', created_at) as game_date,
+            COUNT(*) as games_played,
+            SUM(CASE WHEN game_outcome = 'win' THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN game_outcome = 'loss' THEN 1 ELSE 0 END) as losses,
+            SUM(CASE WHEN game_outcome = 'draw' THEN 1 ELSE 0 END) as draws,
+            ROUND(
+                (SUM(CASE WHEN game_outcome = 'win' THEN 1 ELSE 0 END) * 100.0 / COUNT(*)), 2
+            ) as daily_win_rate
+        FROM game_history
+        WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY player_id, DATE_TRUNC('day', created_at)
+        ORDER BY player_id, game_date DESC;
+      `;
       
       // Execute the schema
       await query(schemaSQL);

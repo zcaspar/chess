@@ -569,6 +569,37 @@ async function startServer() {
           console.error('⚠️  Warning: Could not initialize game history tables:', tableError);
           console.log('⚠️  Game history features may not work properly.');
         }
+        
+        // Initialize analytics tables if they don't exist
+        try {
+          const { AnalyticsModel } = await import('./models/Analytics');
+          
+          // Try multiple times with delays for Railway startup timing
+          let analyticsInitialized = false;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              console.log(`🔄 Attempt ${attempt}/3: Initializing analytics tables...`);
+              await AnalyticsModel.initializeAnalyticsTables();
+              console.log('✅ Analytics tables initialized successfully');
+              analyticsInitialized = true;
+              break;
+            } catch (attemptError: any) {
+              console.error(`❌ Attempt ${attempt} failed:`, attemptError.message);
+              if (attempt < 3) {
+                console.log(`⏳ Waiting 5 seconds before retry...`);
+                await new Promise(resolve => setTimeout(resolve, 5000));
+              }
+            }
+          }
+          
+          if (!analyticsInitialized) {
+            console.error('⚠️  Failed to initialize analytics tables after 3 attempts');
+            console.log('⚠️  Analytics features will be disabled until tables are created manually');
+          }
+        } catch (analyticsError) {
+          console.error('⚠️  Warning: Could not initialize analytics tables:', analyticsError);
+          console.log('⚠️  Analytics features may not work properly.');
+        }
       }
     } catch (dbError) {
       console.error('⚠️  Database connection error:', dbError);
