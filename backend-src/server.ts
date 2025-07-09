@@ -8,6 +8,7 @@ import { Lc0Engine } from './lc0Engine';
 import userRoutes from './routes/users';
 import gameHistoryRoutes from './routes/gameHistory';
 import analyticsRoutes from './routes/analytics';
+import analysisRoutes from './routes/analysis';
 import { GameSocketHandler } from './sockets/gameSocket';
 import { testConnection } from './config/database';
 
@@ -82,6 +83,11 @@ console.log('🔗 Registering analytics routes...');
 app.use('/api/analytics', analyticsRoutes);
 console.log('✅ Analytics routes registered at /api/analytics');
 console.log('📊 Analytics endpoints: /api/analytics/dashboard, /api/analytics/trends, /api/analytics/breakdowns');
+
+console.log('🔗 Registering analysis routes...');
+app.use('/api/analysis', analysisRoutes);
+console.log('✅ Analysis routes registered at /api/analysis');
+console.log('🧠 Analysis endpoints: /api/analysis/position, /api/analysis/health');
 
 // Health check endpoint
 app.get('/health', (req, res) => {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
+import { useAuth } from '../../hooks/useAuth';
 
 interface GameHistoryEntry {
   id: number;
@@ -22,6 +23,22 @@ interface GameHistoryEntry {
   createdAt: string;
 }
 
+interface PositionAnalysis {
+  position: string;
+  engine: string;
+  depth: number;
+  analysisTime: number;
+  evaluation: number | null;
+  bestMove: {
+    from: string;
+    to: string;
+    uci: string;
+  } | null;
+  recommendation: string | null;
+  analysisDate: string;
+  message?: string;
+}
+
 interface GameReplayProps {
   game: GameHistoryEntry;
   onClose?: () => void;
@@ -31,6 +48,11 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [autoPlaySpeed, setAutoPlaySpeed] = useState(1000); // milliseconds
+  const [analysis, setAnalysis] = useState<PositionAnalysis | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  
+  const { user } = useAuth();
 
   // Parse the PGN and get all moves
   const gameHistory = useMemo(() => {
@@ -146,6 +168,55 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
     return index % 2 === 0;
   };
 
+  const analyzePosition = async () => {
+    if (!user) {
+      setAnalysisError('You must be signed in to analyze positions');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setAnalysis(null);
+
+    try {
+      const token = await user.getIdToken();
+      const currentFen = currentGame.fen();
+      
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/analysis/position`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          fen: currentFen,
+          depth: 15
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Analysis failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setAnalysis(data.analysis);
+        if (data.warning) {
+          setAnalysisError(data.warning);
+        }
+      } else {
+        throw new Error('Analysis request failed');
+      }
+
+    } catch (error) {
+      console.error('Analysis error:', error);
+      setAnalysisError(error instanceof Error ? error.message : 'Analysis failed');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-lg p-6 max-w-6xl mx-auto">
       {/* Header */}
@@ -254,6 +325,31 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
               </select>
             </div>
 
+            {/* Position Analysis */}
+            <div className="flex justify-center">
+              <button
+                onClick={analyzePosition}
+                disabled={isAnalyzing || !user}
+                className={`px-4 py-2 rounded transition-colors ${
+                  isAnalyzing || !user
+                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                    : 'bg-purple-600 text-white hover:bg-purple-700'
+                }`}
+                title={!user ? 'Sign in to analyze positions' : 'Analyze current position with LC0'}
+              >
+                {isAnalyzing ? (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                    Analyzing...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    🧠 Analyze Position
+                  </div>
+                )}
+              </button>
+            </div>
+
             {/* Position Info */}
             <div className="text-center text-sm text-gray-600">
               Move {currentMoveIndex + 1} of {gameHistory.length}
@@ -303,6 +399,63 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
               </div>
             )}
           </div>
+
+          {/* Analysis Results */}
+          {(analysis || analysisError) && (
+            <div className="mt-4">
+              <h4 className="text-md font-semibold mb-2">Position Analysis</h4>
+              
+              {analysisError && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded mb-2">
+                  <div className="text-sm">{analysisError}</div>
+                </div>
+              )}
+              
+              {analysis && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Engine:</span>
+                      <span className="text-sm">{analysis.engine}</span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Analysis Time:</span>
+                      <span className="text-sm">{analysis.analysisTime}ms</span>
+                    </div>
+                    
+                    {analysis.bestMove && (
+                      <div className="border-t pt-2">
+                        <div className="text-sm font-medium mb-1">Best Move:</div>
+                        <div className="text-lg font-bold text-purple-700">
+                          {analysis.bestMove.uci}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          {analysis.bestMove.from} → {analysis.bestMove.to}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {analysis.recommendation && (
+                      <div className="text-sm text-purple-700 font-medium">
+                        {analysis.recommendation}
+                      </div>
+                    )}
+                    
+                    {analysis.message && (
+                      <div className="text-xs text-gray-600 italic">
+                        {analysis.message}
+                      </div>
+                    )}
+                    
+                    <div className="text-xs text-gray-500 border-t pt-2">
+                      Analyzed: {new Date(analysis.analysisDate).toLocaleTimeString()}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* PGN Export */}
           <div className="mt-4">
