@@ -1,12 +1,30 @@
 import React, { useState, useRef } from 'react';
 import { useGame } from '../../contexts/GameContext';
+import { useSocket } from '../../contexts/SocketContext';
 
 const ChessClock: React.FC = () => {
   const { gameState, setTimeControl, pauseClock, getPlayerByColor } = useGame();
   const { whiteTime, blackTime, activeColor, timeControl } = gameState;
+  const { roomCode, gameState: socketGameState } = useSocket();
   const [showTimeSelector, setShowTimeSelector] = useState(false);
   const [customMinutes, setCustomMinutes] = useState('5');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Check if we're in an online multiplayer room
+  const isInOnlineRoom = Boolean(roomCode);
+  
+  // Use online room's time control if available, otherwise use local game state
+  const effectiveTimeControl = isInOnlineRoom && socketGameState?.timeControl 
+    ? socketGameState.timeControl 
+    : timeControl;
+  
+  const effectiveWhiteTime = isInOnlineRoom && socketGameState 
+    ? socketGameState.whiteTime 
+    : whiteTime;
+    
+  const effectiveBlackTime = isInOnlineRoom && socketGameState 
+    ? socketGameState.blackTime 
+    : blackTime;
 
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -48,11 +66,34 @@ const ChessClock: React.FC = () => {
   };
 
   const resetTimeControl = () => {
+    // Don't allow time control changes when in an online room
+    if (isInOnlineRoom) {
+      return;
+    }
     setTimeControl(null, 0);
     setShowTimeSelector(true);
   };
 
-  if (!timeControl || showTimeSelector) {
+  // Handle no time control scenarios
+  if (!effectiveTimeControl) {
+    if (isInOnlineRoom) {
+      // In online room but no time control yet - show waiting state
+      return (
+        <div className="bg-white rounded-lg shadow-md p-4">
+          <h3 className="font-bold text-lg mb-3">Chess Clock</h3>
+          <div className="text-center py-4">
+            <div className="text-green-600 font-semibold mb-2">🌐 Online Room</div>
+            <div className="text-gray-600 text-sm">
+              Waiting for room time control settings...
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
+
+  // Show time selector for local games when no time control is set or user wants to change
+  if ((!effectiveTimeControl || showTimeSelector) && !isInOnlineRoom) {
     return (
       <div className="bg-white rounded-lg shadow-md p-4">
         <h3 className="font-bold text-lg mb-3">Time Control</h3>
@@ -129,12 +170,19 @@ const ChessClock: React.FC = () => {
       <div className="flex justify-between items-center mb-3">
         <h3 className="font-bold text-lg">Chess Clock</h3>
         <div className="flex gap-2">
-          <button
-            onClick={resetTimeControl}
-            className="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Change Time
-          </button>
+          {!isInOnlineRoom && (
+            <button
+              onClick={resetTimeControl}
+              className="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Change Time
+            </button>
+          )}
+          {isInOnlineRoom && (
+            <span className="text-xs px-2 py-1 bg-green-500 text-white rounded">
+              Online Room
+            </span>
+          )}
           {activeColor && (
             <button
               onClick={pauseClock}
@@ -156,13 +204,13 @@ const ChessClock: React.FC = () => {
           <div className="flex justify-between items-center">
             <span className="font-semibold">{getPlayerByColor('b')}</span>
             <span className={`font-mono text-xl ${
-              isCriticalTime(blackTime) 
+              isCriticalTime(effectiveBlackTime) 
                 ? 'text-red-500 animate-pulse' 
-                : isLowTime(blackTime) 
+                : isLowTime(effectiveBlackTime) 
                   ? 'text-yellow-500' 
                   : ''
             }`}>
-              {formatTime(blackTime)}
+              {formatTime(effectiveBlackTime)}
             </span>
           </div>
         </div>
@@ -176,21 +224,26 @@ const ChessClock: React.FC = () => {
           <div className="flex justify-between items-center">
             <span className="font-semibold">{getPlayerByColor('w')}</span>
             <span className={`font-mono text-xl ${
-              isCriticalTime(whiteTime) 
+              isCriticalTime(effectiveWhiteTime) 
                 ? 'text-red-500 animate-pulse' 
-                : isLowTime(whiteTime) 
+                : isLowTime(effectiveWhiteTime) 
                   ? 'text-yellow-500' 
                   : ''
             }`}>
-              {formatTime(whiteTime)}
+              {formatTime(effectiveWhiteTime)}
             </span>
           </div>
         </div>
       </div>
 
       <div className="mt-3 text-xs text-gray-600 text-center">
-        {timeControl.initial / 60} minute{timeControl.initial !== 60 ? 's' : ''} per side
-        {timeControl.increment > 0 && ` + ${timeControl.increment}s increment`}
+        {effectiveTimeControl.initial / 60} minute{effectiveTimeControl.initial !== 60 ? 's' : ''} per side
+        {effectiveTimeControl.increment > 0 && ` + ${effectiveTimeControl.increment}s increment`}
+        {isInOnlineRoom && (
+          <div className="text-green-600 font-semibold mt-1">
+            🌐 Online Room Timer
+          </div>
+        )}
       </div>
     </div>
   );
