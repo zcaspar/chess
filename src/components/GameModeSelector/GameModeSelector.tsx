@@ -32,12 +32,12 @@ const GameModeSelector: React.FC = () => {
     await setAIDifficulty(difficulty);
   };
 
-  const difficultyLabels: Record<DifficultyLevel, { name: string; description: string }> = {
-    beginner: { name: 'Beginner', description: 'Very easy, makes many mistakes' },
-    easy: { name: 'Easy', description: 'Casual play, some mistakes' },
-    medium: { name: 'Medium', description: 'Balanced challenge' },
-    hard: { name: 'Hard', description: 'Strong play, few mistakes' },
-    expert: { name: 'Expert', description: 'Very strong, minimal mistakes' },
+  const difficultyLabels: Record<DifficultyLevel, { name: string; description: string; elo: string }> = {
+    beginner: { name: 'Beginner', description: 'Very easy, makes many mistakes', elo: '~800' },
+    easy: { name: 'Easy', description: 'Casual play, some mistakes', elo: '~1200' },
+    medium: { name: 'Medium', description: 'Balanced challenge', elo: '~1600' },
+    hard: { name: 'Hard', description: 'Strong play, few mistakes', elo: '~2000' },
+    expert: { name: 'Expert', description: 'Very strong, minimal mistakes', elo: '~2400+' },
   };
 
   return (
@@ -131,7 +131,9 @@ const GameModeSelector: React.FC = () => {
                       className="mr-3 mt-0.5"
                     />
                     <div>
-                      <div className="text-sm font-medium">{info.name}</div>
+                      <div className="text-sm font-medium">
+                        {info.name} <span className="text-gray-500">({info.elo} ELO)</span>
+                      </div>
                       <div className="text-xs text-gray-600">{info.description}</div>
                     </div>
                   </label>

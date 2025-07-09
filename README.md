@@ -1,129 +1,251 @@
-# Chess App - Phase 2 Complete
+# Chess App - Professional Multiplayer Chess Platform
 
-A feature-rich chess application built with React, TypeScript, and Tailwind CSS. The app now includes advanced game controls, move history, and state management.
+A feature-rich chess application with AI opponents, real-time multiplayer, game history, and comprehensive analytics. Built with React, TypeScript, and Node.js.
 
-## Phase 2 Features (Just Added!)
+## 🎮 Live Demo
 
-### Enhanced Chess Board
-- ✅ **Move highlighting** - Shows possible moves when selecting a piece
-- ✅ **Last move indication** - Highlights the previous move
-- ✅ **Click-to-move** - Click a piece then click destination
-- ✅ **Right-click squares** - Mark squares with right-click
-- ✅ **Visual feedback** - Selected pieces and valid moves clearly shown
+**Play now at: [https://chess-pu71.vercel.app](https://chess-pu71.vercel.app)**
 
-### Game State Management
-- ✅ **React Context** - Centralized game state management
-- ✅ **Undo/Redo** - Navigate through move history
-- ✅ **Move persistence** - Maintains full game history
+## ✨ Key Features
 
-### Advanced Controls
-- ✅ **Resign button** - Either player can resign
-- ✅ **Draw offers** - Propose and accept/decline draws
-- ✅ **Game controls panel** - All controls in one place
+### 🤖 AI Opponents with Multiple Difficulty Levels
 
-### Improved UI
-- ✅ **Three-column layout** - Status, board, and history
-- ✅ **Move history table** - Professional notation display
-- ✅ **Game status panel** - Current turn, check warnings, statistics
-- ✅ **Responsive design** - Works on all screen sizes
+Our AI uses the **LC0 (Leela Chess Zero) neural network** engine, providing world-class chess AI with realistic play at all levels:
 
-## Phase 1 Features (Original MVP)
+#### Difficulty Levels:
 
-- ✅ Fully functional chess board with drag-and-drop pieces
-- ✅ Complete chess rules validation using chess.js
-- ✅ Turn indicator showing whose move it is
-- ✅ Check detection and notification
-- ✅ Game over detection (checkmate, stalemate, draws)
-- ✅ Move history display in algebraic notation
-- ✅ New game button to reset the board
-- ✅ Clean, responsive UI with Tailwind CSS
+1. **Beginner** (~800 ELO)
+   - Perfect for new players learning chess
+   - Makes deliberate mistakes and overlooks tactics
+   - Response time: ~500ms per move
+   - High move randomness to simulate beginner play
 
-## Tech Stack
+2. **Easy** (~1200 ELO)
+   - Suitable for casual players
+   - Occasionally misses tactics but plays solid moves
+   - Response time: ~1 second per move
+   - Moderate move randomness
 
+3. **Medium** (~1600 ELO)
+   - Challenging for intermediate players
+   - Plays tactically sound chess with good positional understanding
+   - Response time: ~2 seconds per move
+   - Low move randomness
+
+4. **Hard** (~2000 ELO)
+   - Strong club player level
+   - Excellent tactical and positional play
+   - Response time: ~5 seconds per move
+   - Minimal randomness, occasional suboptimal moves
+
+5. **Expert** (~2400+ ELO)
+   - Master-level play using full LC0 neural network strength
+   - Superhuman tactical and strategic understanding
+   - Response time: ~10 seconds per move
+   - No randomness - plays the best moves
+
+*Note: ELO ratings are approximate and based on typical human ratings. The AI adjusts its strength through a combination of search depth limitation, move randomness, and thinking time.*
+
+### 🌐 Online Multiplayer
+- **Real-time gameplay** with Socket.io
+- **Room system** - Create/join games with room codes
+- **Timer synchronization** - Chess clocks sync across all players
+- **Automatic reconnection** - Resume games after disconnection
+- **Spectator mode** - Watch ongoing games
+
+### 🔐 User Authentication
+- **Google Sign-In** integration
+- **Guest mode** for quick play
+- **Persistent user profiles**
+- **Game history** tied to user accounts
+
+### 📊 Statistical Dashboard (NEW!)
+- **Performance analytics** - Win rate, game trends, average game duration
+- **Interactive charts** - Visualize your progress over time
+- **AI difficulty breakdown** - See performance against each difficulty level
+- **Time control statistics** - Analyze performance in different time formats
+- **Game outcome distribution** - Wins, losses, draws visualization
+
+### ⏱️ Time Controls
+- **Preset options**: 1 min (Bullet), 5 min (Blitz), 10 min (Rapid)
+- **Custom time controls**: 1-180 minutes
+- **Real-time clock synchronization** in multiplayer
+- **Time expiration** detection with automatic game end
+
+### 🎯 Game Features
+- **Move highlighting** - Shows legal moves for selected pieces
+- **Drag and drop** or click-to-move interface
+- **Move history** with algebraic notation
+- **Game replay** - Review completed games move by move
+- **Position evaluation** - See who's winning
+- **Draw offers** and resignation
+- **Automatic game saving** to history
+
+### 📱 Responsive Design
+- Works on desktop, tablet, and mobile devices
+- Touch-friendly interface
+- Adaptive layout for different screen sizes
+
+## 🛠️ Tech Stack
+
+### Frontend
 - **React** with TypeScript
 - **chess.js** - Chess game logic and validation
 - **react-chessboard** - Chess board UI component
 - **Tailwind CSS** - Styling and responsive design
-- **React Context** - State management
+- **Socket.io-client** - Real-time multiplayer
+- **Firebase** - Authentication
+- **Chart.js** - Analytics visualization
 
-## Getting Started
+### Backend
+- **Node.js** with Express
+- **Socket.io** - WebSocket connections
+- **PostgreSQL** - Game data persistence
+- **Firebase Admin** - User authentication
+- **LC0** - Chess AI engine
+
+### Deployment
+- **Frontend**: Vercel
+- **Backend**: Railway
+- **Database**: Railway PostgreSQL
+- **AI Server**: Railway (separate service)
+
+## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js (v14 or higher)
+- Node.js (v18 or higher)
 - npm or yarn
+- PostgreSQL (for local development)
 
 ### Installation
 
-1. Navigate to the chess-app directory:
+1. Clone the repository:
 ```bash
+git clone https://github.com/your-username/chess-app.git
 cd chess-app
 ```
 
-2. Install dependencies:
+2. Install frontend dependencies:
 ```bash
 npm install
 ```
 
-3. Start the development server:
+3. Install backend dependencies:
+```bash
+cd backend-src
+npm install
+cd ..
+```
+
+4. Set up environment variables:
+
+Create a `.env` file in the root directory:
+```env
+REACT_APP_BACKEND_URL=http://localhost:3005
+REACT_APP_FIREBASE_API_KEY=your-firebase-api-key
+REACT_APP_FIREBASE_AUTH_DOMAIN=your-auth-domain
+REACT_APP_FIREBASE_PROJECT_ID=your-project-id
+```
+
+Create a `.env` file in the backend-src directory:
+```env
+PORT=3005
+DATABASE_URL=postgresql://user:password@localhost:5432/chess
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_PRIVATE_KEY=your-private-key
+FIREBASE_CLIENT_EMAIL=your-client-email
+```
+
+5. Start the development servers:
+
+Frontend:
 ```bash
 npm start
 ```
 
-4. Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+Backend (in a new terminal):
+```bash
+cd backend-src
+npm run dev
+```
 
-## How to Play
+6. Open [http://localhost:3000](http://localhost:3000) to play!
+
+## 🎮 How to Play
+
+### Game Modes
+
+1. **Human vs Human (Local)** - Play against someone on the same device
+2. **Human vs AI** - Play against the computer at various difficulty levels
+3. **Online Multiplayer** - Play against friends or other players online
 
 ### Basic Gameplay
-1. The game starts with White to move
+1. White always moves first
 2. Click and drag pieces OR click a piece then click destination
-3. Invalid moves will be rejected automatically
-4. The turn indicator shows whose move it is
-5. Check warnings appear when a king is in check
+3. Legal moves are highlighted when you select a piece
+4. The game detects check, checkmate, and stalemate automatically
+5. Use the timer for timed games
 
-### Advanced Features
-- **Undo/Redo**: Navigate through your game history
-- **Resign**: End the game by resigning
-- **Draw Offer**: Propose a draw to your opponent
-- **Move Highlighting**: See all legal moves for selected pieces
-- **Right-click**: Mark squares for planning
+### Online Multiplayer
+1. Sign in with Google or continue as guest
+2. Click "Play Online"
+3. Either:
+   - Create a new room and share the code
+   - Join an existing room with a code
+4. The game starts when both players join
+5. Moves and timers sync in real-time
 
-## Project Structure
+### Viewing Statistics
+1. Sign in with your Google account
+2. Click "📊 Analytics" in the header
+3. View your performance trends, win rates, and game statistics
+4. Analyze your performance against different AI difficulties
+
+## 📁 Project Structure
 
 ```
 chess-app/
-├── src/
-│   ├── components/
-│   │   ├── ChessBoard/       # Enhanced chess board with highlights
-│   │   ├── GameControls/     # Control panel (new game, resign, etc.)
-│   │   ├── GameStatus/       # Game status display
-│   │   └── MoveHistory/      # Move history table
-│   ├── contexts/
-│   │   └── GameContext.tsx   # Centralized game state
-│   ├── App.tsx               # Main app with new layout
-│   ├── App.css               # Custom styles
-│   ├── index.tsx             # React entry point
-│   └── index.css             # Global styles with Tailwind
-├── public/
-├── tailwind.config.js        # Tailwind configuration
-├── postcss.config.js         # PostCSS configuration
-├── tsconfig.json             # TypeScript configuration
-└── package.json
+├── src/                      # React frontend
+│   ├── components/           # UI components
+│   ├── contexts/            # React contexts (Game, Auth, Socket)
+│   ├── hooks/               # Custom React hooks
+│   └── utils/               # Utility functions
+├── backend-src/             # Node.js backend
+│   ├── models/              # Database models
+│   ├── routes/              # API routes
+│   ├── sockets/             # Socket.io handlers
+│   └── config/              # Configuration files
+├── lc0-server/              # LC0 AI server
+│   ├── Dockerfile           # LC0 container setup
+│   └── server.js            # AI API endpoints
+└── public/                  # Static assets
 ```
 
-## Next Steps (Phase 3)
+## 🔄 Recent Updates
 
-- Add simple computer opponent
-- Implement basic AI with difficulty levels
-- Add game mode selection (Human vs Human, Human vs Computer)
-- Implement move animations
+- ✅ **Analytics Dashboard** - Comprehensive game statistics and performance tracking
+- ✅ **Timer Synchronization** - Fixed real-time timer updates in multiplayer
+- ✅ **Game Outcome Sync** - Both players now see game results immediately
+- ✅ **LC0 AI Integration** - World-class neural network chess engine
+- ✅ **Game History** - Save and replay all your games
 
-## Available Scripts
+## 🐛 Known Issues
 
-- `npm start` - Runs the app in development mode
-- `npm test` - Launches the test runner
-- `npm run build` - Builds the app for production
-- `npm run eject` - Ejects from Create React App (one-way operation)
+- Analytics features require game history data to display
+- AI response time may vary on first move while engine initializes
+- Mobile keyboard may appear on custom time control input
 
-## License
+## 🤝 Contributing
 
-This project is open source and available under the MIT License.# Vercel deployment restored to working structure
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is open source and available under the MIT License.
+
+## 👥 Credits
+
+- Chess logic powered by [chess.js](https://github.com/jhlywa/chess.js)
+- Board UI by [react-chessboard](https://github.com/Clariity/react-chessboard)
+- AI powered by [Leela Chess Zero](https://lczero.org/)
+- Icons and styling with [Tailwind CSS](https://tailwindcss.com/)
