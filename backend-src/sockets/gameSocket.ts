@@ -446,12 +446,26 @@ export class GameSocketHandler {
         // Update time control
         if (room.timeControl) {
           const now = Date.now();
-          const elapsed = (now - room.lastMoveTime) / 1000;
+          const isFirstMove = room.game.history().length === 1; // First move just happened
           
-          if (playerColor === 'w') {
-            room.whiteTime = Math.max(0, room.whiteTime - elapsed + room.timeControl.increment);
+          // Only deduct time if this is not the first move
+          if (!isFirstMove) {
+            const elapsed = (now - room.lastMoveTime) / 1000;
+            
+            if (playerColor === 'w') {
+              room.whiteTime = Math.max(0, room.whiteTime - elapsed + room.timeControl.increment);
+            } else {
+              room.blackTime = Math.max(0, room.blackTime - elapsed + room.timeControl.increment);
+            }
           } else {
-            room.blackTime = Math.max(0, room.blackTime - elapsed + room.timeControl.increment);
+            // For the first move, just add increment if any
+            if (room.timeControl.increment > 0) {
+              if (playerColor === 'w') {
+                room.whiteTime += room.timeControl.increment;
+              } else {
+                room.blackTime += room.timeControl.increment;
+              }
+            }
           }
           
           room.lastMoveTime = now;
@@ -667,8 +681,8 @@ export class GameSocketHandler {
 
   private broadcastTimerUpdates() {
     for (const [roomCode, room] of this.rooms.entries()) {
-      // Only update timer for active games with time control
-      if (room.timeControl && !room.game.isGameOver() && room.whitePlayer && room.blackPlayer) {
+      // Only update timer for active games with time control AND after the first move
+      if (room.timeControl && !room.game.isGameOver() && room.whitePlayer && room.blackPlayer && room.game.history().length > 0) {
         const now = Date.now();
         const elapsed = (now - room.lastMoveTime) / 1000;
         

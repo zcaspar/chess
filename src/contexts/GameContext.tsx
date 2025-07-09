@@ -617,8 +617,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           drawOffer: { offered: false, by: null }, // Clear draw offer on move
           whiteTime: newWhiteTime,
           blackTime: newBlackTime,
-          activeColor: result ? null : (prev.timeControl ? (gameCopy.turn() === 'w' ? 'w' : 'b') : null),
-          startTime: result ? null : (prev.timeControl ? Date.now() : null),
+          activeColor: result ? null : (prev.timeControl && newHistory.length > 1 ? (gameCopy.turn() === 'w' ? 'w' : 'b') : null),
+          startTime: result ? null : (prev.timeControl && newHistory.length > 1 ? Date.now() : null),
           gameStats: updatedStats,
           statsUpdated: result ? true : prev.statsUpdated,
         };
@@ -916,13 +916,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       console.log('🌐 Socket move made received:', data);
       
       // Update game state with the move and timer information
+      const updatedGame = new Chess(data.fen);
+      const moveCount = updatedGame.history().length;
+      
       setGameState(prev => ({
         ...prev,
-        game: new Chess(data.fen),
+        game: updatedGame,
         whiteTime: data.whiteTime,
         blackTime: data.blackTime,
-        activeColor: data.turn,
-        startTime: Date.now(), // Reset timer for next player
+        // Only start timer for next player if this is not the first move
+        activeColor: moveCount > 1 ? data.turn : null,
+        startTime: moveCount > 1 ? Date.now() : null,
       }));
     };
 
@@ -969,7 +973,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         ...prev,
         whiteTime: data.whiteTime,
         blackTime: data.blackTime,
-        activeColor: data.turn,
+        // Only set activeColor if moves have been made (timer should be running)
+        activeColor: prev.history.length > 0 ? data.turn : null,
+        startTime: prev.history.length > 0 && data.turn ? Date.now() : null,
       }));
     };
 
