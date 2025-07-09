@@ -99,6 +99,17 @@ router.post('/position', authenticateToken, async (req: AuthenticatedRequest, re
 });
 
 /**
+ * GET /api/analysis/test
+ * Simple test endpoint to verify route is working
+ */
+router.get('/test', (req, res) => {
+  res.json({
+    message: 'Analysis route is working',
+    timestamp: new Date().toISOString()
+  });
+});
+
+/**
  * GET /api/analysis/health
  * Check if analysis service is working
  */
