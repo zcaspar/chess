@@ -47,7 +47,7 @@ router.post('/position', authenticateToken, async (req: AuthenticatedRequest, re
         throw new Error(`LC0 server responded with ${analysisResponse.status}: ${analysisResponse.statusText}`);
       }
 
-      const analysisData = await analysisResponse.json();
+      const analysisData = await analysisResponse.json() as any;
       
       // Format the response for frontend consumption
       const formattedAnalysis = {
@@ -117,9 +117,14 @@ router.get('/health', async (req, res) => {
   try {
     const LC0_SERVER_URL = process.env.LC0_SERVER_URL || 'https://web-production-4cc9.up.railway.app';
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
     const healthResponse = await fetch(`${LC0_SERVER_URL}/health`, {
-      timeout: 5000
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
 
     const isLC0Available = healthResponse.ok;
     
