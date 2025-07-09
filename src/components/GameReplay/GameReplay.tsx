@@ -217,6 +217,27 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
     }
   };
 
+  // Create custom square styles for highlighting the best move
+  const getCustomSquareStyles = () => {
+    const styles: { [square: string]: React.CSSProperties } = {};
+    
+    if (analysis?.bestMove) {
+      // Highlight the from square in light purple
+      styles[analysis.bestMove.from] = {
+        backgroundColor: 'rgba(147, 51, 234, 0.3)',
+        borderRadius: '3px',
+      };
+      
+      // Highlight the to square in darker purple
+      styles[analysis.bestMove.to] = {
+        backgroundColor: 'rgba(147, 51, 234, 0.5)',
+        borderRadius: '3px',
+      };
+    }
+    
+    return styles;
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-lg p-6 max-w-6xl mx-auto">
       {/* Header */}
@@ -258,9 +279,48 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                 borderRadius: '4px',
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
               }}
+              customSquareStyles={getCustomSquareStyles()}
               areArrowsAllowed={false}
               arePiecesDraggable={false}
             />
+          </div>
+
+          {/* Position Analysis - Left aligned with board */}
+          <div className="mb-4 flex gap-2">
+            <button
+              onClick={analyzePosition}
+              disabled={isAnalyzing || !user}
+              className={`px-4 py-2 rounded transition-colors ${
+                isAnalyzing || !user
+                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                  : 'bg-purple-600 text-white hover:bg-purple-700'
+              }`}
+              title={!user ? 'Sign in to analyze positions' : 'Analyze current position with LC0'}
+            >
+              {isAnalyzing ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  Analyzing...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  🧠 Analyze Position
+                </div>
+              )}
+            </button>
+            
+            {analysis && (
+              <button
+                onClick={() => {
+                  setAnalysis(null);
+                  setAnalysisError(null);
+                }}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                title="Clear analysis and highlighting"
+              >
+                Clear Analysis
+              </button>
+            )}
           </div>
 
           {/* Controls */}
@@ -325,30 +385,6 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
               </select>
             </div>
 
-            {/* Position Analysis */}
-            <div className="flex justify-center">
-              <button
-                onClick={analyzePosition}
-                disabled={isAnalyzing || !user}
-                className={`px-4 py-2 rounded transition-colors ${
-                  isAnalyzing || !user
-                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                    : 'bg-purple-600 text-white hover:bg-purple-700'
-                }`}
-                title={!user ? 'Sign in to analyze positions' : 'Analyze current position with LC0'}
-              >
-                {isAnalyzing ? (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                    Analyzing...
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    🧠 Analyze Position
-                  </div>
-                )}
-              </button>
-            </div>
 
             {/* Position Info */}
             <div className="text-center text-sm text-gray-600">

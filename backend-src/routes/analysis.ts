@@ -11,6 +11,8 @@ router.post('/position', authenticateToken, async (req: AuthenticatedRequest, re
   try {
     const { fen, depth = 15 } = req.body;
     
+    console.log('🧠 Analysis request received:', { fen, depth, user: req.user?.uid });
+    
     if (!fen) {
       return res.status(400).json({
         error: 'Bad Request',
@@ -20,9 +22,13 @@ router.post('/position', authenticateToken, async (req: AuthenticatedRequest, re
 
     // Check if LC0 server is available
     const LC0_SERVER_URL = process.env.LC0_SERVER_URL || 'https://web-production-4cc9.up.railway.app';
+    console.log('🔗 Calling LC0 server:', LC0_SERVER_URL);
     
     try {
       // Call LC0 server for best move analysis
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
       const analysisResponse = await fetch(`${LC0_SERVER_URL}/move`, {
         method: 'POST',
         headers: {
@@ -32,8 +38,10 @@ router.post('/position', authenticateToken, async (req: AuthenticatedRequest, re
           fen,
           difficulty: 'expert' // Use expert level for analysis
         }),
-        timeout: 30000 // 30 second timeout
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
 
       if (!analysisResponse.ok) {
         throw new Error(`LC0 server responded with ${analysisResponse.status}: ${analysisResponse.statusText}`);
