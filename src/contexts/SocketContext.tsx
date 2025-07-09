@@ -11,6 +11,15 @@ interface SocketContextType {
     white: { id: string; username: string } | null;
     black: { id: string; username: string } | null;
   };
+  gameState: {
+    fen: string;
+    pgn: string;
+    turn: 'w' | 'b';
+    isGameOver: boolean;
+    whiteTime: number;
+    blackTime: number;
+    timeControl: { initial: number; increment: number } | null;
+  } | null;
   createRoom: (timeControl?: { initial: number; increment: number }) => void;
   joinRoom: (roomCode: string) => void;
   makeMove: (from: string, to: string, promotion?: string) => void;
@@ -44,6 +53,16 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     white: { id: string; username: string } | null;
     black: { id: string; username: string } | null;
   }>({ white: null, black: null });
+  
+  const [gameState, setGameState] = useState<{
+    fen: string;
+    pgn: string;
+    turn: 'w' | 'b';
+    isGameOver: boolean;
+    whiteTime: number;
+    blackTime: number;
+    timeControl: { initial: number; increment: number } | null;
+  } | null>(null);
   
   const { user } = useAuth();
 
@@ -107,6 +126,17 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           setRoomCode(data.roomCode);
           setAssignedColor(data.assignedColor);
           setPlayers(data.players);
+          
+          // Initialize game state
+          setGameState({
+            fen: data.gameState.fen,
+            pgn: data.gameState.pgn,
+            turn: data.gameState.turn,
+            isGameOver: data.gameState.isGameOver,
+            whiteTime: data.whiteTime,
+            blackTime: data.blackTime,
+            timeControl: data.timeControl,
+          });
         });
 
         socketInstance.on('playerJoined', (data) => {
@@ -172,6 +202,64 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
         socketInstance.on('upgradeError', (error) => {
           console.warn('Socket upgrade failed, staying on polling:', error);
+        });
+
+        // Game events
+        socketInstance.on('moveMade', (data) => {
+          console.log('Move made:', data);
+          
+          // Update game state with timer information
+          setGameState(prev => prev ? {
+            ...prev,
+            fen: data.fen,
+            pgn: data.pgn,
+            turn: data.turn,
+            whiteTime: data.whiteTime,
+            blackTime: data.blackTime,
+          } : null);
+          
+          // Broadcast to GameContext or other components via custom event
+          window.dispatchEvent(new CustomEvent('socketMoveMade', { detail: data }));
+        });
+
+        socketInstance.on('gameEnded', (data) => {
+          console.log('Game ended:', data);
+          
+          // Update game state to mark as over
+          setGameState(prev => prev ? {
+            ...prev,
+            isGameOver: true,
+          } : null);
+          
+          // Broadcast to GameContext or other components via custom event
+          window.dispatchEvent(new CustomEvent('socketGameEnded', { detail: data }));
+        });
+
+        socketInstance.on('drawOffered', () => {
+          console.log('Draw offered');
+          // Broadcast to GameContext or other components via custom event
+          window.dispatchEvent(new CustomEvent('socketDrawOffered'));
+        });
+
+        socketInstance.on('gameRestored', (data) => {
+          console.log('Game restored:', data);
+          // Broadcast to GameContext or other components via custom event
+          window.dispatchEvent(new CustomEvent('socketGameRestored', { detail: data }));
+        });
+
+        socketInstance.on('timerUpdate', (data) => {
+          console.log('Timer update:', data);
+          
+          // Update game state with timer information
+          setGameState(prev => prev ? {
+            ...prev,
+            whiteTime: data.whiteTime,
+            blackTime: data.blackTime,
+            turn: data.turn,
+          } : null);
+          
+          // Broadcast to GameContext or other components via custom event
+          window.dispatchEvent(new CustomEvent('socketTimerUpdate', { detail: data }));
         });
       } catch (error) {
         console.error('Failed to connect socket:', error);
@@ -247,6 +335,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     roomCode,
     assignedColor,
     players,
+    gameState,
     createRoom,
     joinRoom,
     makeMove,

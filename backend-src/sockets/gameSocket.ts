@@ -39,6 +39,11 @@ export class GameSocketHandler {
     setInterval(() => {
       RoomPersistence.saveRooms(this.rooms);
     }, 30000); // Every 30 seconds
+    
+    // Timer update broadcast - send timer updates every second
+    setInterval(() => {
+      this.broadcastTimerUpdates();
+    }, 1000);
   }
   
   private restorePersistedRooms() {
@@ -658,6 +663,45 @@ export class GameSocketHandler {
     RoomPersistence.saveRooms(this.rooms);
     
     console.log(`Player ${socket.id} (${leftColor}) left room ${roomCode}`);
+  }
+
+  private broadcastTimerUpdates() {
+    for (const [roomCode, room] of this.rooms.entries()) {
+      // Only update timer for active games with time control
+      if (room.timeControl && !room.game.isGameOver() && room.whitePlayer && room.blackPlayer) {
+        const now = Date.now();
+        const elapsed = (now - room.lastMoveTime) / 1000;
+        
+        let updatedWhiteTime = room.whiteTime;
+        let updatedBlackTime = room.blackTime;
+        
+        // Deduct time from the active player
+        if (room.game.turn() === 'w') {
+          updatedWhiteTime = Math.max(0, room.whiteTime - elapsed);
+        } else {
+          updatedBlackTime = Math.max(0, room.blackTime - elapsed);
+        }
+        
+        // Update room time
+        room.whiteTime = updatedWhiteTime;
+        room.blackTime = updatedBlackTime;
+        room.lastMoveTime = now;
+        
+        // Check for timeout
+        if (updatedWhiteTime <= 0 || updatedBlackTime <= 0) {
+          const winner = updatedWhiteTime <= 0 ? 'black' : 'white';
+          this.endGame(roomCode, winner, 'timeout');
+          continue;
+        }
+        
+        // Broadcast timer update to all players in the room
+        this.io.to(roomCode).emit('timerUpdate', {
+          whiteTime: updatedWhiteTime,
+          blackTime: updatedBlackTime,
+          turn: room.game.turn(),
+        });
+      }
+    }
   }
 
   private generateRoomCode(): string {

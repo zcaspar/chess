@@ -908,6 +908,85 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
   }, [gameState.gameMode]);
 
+  // Socket event listeners for online multiplayer
+  useEffect(() => {
+    const handleSocketMoveMade = (event: CustomEvent) => {
+      const data = event.detail;
+      console.log('🌐 Socket move made received:', data);
+      
+      // Update game state with the move and timer information
+      setGameState(prev => ({
+        ...prev,
+        game: new Chess(data.fen),
+        whiteTime: data.whiteTime,
+        blackTime: data.blackTime,
+        activeColor: data.turn,
+        startTime: Date.now(), // Reset timer for next player
+      }));
+    };
+
+    const handleSocketGameEnded = (event: CustomEvent) => {
+      const data = event.detail;
+      console.log('🌐 Socket game ended received:', data);
+      
+      // Update game state to show game result
+      setGameState(prev => ({
+        ...prev,
+        gameResult: `${data.result} (${data.reason})`,
+        activeColor: null,
+      }));
+      
+      // Stop the timer
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      
+      // Mark game as ended to prevent further moves
+      gameEndedRef.current = true;
+    };
+
+    const handleSocketDrawOffered = () => {
+      console.log('🌐 Socket draw offered received');
+      
+      // Update draw offer state
+      setGameState(prev => ({
+        ...prev,
+        drawOffer: {
+          offered: true,
+          by: prev.game.turn() === 'w' ? 'b' : 'w', // The other player offered
+        },
+      }));
+    };
+
+    const handleSocketTimerUpdate = (event: CustomEvent) => {
+      const data = event.detail;
+      console.log('🌐 Socket timer update received:', data);
+      
+      // Update game state with timer information
+      setGameState(prev => ({
+        ...prev,
+        whiteTime: data.whiteTime,
+        blackTime: data.blackTime,
+        activeColor: data.turn,
+      }));
+    };
+
+    // Add event listeners
+    window.addEventListener('socketMoveMade', handleSocketMoveMade as EventListener);
+    window.addEventListener('socketGameEnded', handleSocketGameEnded as EventListener);
+    window.addEventListener('socketDrawOffered', handleSocketDrawOffered);
+    window.addEventListener('socketTimerUpdate', handleSocketTimerUpdate as EventListener);
+
+    return () => {
+      // Clean up event listeners
+      window.removeEventListener('socketMoveMade', handleSocketMoveMade as EventListener);
+      window.removeEventListener('socketGameEnded', handleSocketGameEnded as EventListener);
+      window.removeEventListener('socketDrawOffered', handleSocketDrawOffered);
+      window.removeEventListener('socketTimerUpdate', handleSocketTimerUpdate as EventListener);
+    };
+  }, []);
+
   const canUndo = gameState.currentMoveIndex >= 0;
   const canRedo = gameState.currentMoveIndex < gameState.history.length - 1;
 
