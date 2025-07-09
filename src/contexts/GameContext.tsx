@@ -908,6 +908,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
   }, [gameState.gameMode]);
 
+
   // Socket event listeners for online multiplayer
   useEffect(() => {
     const handleSocketMoveMade = (event: CustomEvent) => {
@@ -972,11 +973,39 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       }));
     };
 
+    const handleSocketGameRestored = (event: CustomEvent) => {
+      const data = event.detail;
+      console.log('🌐 Socket game restored received:', data);
+      
+      // Game was restored from previous session, display message
+      console.log(data.message);
+    };
+
+    const handleSocketRoomJoined = (event: CustomEvent) => {
+      const data = event.detail;
+      console.log('🌐 Socket room joined received:', data);
+      
+      // Sync GameContext time control with room's time control
+      if (data.timeControl) {
+        console.log('🔄 Syncing GameContext time control with room:', data.timeControl);
+        
+        setGameState(prev => ({
+          ...prev,
+          timeControl: data.timeControl,
+          whiteTime: data.whiteTime || data.timeControl.initial,
+          blackTime: data.blackTime || data.timeControl.initial,
+          activeColor: data.gameState.turn,
+        }));
+      }
+    };
+
     // Add event listeners
     window.addEventListener('socketMoveMade', handleSocketMoveMade as EventListener);
     window.addEventListener('socketGameEnded', handleSocketGameEnded as EventListener);
     window.addEventListener('socketDrawOffered', handleSocketDrawOffered);
     window.addEventListener('socketTimerUpdate', handleSocketTimerUpdate as EventListener);
+    window.addEventListener('socketGameRestored', handleSocketGameRestored as EventListener);
+    window.addEventListener('socketRoomJoined', handleSocketRoomJoined as EventListener);
 
     return () => {
       // Clean up event listeners
@@ -984,6 +1013,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       window.removeEventListener('socketGameEnded', handleSocketGameEnded as EventListener);
       window.removeEventListener('socketDrawOffered', handleSocketDrawOffered);
       window.removeEventListener('socketTimerUpdate', handleSocketTimerUpdate as EventListener);
+      window.removeEventListener('socketGameRestored', handleSocketGameRestored as EventListener);
+      window.removeEventListener('socketRoomJoined', handleSocketRoomJoined as EventListener);
     };
   }, []);
 

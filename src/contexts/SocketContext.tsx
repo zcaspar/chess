@@ -137,6 +137,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             blackTime: data.blackTime,
             timeControl: data.timeControl,
           });
+          
+          // Broadcast room joined event to GameContext
+          window.dispatchEvent(new CustomEvent('socketRoomJoined', { detail: data }));
         });
 
         socketInstance.on('playerJoined', (data) => {
