@@ -7,6 +7,7 @@ import { Chess } from 'chess.js';
 import { Lc0Engine } from './lc0Engine';
 import userRoutes from './routes/users';
 import gameHistoryRoutes from './routes/gameHistory';
+import analyticsRoutes from './routes/analytics';
 import { GameSocketHandler } from './sockets/gameSocket';
 import { testConnection } from './config/database';
 
@@ -76,6 +77,10 @@ console.log('✅ User routes registered at /api/users');
 console.log('🔗 Registering game history routes...');
 app.use('/api/game-history', gameHistoryRoutes);
 console.log('✅ Game history routes registered at /api/game-history');
+
+console.log('🔗 Registering analytics routes...');
+app.use('/api/analytics', analyticsRoutes);
+console.log('✅ Analytics routes registered at /api/analytics');
 
 // Health check endpoint
 app.get('/health', (req, res) => {

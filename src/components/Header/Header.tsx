@@ -5,10 +5,11 @@ import { AuthModal, UserProfile } from '../Auth';
 
 interface HeaderProps {
   onShowHistory?: () => void;
-  currentView?: 'game' | 'history';
+  onShowStats?: () => void;
+  currentView?: 'game' | 'history' | 'stats';
 }
 
-export const Header: React.FC<HeaderProps> = ({ onShowHistory, currentView = 'game' }) => {
+export const Header: React.FC<HeaderProps> = ({ onShowHistory, onShowStats, currentView = 'game' }) => {
   const { profile, isAuthenticated, isGuest, signOut } = useAuth();
   const { clearAllGameData } = useGame();
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -37,18 +38,32 @@ export const Header: React.FC<HeaderProps> = ({ onShowHistory, currentView = 'ga
               </h1>
               
               {/* Navigation */}
-              {(isAuthenticated || isGuest) && onShowHistory && (
+              {(isAuthenticated || isGuest) && (onShowHistory || onShowStats) && (
                 <nav className="flex space-x-4">
-                  <button
-                    onClick={() => currentView === 'history' ? undefined : onShowHistory()}
-                    className={`px-3 py-2 text-sm font-medium transition-colors ${
-                      currentView === 'history'
-                        ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                    }`}
-                  >
-                    Game History
-                  </button>
+                  {onShowHistory && (
+                    <button
+                      onClick={() => currentView === 'history' ? undefined : onShowHistory()}
+                      className={`px-3 py-2 text-sm font-medium transition-colors ${
+                        currentView === 'history'
+                          ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                          : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Game History
+                    </button>
+                  )}
+                  {onShowStats && (isAuthenticated || isGuest) && (
+                    <button
+                      onClick={() => currentView === 'stats' ? undefined : onShowStats()}
+                      className={`px-3 py-2 text-sm font-medium transition-colors ${
+                        currentView === 'stats'
+                          ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                          : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                      }`}
+                    >
+                      📊 Analytics
+                    </button>
+                  )}
                 </nav>
               )}
             </div>

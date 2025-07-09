@@ -7,6 +7,9 @@
 
 # testing
 /coverage
+/cypress/screenshots
+/cypress/videos
+/cypress/downloads
 
 # production
 /build
@@ -21,3 +24,21 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+
+# Local env files
+.env
+
+# Cypress
+cypress.env.json
+
+# LC0 binary
+lc0/lc0
