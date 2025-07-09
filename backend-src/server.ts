@@ -81,6 +81,7 @@ console.log('✅ Game history routes registered at /api/game-history');
 console.log('🔗 Registering analytics routes...');
 app.use('/api/analytics', analyticsRoutes);
 console.log('✅ Analytics routes registered at /api/analytics');
+console.log('📊 Analytics endpoints: /api/analytics/dashboard, /api/analytics/trends, /api/analytics/breakdowns');
 
 // Health check endpoint
 app.get('/health', (req, res) => {
