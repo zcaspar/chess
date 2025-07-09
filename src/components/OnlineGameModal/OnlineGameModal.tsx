@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSocket } from '../../contexts/SocketContext';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -16,6 +16,34 @@ export const OnlineGameModal: React.FC<OnlineGameModalProps> = ({ isOpen, onClos
   
   const { isConnected, createRoom, joinRoom, roomCode: currentRoomCode } = useSocket();
   const { user } = useAuth();
+
+  // Auto-close modal when room is successfully joined
+  useEffect(() => {
+    if (currentRoomCode && isOpen) {
+      onClose();
+    }
+  }, [currentRoomCode, isOpen, onClose]);
+
+  // Listen for socket errors
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleSocketError = (event: CustomEvent) => {
+      const errorData = event.detail;
+      console.log('Socket error received in modal:', errorData);
+      
+      // Display error message
+      if (errorData.message) {
+        setError(errorData.message);
+      }
+    };
+
+    window.addEventListener('socketError', handleSocketError as EventListener);
+    
+    return () => {
+      window.removeEventListener('socketError', handleSocketError as EventListener);
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -62,16 +90,12 @@ export const OnlineGameModal: React.FC<OnlineGameModalProps> = ({ isOpen, onClos
       return;
     }
 
+    setError(''); // Clear any previous errors
     joinRoom(roomCode.toUpperCase());
     
-    // Wait for join response
-    setTimeout(() => {
-      if (currentRoomCode) {
-        onClose();
-      } else {
-        setError('Failed to join room. Please check the code and try again.');
-      }
-    }, 1000);
+    // The success/failure will be handled by socket events in SocketContext
+    // 'roomJoined' event will trigger onClose via useEffect
+    // 'error' event will display error message via SocketContext
   };
 
   if (!user) {

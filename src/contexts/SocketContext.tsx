@@ -170,6 +170,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             setPlayers({ white: null, black: null });
           }
           
+          // Broadcast error to components via custom event
+          window.dispatchEvent(new CustomEvent('socketError', { detail: data }));
+          
           // Notify user of error (you might want to use a toast library here)
           if (data.message) {
             alert(`Error: ${data.message}`);
