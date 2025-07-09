@@ -105,6 +105,10 @@ const StatisticalDashboard: React.FC = () => {
       });
 
       if (!response.ok) {
+        if (response.status === 404) {
+          // Analytics endpoints not deployed yet
+          throw new Error('Analytics feature is being deployed. Please try again in a few minutes.');
+        }
         throw new Error(`Failed to fetch dashboard data: ${response.status}`);
       }
 
