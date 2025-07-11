@@ -23,8 +23,8 @@ export interface UserProfile {
 }
 
 export interface UserPreferences {
-  boardTheme?: 'classic' | 'modern' | 'neon';
-  pieceStyle?: 'classic' | 'modern' | 'cartoon';
+  boardTheme?: 'classic' | 'wood' | 'neon' | 'ice';
+  pieceStyle?: 'classic' | 'modern' | 'fantasy' | 'minimal';
   soundEnabled?: boolean;
   autoPromoteQueen?: boolean;
   showLegalMoves?: boolean;

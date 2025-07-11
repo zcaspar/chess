@@ -1,1 +1,32 @@
 /* Keep this file for any custom CSS if needed */
+
+/* Chess piece style variations using CSS filters */
+
+/* Classic style - default, no modifications */
+.piece-style-classic img[alt*="piece"] {
+  /* Default appearance */
+}
+
+/* Modern style - sleek, high contrast */
+.piece-style-modern img[alt*="piece"] {
+  filter: contrast(1.3) brightness(1.1);
+  transform: scale(0.95);
+}
+
+/* Fantasy style - colorful, vibrant */
+.piece-style-fantasy img[alt*="piece"] {
+  filter: hue-rotate(20deg) saturate(1.5) brightness(1.1);
+  transform: scale(1.05);
+}
+
+/* Minimal style - simple, clean */
+.piece-style-minimal img[alt*="piece"] {
+  filter: grayscale(0.3) contrast(1.2);
+  opacity: 0.9;
+  transform: scale(0.9);
+}
+
+/* Board theme adjustments for better contrast */
+.chess-board-container {
+  position: relative;
+}

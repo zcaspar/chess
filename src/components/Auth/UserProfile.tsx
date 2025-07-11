@@ -8,7 +8,7 @@ interface UserProfileProps {
 
 export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => {
   const { user, profile, signOut, updateProfile, updatePreferences, isGuest } = useAuth();
-  const [activeTab, setActiveTab] = useState<'profile' | 'preferences' | 'stats'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'preferences'>('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
     username: profile?.username || '',
@@ -106,16 +106,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
             onClick={() => setActiveTab('preferences')}
           >
             Preferences
-          </button>
-          <button
-            className={`py-2 px-4 text-sm font-medium border-b-2 ${
-              activeTab === 'stats'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}
-            onClick={() => setActiveTab('stats')}
-          >
-            Statistics
           </button>
         </div>
 
@@ -231,8 +221,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                 >
                   <option value="classic">Classic</option>
-                  <option value="modern">Modern</option>
+                  <option value="wood">Wood</option>
                   <option value="neon">Neon</option>
+                  <option value="ice">Ice</option>
                 </select>
               </div>
 
@@ -247,7 +238,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
                 >
                   <option value="classic">Classic</option>
                   <option value="modern">Modern</option>
-                  <option value="cartoon">Cartoon</option>
+                  <option value="fantasy">Fantasy</option>
+                  <option value="minimal">Minimal</option>
                 </select>
               </div>
 
@@ -279,63 +271,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
             </div>
           )}
 
-          {activeTab === 'stats' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    {profile.stats.wins}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Wins</div>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                    {profile.stats.losses}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Losses</div>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                    {profile.stats.draws}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Draws</div>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                    {profile.stats.rating}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Rating</div>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                <h4 className="font-medium text-gray-900 dark:text-white mb-2">Game Summary</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Total Games:</span>
-                    <span className="text-gray-900 dark:text-white">{profile.stats.gamesPlayed}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Win Rate:</span>
-                    <span className="text-gray-900 dark:text-white">
-                      {profile.stats.gamesPlayed > 0 
-                        ? `${Math.round((profile.stats.wins / profile.stats.gamesPlayed) * 100)}%`
-                        : '0%'
-                      }
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Current Streak:</span>
-                    <span className="text-gray-900 dark:text-white">{profile.stats.winStreak}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Best Streak:</span>
-                    <span className="text-gray-900 dark:text-white">{profile.stats.bestWinStreak}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer Actions */}

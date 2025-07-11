@@ -4,15 +4,39 @@ import { Square } from 'chess.js';
 import { useGame } from '../../contexts/GameContext';
 import { useSocket } from '../../contexts/SocketContext';
 import { useOnlineGame } from '../../hooks/useOnlineGame';
+import { useAuth } from '../../hooks/useAuth';
 
 const ChessBoard: React.FC = () => {
   const { gameState, makeMove } = useGame();
   const { roomCode, assignedColor, makeMove: socketMakeMove } = useSocket();
   const { isOnlineGame } = useOnlineGame();
+  const { profile } = useAuth();
   const [moveFrom, setMoveFrom] = useState<Square | null>(null);
   const [rightClickedSquares, setRightClickedSquares] = useState<Square[]>([]);
   const [optionSquares, setOptionSquares] = useState<Partial<Record<Square, { background: string }>>>({});
   
+  // Board theme configurations
+  const boardThemes = {
+    classic: {
+      lightSquareStyle: { backgroundColor: '#f0d9b5' },
+      darkSquareStyle: { backgroundColor: '#b58863' },
+    },
+    wood: {
+      lightSquareStyle: { backgroundColor: '#ddb88c' },
+      darkSquareStyle: { backgroundColor: '#8b6914' },
+    },
+    neon: {
+      lightSquareStyle: { backgroundColor: '#39ff14' },
+      darkSquareStyle: { backgroundColor: '#ff006e' },
+    },
+    ice: {
+      lightSquareStyle: { backgroundColor: '#e8f4f8' },
+      darkSquareStyle: { backgroundColor: '#4a90e2' },
+    },
+  };
+
+  // Get current theme
+  const currentTheme = boardThemes[profile?.preferences?.boardTheme || 'classic'];
   
   // Clear selections when game ends
   useEffect(() => {
@@ -160,8 +184,14 @@ const ChessBoard: React.FC = () => {
     return styles;
   }, [moveFrom, rightClickedSquares, optionSquares, gameState.history, gameState.currentMoveIndex]);
 
+  // Get piece style class for CSS filters
+  const getPieceStyleClass = () => {
+    const pieceStyle = profile?.preferences?.pieceStyle || 'classic';
+    return `piece-style-${pieceStyle}`;
+  };
+
   return (
-    <div className="chess-board-container">
+    <div className={`chess-board-container ${getPieceStyleClass()}`}>
       <Chessboard
         position={gameState.game.fen()}
         onPieceDrop={onDrop}
@@ -173,6 +203,8 @@ const ChessBoard: React.FC = () => {
           borderRadius: '4px',
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
         }}
+        customLightSquareStyle={currentTheme.lightSquareStyle}
+        customDarkSquareStyle={currentTheme.darkSquareStyle}
       />
     </div>
   );
