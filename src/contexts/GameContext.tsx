@@ -225,11 +225,28 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       // Generate PGN if not provided
       let gamePgn = pgn;
       if (!gamePgn) {
-        const pgnGame = new Chess();
-        gameState.history.forEach(move => {
-          pgnGame.move(move);
-        });
-        gamePgn = pgnGame.pgn();
+        // Use the current game's PGN which should have the complete history
+        gamePgn = gameState.game.pgn();
+        
+        // If that's still empty/short, try reconstructing from history
+        if (!gamePgn || gamePgn.length < 20) {
+          console.log('⚠️ Game PGN is short, reconstructing from history');
+          const pgnGame = new Chess();
+          gameState.history.forEach(move => {
+            try {
+              pgnGame.move(move);
+            } catch (e) {
+              console.log('⚠️ Error applying move to PGN reconstruction:', move, e);
+            }
+          });
+          gamePgn = pgnGame.pgn();
+        }
+        
+        console.log('📝 Generated PGN length:', gamePgn.length);
+        console.log('📝 Generated PGN preview:', gamePgn.substring(0, 100));
+        console.log('📝 History length used:', gameState.history.length);
+        console.log('📝 Game history length:', gameState.game.history().length);
+        console.log('📝 Final move count:', Math.max(gameState.history.length, gameState.game.history().length));
       }
       
       // Determine opponent info
@@ -254,7 +271,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         gameOutcome,
         finalFen: finalFen || gameState.game.fen(),
         pgn: gamePgn,
-        moveCount: gameState.history.length,
+        moveCount: Math.max(gameState.history.length, gameState.game.history().length),
         gameDuration: gameState.timeControl ? 
           Math.floor((gameState.timeControl.initial * 2 - gameState.whiteTime - gameState.blackTime) / 1000) : 
           undefined,
