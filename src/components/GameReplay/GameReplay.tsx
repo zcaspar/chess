@@ -59,59 +59,172 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
   const gameHistory = useMemo(() => {
     try {
       setGameError(null);
-      const chessGame = new Chess();
       
       if (!game.pgn || typeof game.pgn !== 'string') {
-        throw new Error('Invalid PGN data');
+        throw new Error('Invalid PGN data - PGN is missing or not a string');
       }
       
-      // Load the PGN
-      const success = chessGame.loadPgn(game.pgn);
-      if (!success) {
-        throw new Error('Failed to load PGN');
+      console.log('🔍 Raw PGN data:', game.pgn);
+      console.log('🔍 PGN length:', game.pgn.length);
+      console.log('🔍 PGN type:', typeof game.pgn);
+      
+      // Try multiple approaches to parse the game
+      let history: any[] = [];
+      
+      // Approach 1: Direct PGN loading
+      try {
+        const chessGame = new Chess();
+        console.log('🔍 Attempting direct PGN load...');
+        const success = chessGame.loadPgn(game.pgn);
+        if (success) {
+          history = chessGame.history({ verbose: true });
+          console.log('✅ Direct PGN load successful, moves:', history.length);
+          return history;
+        } else {
+          console.log('❌ Direct PGN load failed');
+        }
+      } catch (pgnError) {
+        console.log('❌ Direct PGN load error:', pgnError);
       }
       
-      // Get all the moves from the history
-      const history = chessGame.history({ verbose: true });
-      console.log('Loaded game history:', history);
-      return history;
+      // Approach 2: Try cleaning the PGN and removing result markers
+      try {
+        console.log('🔍 Attempting cleaned PGN load...');
+        let cleanedPgn = game.pgn.trim();
+        
+        // Remove common PGN result markers that might cause issues
+        cleanedPgn = cleanedPgn.replace(/\s*(1-0|0-1|1\/2-1\/2|\*)\s*$/, '');
+        
+        // Remove extra whitespace and normalize
+        cleanedPgn = cleanedPgn.replace(/\s+/g, ' ').trim();
+        
+        console.log('🔍 Cleaned PGN:', cleanedPgn.substring(0, 100) + '...');
+        
+        const chessGame = new Chess();
+        const success = chessGame.loadPgn(cleanedPgn);
+        if (success) {
+          history = chessGame.history({ verbose: true });
+          console.log('✅ Cleaned PGN load successful, moves:', history.length);
+          return history;
+        } else {
+          console.log('❌ Cleaned PGN load failed');
+        }
+      } catch (cleanError) {
+        console.log('❌ Cleaned PGN load error:', cleanError);
+      }
+      
+      // Approach 3: Try parsing as space-separated moves without move numbers
+      try {
+        console.log('🔍 Attempting manual move parsing...');
+        const chessGame = new Chess();
+        
+        // Extract just the moves from PGN, removing move numbers and results
+        let moveString = game.pgn
+          .replace(/\d+\.\s*/g, '') // Remove move numbers like "1. "
+          .replace(/\s*(1-0|0-1|1\/2-1\/2|\*)\s*$/, '') // Remove result
+          .replace(/\s+/g, ' ') // Normalize whitespace
+          .trim();
+        
+        console.log('🔍 Extracted move string:', moveString);
+        
+        if (moveString) {
+          const moves = moveString.split(' ').filter(move => move.trim());
+          console.log('🔍 Move array:', moves);
+          
+          for (const moveStr of moves) {
+            if (moveStr.trim()) {
+              try {
+                const move = chessGame.move(moveStr.trim());
+                if (!move) {
+                  console.log('❌ Invalid move:', moveStr);
+                  break;
+                }
+              } catch (moveErr) {
+                console.log('❌ Move error for', moveStr, ':', moveErr);
+                break;
+              }
+            }
+          }
+          
+          history = chessGame.history({ verbose: true });
+          if (history.length > 0) {
+            console.log('✅ Manual parsing successful, moves:', history.length);
+            return history;
+          }
+        }
+      } catch (manualError) {
+        console.log('❌ Manual parsing error:', manualError);
+      }
+      
+      // Approach 4: Try to recreate game from final FEN by working backwards (as last resort)
+      try {
+        console.log('🔍 Attempting FEN-based reconstruction...');
+        if (game.finalFen && game.moveCount > 0) {
+          // This is a fallback - we'll show the final position but won't have move history
+          console.log('⚠️ Using final position only - move history unavailable');
+          const chessGame = new Chess(game.finalFen);
+          
+          // Return empty history but log that we're showing final position
+          console.log('✅ Showing final position only');
+          return [];
+        }
+      } catch (fenError) {
+        console.log('❌ FEN-based reconstruction failed:', fenError);
+      }
+      
+      // If all approaches fail
+      throw new Error(`Unable to parse PGN. PGN preview: "${game.pgn.substring(0, 50)}..."`);
+      
     } catch (error) {
-      console.error('Error parsing PGN:', error);
-      setGameError(`Failed to load game: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('❌ All PGN parsing methods failed:', error);
+      setGameError(`Failed to load PGN: ${error instanceof Error ? error.message : 'Unknown error'}`);
       return [];
     }
-  }, [game.pgn]);
+  }, [game.pgn, game.finalFen, game.moveCount]);
 
   // Get current board position
   const currentGame = useMemo(() => {
     try {
       const chessGame = new Chess();
       
-      // Apply moves up to current index
-      for (let i = 0; i <= currentMoveIndex && i < gameHistory.length; i++) {
-        const move = gameHistory[i];
-        try {
-          const result = chessGame.move({
-            from: move.from,
-            to: move.to,
-            promotion: move.promotion
-          });
-          if (!result) {
-            console.error('Invalid move at index', i, move);
+      // If we have move history, apply moves up to current index
+      if (gameHistory.length > 0) {
+        for (let i = 0; i <= currentMoveIndex && i < gameHistory.length; i++) {
+          const move = gameHistory[i];
+          try {
+            const result = chessGame.move({
+              from: move.from,
+              to: move.to,
+              promotion: move.promotion
+            });
+            if (!result) {
+              console.error('Invalid move at index', i, move);
+              break;
+            }
+          } catch (moveError) {
+            console.error('Error applying move at index', i, move, moveError);
             break;
           }
-        } catch (moveError) {
-          console.error('Error applying move at index', i, move, moveError);
-          break;
         }
+        return chessGame;
+      } else {
+        // If no move history but we have a final FEN, show that position
+        if (game.finalFen) {
+          try {
+            console.log('🔄 Loading final position from FEN:', game.finalFen);
+            return new Chess(game.finalFen);
+          } catch (fenError) {
+            console.error('❌ Error loading final FEN:', fenError);
+            return new Chess(); // Return starting position as fallback
+          }
+        }
+        return new Chess(); // Return starting position as fallback
       }
-      
-      return chessGame;
     } catch (error) {
       console.error('Error creating current game position:', error);
       return new Chess(); // Return starting position as fallback
     }
-  }, [gameHistory, currentMoveIndex]);
+  }, [gameHistory, currentMoveIndex, game.finalFen]);
 
   // Auto-play functionality
   useEffect(() => {
@@ -470,6 +583,8 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                     </span>
                   )}
                 </>
+              ) : game.finalFen ? (
+                <span className="text-yellow-600">Showing final position - move history unavailable</span>
               ) : (
                 <span className="text-red-500">No moves available in this game</span>
               )}
@@ -482,7 +597,12 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
           <h3 className="text-lg font-semibold mb-4">Move History</h3>
           <div className="bg-gray-50 rounded-lg p-4 h-96 overflow-y-auto">
             {gameHistory.length === 0 ? (
-              <p className="text-gray-500 text-center">No moves available</p>
+              <div className="text-gray-500 text-center">
+                <p>No move history available</p>
+                {game.finalFen && (
+                  <p className="text-sm mt-2">Showing final board position</p>
+                )}
+              </div>
             ) : (
               <div className="space-y-1">
                 {gameHistory.map((move, index) => {
