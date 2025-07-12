@@ -37,7 +37,7 @@ const GameModeSelector: React.FC = () => {
     easy: { name: 'Easy', description: 'Casual play, some mistakes', elo: '~1200' },
     medium: { name: 'Medium', description: 'Balanced challenge', elo: '~1600' },
     hard: { name: 'Hard', description: 'Strong play, few mistakes', elo: '~2000' },
-    expert: { name: 'Expert', description: 'Very strong, minimal mistakes', elo: '~2400+' },
+    expert: { name: 'Expert', description: 'Superhuman strength, world-class play', elo: '~3400+' },
   };
 
   return (

@@ -38,9 +38,9 @@ Our AI uses the **LC0 (Leela Chess Zero) neural network** engine, providing worl
    - Response time: ~5 seconds per move
    - Minimal randomness, occasional suboptimal moves
 
-5. **Expert** (~2400+ ELO)
-   - Master-level play using full LC0 neural network strength
-   - Superhuman tactical and strategic understanding
+5. **Expert** (~3400+ ELO)
+   - Superhuman play using full LC0 neural network strength
+   - World-class tactical and strategic understanding (stronger than any human)
    - Response time: ~10 seconds per move
    - No randomness - plays the best moves
 
