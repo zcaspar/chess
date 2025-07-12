@@ -4,7 +4,6 @@ import GameControls from '../GameControls';
 import MoveHistory from '../MoveHistory';
 import GameStatus from '../GameStatus';
 import ChessClock from '../ChessClock';
-import PlayerInfo from '../PlayerInfo';
 import GameModeSelector from '../GameModeSelector';
 import { OnlineGameStatus } from '../OnlineGameStatus';
 
@@ -14,7 +13,6 @@ export const GameApp: React.FC = () => {
       <div className="grid grid-cols-1 xl:grid-cols-[300px_1fr_300px] lg:grid-cols-[250px_1fr_250px] gap-4 lg:gap-6">
         {/* Left Sidebar */}
         <div className="order-2 lg:order-1 space-y-4">
-          <PlayerInfo />
           <GameModeSelector />
           <OnlineGameStatus />
           <GameStatus />
