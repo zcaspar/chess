@@ -51,55 +51,85 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
   const [analysis, setAnalysis] = useState<PositionAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [gameError, setGameError] = useState<string | null>(null);
   
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   // Parse the PGN and get all moves
   const gameHistory = useMemo(() => {
     try {
+      setGameError(null);
       const chessGame = new Chess();
       
+      if (!game.pgn || typeof game.pgn !== 'string') {
+        throw new Error('Invalid PGN data');
+      }
+      
       // Load the PGN
-      chessGame.loadPgn(game.pgn);
+      const success = chessGame.loadPgn(game.pgn);
+      if (!success) {
+        throw new Error('Failed to load PGN');
+      }
       
       // Get all the moves from the history
       const history = chessGame.history({ verbose: true });
+      console.log('Loaded game history:', history);
       return history;
     } catch (error) {
       console.error('Error parsing PGN:', error);
+      setGameError(`Failed to load game: ${error instanceof Error ? error.message : 'Unknown error'}`);
       return [];
     }
   }, [game.pgn]);
 
   // Get current board position
   const currentGame = useMemo(() => {
-    const chessGame = new Chess();
-    
-    // Apply moves up to current index
-    for (let i = 0; i <= currentMoveIndex && i < gameHistory.length; i++) {
-      const move = gameHistory[i];
-      chessGame.move({
-        from: move.from,
-        to: move.to,
-        promotion: move.promotion
-      });
+    try {
+      const chessGame = new Chess();
+      
+      // Apply moves up to current index
+      for (let i = 0; i <= currentMoveIndex && i < gameHistory.length; i++) {
+        const move = gameHistory[i];
+        try {
+          const result = chessGame.move({
+            from: move.from,
+            to: move.to,
+            promotion: move.promotion
+          });
+          if (!result) {
+            console.error('Invalid move at index', i, move);
+            break;
+          }
+        } catch (moveError) {
+          console.error('Error applying move at index', i, move, moveError);
+          break;
+        }
+      }
+      
+      return chessGame;
+    } catch (error) {
+      console.error('Error creating current game position:', error);
+      return new Chess(); // Return starting position as fallback
     }
-    
-    return chessGame;
   }, [gameHistory, currentMoveIndex]);
 
   // Auto-play functionality
   useEffect(() => {
-    if (!isAutoPlaying) return;
+    if (!isAutoPlaying || gameHistory.length === 0) return;
 
     const interval = setInterval(() => {
-      setCurrentMoveIndex(prevIndex => {
-        if (prevIndex >= gameHistory.length - 1) {
-          setIsAutoPlaying(false);
-          return prevIndex;
-        }
-        return prevIndex + 1;
-      });
+      try {
+        setCurrentMoveIndex(prevIndex => {
+          if (prevIndex >= gameHistory.length - 1) {
+            setIsAutoPlaying(false);
+            return prevIndex;
+          }
+          return prevIndex + 1;
+        });
+      } catch (error) {
+        console.error('Error in auto-play interval:', error);
+        setIsAutoPlaying(false);
+      }
     }, autoPlaySpeed);
 
     return () => clearInterval(interval);
@@ -118,19 +148,34 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
   };
 
   const goToNext = () => {
-    if (currentMoveIndex < gameHistory.length - 1) {
-      setCurrentMoveIndex(currentMoveIndex + 1);
+    try {
+      if (currentMoveIndex < gameHistory.length - 1) {
+        setCurrentMoveIndex(currentMoveIndex + 1);
+      }
+      setIsAutoPlaying(false);
+    } catch (error) {
+      console.error('Error in goToNext:', error);
+      setIsAutoPlaying(false);
     }
-    setIsAutoPlaying(false);
   };
 
   const goToEnd = () => {
-    setCurrentMoveIndex(gameHistory.length - 1);
-    setIsAutoPlaying(false);
+    try {
+      setCurrentMoveIndex(gameHistory.length - 1);
+      setIsAutoPlaying(false);
+    } catch (error) {
+      console.error('Error in goToEnd:', error);
+      setIsAutoPlaying(false);
+    }
   };
 
   const toggleAutoPlay = () => {
-    setIsAutoPlaying(!isAutoPlaying);
+    try {
+      setIsAutoPlaying(!isAutoPlaying);
+    } catch (error) {
+      console.error('Error in toggleAutoPlay:', error);
+      setIsAutoPlaying(false);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -238,6 +283,33 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
     return styles;
   };
 
+  // Get board orientation from user preferences
+  const boardOrientation = profile?.preferences?.boardOrientation === 'black' ? 'black' : 'white';
+
+  // If there's a critical error, show error message
+  if (gameError) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg p-6 max-w-6xl mx-auto">
+        <div className="flex justify-between items-start mb-6">
+          <h2 className="text-2xl font-bold text-red-600">Error Loading Game</h2>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+            >
+              Close
+            </button>
+          )}
+        </div>
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          <p className="font-medium">Failed to load game replay:</p>
+          <p className="mt-2">{gameError}</p>
+          <p className="mt-2 text-sm">Please try refreshing the page or contact support if this issue persists.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-lg p-6 max-w-6xl mx-auto">
       {/* Header */}
@@ -282,6 +354,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
               customSquareStyles={getCustomSquareStyles()}
               areArrowsAllowed={false}
               arePiecesDraggable={false}
+              boardOrientation={boardOrientation}
             />
           </div>
 
@@ -388,11 +461,17 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
 
             {/* Position Info */}
             <div className="text-center text-sm text-gray-600">
-              Move {currentMoveIndex + 1} of {gameHistory.length}
-              {currentMoveIndex >= 0 && gameHistory[currentMoveIndex] && (
-                <span className="ml-2">
-                  ({isWhiteMove(currentMoveIndex) ? 'White' : 'Black'}: {gameHistory[currentMoveIndex].san})
-                </span>
+              {gameHistory.length > 0 ? (
+                <>
+                  Move {currentMoveIndex + 1} of {gameHistory.length}
+                  {currentMoveIndex >= 0 && currentMoveIndex < gameHistory.length && gameHistory[currentMoveIndex] && (
+                    <span className="ml-2">
+                      ({isWhiteMove(currentMoveIndex) ? 'White' : 'Black'}: {gameHistory[currentMoveIndex].san})
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-red-500">No moves available in this game</span>
               )}
             </div>
           </div>
@@ -418,8 +497,12 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                       )}
                       <button
                         onClick={() => {
-                          setCurrentMoveIndex(index);
-                          setIsAutoPlaying(false);
+                          try {
+                            setCurrentMoveIndex(index);
+                            setIsAutoPlaying(false);
+                          } catch (error) {
+                            console.error('Error setting move index:', error);
+                          }
                         }}
                         className={`px-2 py-1 rounded text-sm transition-colors ${
                           isCurrentMove
@@ -427,7 +510,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                             : 'hover:bg-gray-200'
                         }`}
                       >
-                        {move.san}
+                        {move.san || 'Invalid move'}
                       </button>
                     </div>
                   );
