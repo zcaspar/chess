@@ -704,33 +704,59 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
               </div>
             ) : (
               <div className="space-y-1">
-                {gameHistory.map((move, index) => {
-                  const moveNumber = getMoveNumber(index);
-                  const isWhite = isWhiteMove(index);
-                  const isCurrentMove = index === currentMoveIndex;
+                {Array.from({ length: Math.ceil(gameHistory.length / 2) }, (_, pairIndex) => {
+                  const whiteIndex = pairIndex * 2;
+                  const blackIndex = pairIndex * 2 + 1;
+                  const whiteMove = gameHistory[whiteIndex];
+                  const blackMove = gameHistory[blackIndex];
+                  const moveNumber = pairIndex + 1;
                   
                   return (
-                    <div key={index} className="flex items-center">
-                      {isWhite && (
-                        <span className="text-gray-500 text-sm w-8">{moveNumber}.</span>
-                      )}
+                    <div key={pairIndex} className="flex items-center gap-1">
+                      {/* Move number */}
+                      <span className="text-gray-500 text-sm w-6 text-right">{moveNumber}.</span>
+                      
+                      {/* White move */}
                       <button
                         onClick={() => {
                           try {
-                            setCurrentMoveIndex(index);
+                            setCurrentMoveIndex(whiteIndex);
                             setIsAutoPlaying(false);
                           } catch (error) {
                             console.error('Error setting move index:', error);
                           }
                         }}
-                        className={`px-2 py-1 rounded text-sm transition-colors ${
-                          isCurrentMove
+                        className={`px-2 py-1 rounded text-sm transition-colors min-w-[60px] ${
+                          currentMoveIndex === whiteIndex
                             ? 'bg-blue-500 text-white'
                             : 'hover:bg-gray-200'
                         }`}
                       >
-                        {move.san || 'Invalid move'}
+                        {whiteMove?.san || 'Invalid'}
                       </button>
+                      
+                      {/* Black move (if exists) */}
+                      {blackMove ? (
+                        <button
+                          onClick={() => {
+                            try {
+                              setCurrentMoveIndex(blackIndex);
+                              setIsAutoPlaying(false);
+                            } catch (error) {
+                              console.error('Error setting move index:', error);
+                            }
+                          }}
+                          className={`px-2 py-1 rounded text-sm transition-colors min-w-[60px] ${
+                            currentMoveIndex === blackIndex
+                              ? 'bg-blue-500 text-white'
+                              : 'hover:bg-gray-200'
+                          }`}
+                        >
+                          {blackMove.san || 'Invalid'}
+                        </button>
+                      ) : (
+                        <div className="min-w-[60px]"></div>
+                      )}
                     </div>
                   );
                 })}
