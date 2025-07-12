@@ -73,6 +73,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
       console.log('🔍 PGN char codes:', game.pgn.split('').slice(0, 20).map(c => c.charCodeAt(0)));
       console.log('🔍 Game moveCount:', game.moveCount);
       console.log('🔍 Game finalFen:', game.finalFen);
+      console.log('🔍 Full PGN content:', JSON.stringify(game.pgn));
       
       // Try multiple approaches to parse the game
       let history: any[] = [];
@@ -85,6 +86,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         if (success) {
           history = chessGame.history({ verbose: true });
           console.log('✅ Direct PGN load successful, moves:', history.length);
+          console.log('🔍 Sample moves from direct load:', history.slice(0, 5).map(m => m.san));
           return history;
         } else {
           console.log('❌ Direct PGN load failed');
@@ -111,6 +113,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         if (success) {
           history = chessGame.history({ verbose: true });
           console.log('✅ Cleaned PGN load successful, moves:', history.length);
+          console.log('🔍 Sample moves from cleaned load:', history.slice(0, 5).map(m => m.san));
           return history;
         } else {
           console.log('❌ Cleaned PGN load failed');
@@ -283,6 +286,16 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
       return [];
     }
   }, [game.pgn, game.finalFen, game.moveCount]);
+
+  // Log the final gameHistory result
+  useEffect(() => {
+    console.log('🎯 Final gameHistory length:', gameHistory.length);
+    console.log('🎯 Expected moveCount:', game.moveCount);
+    if (gameHistory.length > 0) {
+      console.log('🎯 First 10 moves:', gameHistory.slice(0, 10).map(m => m.san));
+      console.log('🎯 Last 5 moves:', gameHistory.slice(-5).map(m => m.san));
+    }
+  }, [gameHistory, game.moveCount]);
 
   // Get current board position
   const currentGame = useMemo(() => {
@@ -858,7 +871,24 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                 console.log('Move count:', game.moveCount);
                 console.log('Final FEN:', game.finalFen);
                 console.log('First 100 chars:', game.pgn.substring(0, 100));
+                console.log('Last 100 chars:', game.pgn.substring(game.pgn.length - 100));
                 console.log('PGN as JSON:', JSON.stringify(game.pgn));
+                console.log('Current gameHistory length:', gameHistory.length);
+                console.log('Discrepancy:', game.moveCount, 'expected vs', gameHistory.length, 'actual');
+                
+                // Try to manually parse and see where it stops
+                const testGame = new Chess();
+                console.log('=== MANUAL PARSING TEST ===');
+                try {
+                  const result = testGame.loadPgn(game.pgn);
+                  console.log('Manual loadPgn result:', result);
+                  const moves = testGame.history({ verbose: true });
+                  console.log('Manual parsing got', moves.length, 'moves');
+                  console.log('All moves:', moves.map(m => m.san).join(' '));
+                } catch (e) {
+                  console.log('Manual parsing failed:', e);
+                }
+                
                 alert('PGN debug info logged to console. Check developer tools.');
               }}
               className="w-full px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors text-sm"
