@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { useAuth } from '../../hooks/useAuth';
@@ -54,6 +54,9 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
   const [gameError, setGameError] = useState<string | null>(null);
   
   const { user, profile } = useAuth();
+  
+  // Ref for the move history container to enable auto-scrolling
+  const moveHistoryRef = useRef<HTMLDivElement>(null);
 
   // Parse the PGN and get all moves
   const gameHistory = useMemo(() => {
@@ -346,6 +349,20 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
 
     return () => clearInterval(interval);
   }, [isAutoPlaying, autoPlaySpeed, gameHistory.length]);
+
+  // Auto-scroll to current move in history
+  useEffect(() => {
+    if (moveHistoryRef.current && currentMoveIndex >= 0) {
+      const pairIndex = Math.floor(currentMoveIndex / 2);
+      const moveElement = moveHistoryRef.current.children[pairIndex] as HTMLElement;
+      if (moveElement) {
+        moveElement.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'nearest' 
+        });
+      }
+    }
+  }, [currentMoveIndex]);
 
   const goToStart = () => {
     setCurrentMoveIndex(-1);
@@ -694,7 +711,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         {/* Move History */}
         <div className="lg:col-span-1">
           <h3 className="text-lg font-semibold mb-4">Move History</h3>
-          <div className="bg-gray-50 rounded-lg p-4 h-96 overflow-y-auto">
+          <div className="bg-gray-50 rounded-lg p-3 h-[600px] overflow-y-auto">
             {gameHistory.length === 0 ? (
               <div className="text-gray-500 text-center">
                 <p>No move history available</p>
@@ -703,7 +720,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                 )}
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-0.5" ref={moveHistoryRef}>
                 {Array.from({ length: Math.ceil(gameHistory.length / 2) }, (_, pairIndex) => {
                   const whiteIndex = pairIndex * 2;
                   const blackIndex = pairIndex * 2 + 1;
@@ -726,7 +743,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                             console.error('Error setting move index:', error);
                           }
                         }}
-                        className={`px-2 py-1 rounded text-sm transition-colors min-w-[60px] ${
+                        className={`px-2 py-0.5 rounded text-sm transition-colors min-w-[60px] ${
                           currentMoveIndex === whiteIndex
                             ? 'bg-blue-500 text-white'
                             : 'hover:bg-gray-200'
@@ -746,7 +763,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                               console.error('Error setting move index:', error);
                             }
                           }}
-                          className={`px-2 py-1 rounded text-sm transition-colors min-w-[60px] ${
+                          className={`px-2 py-0.5 rounded text-sm transition-colors min-w-[60px] ${
                             currentMoveIndex === blackIndex
                               ? 'bg-blue-500 text-white'
                               : 'hover:bg-gray-200'
