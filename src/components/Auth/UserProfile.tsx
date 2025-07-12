@@ -240,6 +240,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
                   <option value="modern">Modern</option>
                   <option value="fantasy">Fantasy</option>
                   <option value="minimal">Minimal</option>
+                  <option value="lego">Lego</option>
                 </select>
               </div>
 

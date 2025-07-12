@@ -24,7 +24,7 @@ export interface UserProfile {
 
 export interface UserPreferences {
   boardTheme?: 'classic' | 'wood' | 'neon' | 'ice';
-  pieceStyle?: 'classic' | 'modern' | 'fantasy' | 'minimal';
+  pieceStyle?: 'classic' | 'modern' | 'fantasy' | 'minimal' | 'lego';
   soundEnabled?: boolean;
   autoPromoteQueen?: boolean;
   showLegalMoves?: boolean;
