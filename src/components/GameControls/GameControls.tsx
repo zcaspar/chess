@@ -1,5 +1,6 @@
 import React from 'react';
 import { useGame } from '../../contexts/GameContext';
+import { useAuth } from '../../hooks/useAuth';
 
 const GameControls: React.FC = () => {
   const { 
@@ -14,9 +15,18 @@ const GameControls: React.FC = () => {
     canUndo, 
     canRedo 
   } = useGame();
+  
+  const { updatePreferences, profile } = useAuth();
 
   const currentPlayer = gameState.game.turn();
   const isGameOver = gameState.game.isGameOver() || gameState.gameResult !== '';
+  
+  const handleFlipBoard = async () => {
+    if (profile) {
+      const newOrientation = profile.preferences?.boardOrientation === 'black' ? 'white' : 'black';
+      await updatePreferences({ boardOrientation: newOrientation });
+    }
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 space-y-3">
@@ -58,6 +68,18 @@ const GameControls: React.FC = () => {
           Redo →
         </button>
       </div>
+
+      {/* Board Flip Control */}
+      <button
+        onClick={handleFlipBoard}
+        className="w-full px-3 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors text-sm flex items-center justify-center gap-2"
+        title="Flip board perspective"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+        Flip Board
+      </button>
 
       {/* Draw Controls */}
       {!isGameOver && (

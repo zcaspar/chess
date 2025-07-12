@@ -35,8 +35,9 @@ const ChessBoard: React.FC = () => {
     },
   };
 
-  // Get current theme
+  // Get current theme and board orientation
   const currentTheme = boardThemes[profile?.preferences?.boardTheme || 'classic'];
+  const boardOrientation = profile?.preferences?.boardOrientation === 'black' ? 'black' : 'white';
   
   // Clear selections when game ends
   useEffect(() => {
@@ -205,6 +206,7 @@ const ChessBoard: React.FC = () => {
         }}
         customLightSquareStyle={currentTheme.lightSquareStyle}
         customDarkSquareStyle={currentTheme.darkSquareStyle}
+        boardOrientation={boardOrientation}
       />
     </div>
   );

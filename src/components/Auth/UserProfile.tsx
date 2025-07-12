@@ -244,6 +244,20 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
                 </select>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Board Orientation
+                </label>
+                <select
+                  value={profile.preferences.boardOrientation || 'white'}
+                  onChange={(e) => handlePreferenceChange('boardOrientation', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                >
+                  <option value="white">White at Bottom</option>
+                  <option value="black">Black at Bottom</option>
+                </select>
+              </div>
+
               <div className="flex items-center">
                 <input
                   type="checkbox"
