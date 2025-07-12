@@ -2,31 +2,75 @@
 
 /* Chess piece style variations using CSS filters */
 
+/* Target pieces within react-chessboard structure */
+.chess-board-container [data-piece] svg,
+.chess-board-container [class*="piece"] svg {
+  transition: all 0.2s ease;
+}
+
 /* Classic style - default, no modifications */
-.piece-style-classic img[alt*="piece"] {
+.piece-style-classic svg {
   /* Default appearance */
 }
 
 /* Modern style - sleek, high contrast */
-.piece-style-modern img[alt*="piece"] {
-  filter: contrast(1.3) brightness(1.1);
+.piece-style-modern svg,
+.piece-style-modern [data-piece] svg,
+.piece-style-modern [class*="piece"] svg {
+  filter: contrast(1.5) brightness(1.1) drop-shadow(1px 1px 2px rgba(0,0,0,0.3));
   transform: scale(0.95);
+  transition: all 0.2s ease;
+}
+
+.piece-style-modern svg:hover {
+  filter: contrast(1.6) brightness(1.15) drop-shadow(2px 2px 3px rgba(0,0,0,0.4));
+  transform: scale(0.97);
 }
 
 /* Fantasy style - colorful, vibrant */
-.piece-style-fantasy img[alt*="piece"] {
-  filter: hue-rotate(20deg) saturate(1.5) brightness(1.1);
+.piece-style-fantasy svg,
+.piece-style-fantasy [data-piece] svg,
+.piece-style-fantasy [class*="piece"] svg {
+  filter: hue-rotate(20deg) saturate(1.8) brightness(1.15) drop-shadow(0 0 8px rgba(255,0,255,0.4));
   transform: scale(1.05);
+  transition: all 0.3s ease;
+}
+
+.piece-style-fantasy svg:hover {
+  filter: hue-rotate(25deg) saturate(2) brightness(1.2) drop-shadow(0 0 12px rgba(255,0,255,0.6));
+  transform: scale(1.08);
 }
 
 /* Minimal style - simple, clean */
-.piece-style-minimal img[alt*="piece"] {
-  filter: grayscale(0.3) contrast(1.2);
-  opacity: 0.9;
+.piece-style-minimal svg,
+.piece-style-minimal [data-piece] svg,
+.piece-style-minimal [class*="piece"] svg {
+  filter: grayscale(0.8) contrast(1.4) brightness(0.95);
+  opacity: 0.85;
+  transform: scale(0.88);
+  transition: all 0.2s ease;
+}
+
+.piece-style-minimal svg:hover {
+  filter: grayscale(0.6) contrast(1.5) brightness(1);
+  opacity: 0.95;
   transform: scale(0.9);
 }
 
 /* Board theme adjustments for better contrast */
 .chess-board-container {
   position: relative;
+}
+
+/* Ensure piece visibility on neon board */
+.piece-style-classic svg path,
+.piece-style-modern svg path,
+.piece-style-fantasy svg path,
+.piece-style-minimal svg path {
+  stroke-width: 1.5;
+}
+
+/* Special adjustments for neon board theme */
+.chess-board-container[class*="neon"] svg {
+  filter: brightness(0.9) contrast(1.3);
 }
