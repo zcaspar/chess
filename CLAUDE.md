@@ -39,6 +39,21 @@
   - Removed empty "Players & Statistics" box from main interface
   - Streamlined interface for better focus on gameplay
 
+### Recent Achievements (2025-01-21):
+- ✅ **Drag and Drop Movement**: Full implementation
+  - Added drag and drop functionality alongside click-to-move
+  - Implemented visual feedback during drag with move highlighting
+  - Added turn validation to prevent dragging opponent's pieces
+  - Enhanced CSS with grab/grabbing cursors
+  - Works seamlessly with all board themes and piece styles
+- ✅ **Move History Display Enhancement**: 
+  - Fixed issue where only 10 moves were visible
+  - Increased display capacity to 600px height (showing ~20 moves)
+  - Added auto-scrolling to keep current move in view
+  - Made table header sticky for better navigation
+  - Added move counter showing total moves when > 10
+  - Enhanced current move highlighting with background color
+
 ### Current System Status:
 - ✅ **Core Gameplay**: Chess rules, move validation, game state management
 - ✅ **AI Integration**: LC0 neural network (~3400 ELO) with 5 difficulty levels
@@ -202,10 +217,12 @@ Expert-level position analysis feature added to game replay functionality.
 
 ## 📝 Current Git Status
 - **Branch**: master
-- **Latest Commit**: "🔧 Fix PGN generation to capture complete game history"
+- **Latest Commits** (2025-01-21):
+  - "📈 Expand move history display capacity and add auto-scrolling"
+  - "✨ Add drag and drop functionality for chess pieces"
 - **Railway**: All services deployed and operational
 - **Vercel**: Frontend deployed with latest features
-- **Status**: Production-ready chess platform with polished user experience
+- **Status**: Production-ready chess platform with enhanced UX features
 
 ## 🎮 Complete Production Chess Platform
 
@@ -223,6 +240,8 @@ Expert-level position analysis feature added to game replay functionality.
 - ✅ **Board Customization** - Multiple themes and piece styles including Lego
 - ✅ **Board Orientation** - Flip board to view from black's perspective
 - ✅ **Responsive Design** - Works perfectly on all devices
+- ✅ **Drag and Drop** - Move pieces by dragging (in addition to click-to-move)
+- ✅ **Enhanced Move History** - Shows all moves with auto-scrolling
 
 ### Platform Highlights:
 - Professional-grade chess platform rivaling commercial applications
@@ -257,8 +276,29 @@ Expert-level position analysis feature added to game replay functionality.
 **Solution**: Updated to show accurate ~3400+ ELO rating
 
 ---
-**Last Updated**: 2025-01-12  
-**Status**: ✅ PRODUCTION-READY - Professional chess platform with polished user experience!  
-**Recent**: Complete game replay system overhaul and UX polish  
+**Last Updated**: 2025-01-21  
+**Status**: ✅ PRODUCTION-READY - Professional chess platform with enhanced user experience!  
+**Recent**: Added drag and drop movement + fixed move history display capacity  
 **Live URL**: https://chess-pu71.vercel.app  
 **Backend URL**: https://chess-production-c94f.up.railway.app
+
+## 🚀 Where We Left Off (2025-01-21)
+
+Just completed two user-requested enhancements:
+1. **Drag and Drop Movement** - Pieces can now be moved by dragging them in addition to the existing click-to-move functionality
+2. **Move History Display Fix** - Fixed limitation where only 10 moves were shown; now displays all moves with scrolling
+
+The app is fully functional and production-ready. All core features are working perfectly including:
+- Online multiplayer with Google authentication
+- LC0 AI integration (~3400 ELO strength)
+- Game history and replay system
+- Statistical analytics dashboard
+- Board/piece customization
+- Position analysis
+
+**Next potential areas for development** (from the roadmap):
+- 🔮 **Tournaments**: Organized competitive play system
+- 🔮 **Mobile Apps**: Native iOS/Android applications
+- 🔮 **Chess Variants**: Chess960, King of the Hill, etc.
+- 🔮 **Opening Explorer**: Database of chess openings
+- 🔮 **Puzzle Training**: Tactical puzzles for improvement
