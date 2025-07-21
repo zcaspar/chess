@@ -114,6 +114,30 @@
   position: relative;
 }
 
+/* Drag and drop enhancements */
+.chess-board-container [draggable="true"] {
+  cursor: grab !important;
+}
+
+.chess-board-container [draggable="true"]:active {
+  cursor: grabbing !important;
+  opacity: 0.9;
+}
+
+/* Smooth piece movement during drag */
+.chess-board-container.dragging svg {
+  transition: none !important; /* Remove transition during drag for smoother experience */
+}
+
+/* Highlight valid drop squares during drag */
+.chess-board-container .drop-square-valid {
+  background-color: rgba(0, 255, 0, 0.3) !important;
+}
+
+.chess-board-container .drop-square-invalid {
+  background-color: rgba(255, 0, 0, 0.3) !important;
+}
+
 /* Ensure piece visibility on neon board */
 .piece-style-classic svg path,
 .piece-style-modern svg path,

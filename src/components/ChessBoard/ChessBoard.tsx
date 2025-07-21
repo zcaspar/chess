@@ -156,6 +156,37 @@ const ChessBoard: React.FC = () => {
     return moveSuccessful;
   };
 
+  const onDragBegin = (piece: string, sourceSquare: Square) => {
+    // Don't allow drag if game has ended
+    if (gameState.gameResult) {
+      return false;
+    }
+
+    // Check if it's the correct turn
+    const pieceColor = piece[0] === 'w' ? 'w' : 'b';
+    if (pieceColor !== gameState.game.turn()) {
+      return false;
+    }
+
+    // For online games, check if it's our turn
+    if (isOnlineGame && roomCode && assignedColor) {
+      if (gameState.game.turn() !== assignedColor.charAt(0)) {
+        return false;
+      }
+    }
+
+    // Highlight the source square and show move options
+    setMoveFrom(sourceSquare);
+    setOptionSquares(getMoveOptions(sourceSquare));
+    return true;
+  };
+
+  const onDragEnd = () => {
+    // Clear highlights when drag ends
+    setMoveFrom(null);
+    setOptionSquares({});
+  };
+
   // Custom square styles for highlights
   const customSquareStyles = useMemo(() => {
     const styles: Partial<Record<Square, { backgroundColor?: string; background?: string }>> = {};
@@ -196,6 +227,8 @@ const ChessBoard: React.FC = () => {
       <Chessboard
         position={gameState.game.fen()}
         onPieceDrop={onDrop}
+        onPieceDragBegin={onDragBegin}
+        onPieceDragEnd={onDragEnd}
         onSquareClick={onSquareClick}
         onSquareRightClick={onSquareRightClick}
         boardWidth={500}
@@ -207,6 +240,8 @@ const ChessBoard: React.FC = () => {
         customLightSquareStyle={currentTheme.lightSquareStyle}
         customDarkSquareStyle={currentTheme.darkSquareStyle}
         boardOrientation={boardOrientation}
+        arePiecesDraggable={true}
+        showBoardNotation={true}
       />
     </div>
   );
