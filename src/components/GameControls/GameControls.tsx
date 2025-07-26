@@ -1,6 +1,8 @@
 import React from 'react';
 import { useGame } from '../../contexts/GameContext';
 import { useAuth } from '../../hooks/useAuth';
+import { useSocket } from '../../contexts/SocketContext';
+import { useOnlineGame } from '../../hooks/useOnlineGame';
 
 const GameControls: React.FC = () => {
   const { 
@@ -13,7 +15,10 @@ const GameControls: React.FC = () => {
     acceptDraw,
     declineDraw,
     canUndo, 
-    canRedo 
+    canRedo,
+    canUseNuke,
+    activateNukeMode,
+    cancelNukeMode 
   } = useGame();
   
   const { updatePreferences, profile } = useAuth();
@@ -80,6 +85,89 @@ const GameControls: React.FC = () => {
         </svg>
         Flip Board
       </button>
+
+      {/* Nuclear Mode Button - Only in human vs human mode */}
+      {gameState.gameMode === 'human-vs-human' && !isGameOver && (
+        <>
+          {(canUseNuke('w') || canUseNuke('b')) && (
+            <div className="space-y-2">
+              {currentPlayer === 'w' && canUseNuke('w') && (
+                gameState.nukeModeActive.white ? (
+                  <button
+                    onClick={() => {
+                      if (isOnlineGame && roomCode) {
+                        cancelNukeSocket();
+                      } else {
+                        cancelNukeMode();
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm flex items-center justify-center gap-2 animate-pulse"
+                    title="Cancel nuke mode"
+                  >
+                    <span>💣</span>
+                    Cancel Nuke
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      if (isOnlineGame && roomCode) {
+                        activateNukeSocket('w');
+                      } else {
+                        activateNukeMode('w');
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors text-sm flex items-center justify-center gap-2"
+                    title="Activate nuke mode - remove one opponent piece"
+                  >
+                    <span>💣</span>
+                    Nuke (1 use)
+                  </button>
+                )
+              )}
+              {currentPlayer === 'b' && canUseNuke('b') && (
+                gameState.nukeModeActive.black ? (
+                  <button
+                    onClick={() => {
+                      if (isOnlineGame && roomCode) {
+                        cancelNukeSocket();
+                      } else {
+                        cancelNukeMode();
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm flex items-center justify-center gap-2 animate-pulse"
+                    title="Cancel nuke mode"
+                  >
+                    <span>💣</span>
+                    Cancel Nuke
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      if (isOnlineGame && roomCode) {
+                        activateNukeSocket('b');
+                      } else {
+                        activateNukeMode('b');
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors text-sm flex items-center justify-center gap-2"
+                    title="Activate nuke mode - remove one opponent piece"
+                  >
+                    <span>💣</span>
+                    Nuke (1 use)
+                  </button>
+                )
+              )}
+              {(gameState.nukeModeActive.white || gameState.nukeModeActive.black) && (
+                <p className="text-xs text-center text-red-600 font-semibold">
+                  Click an opponent's piece to nuke it!
+                  <br />
+                  (Cannot target King or Queen)
+                </p>
+              )}
+            </div>
+          )}
+        </>
+      )}
 
       {/* Draw Controls */}
       {!isGameOver && (

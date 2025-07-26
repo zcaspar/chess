@@ -45,6 +45,14 @@ interface GameState {
   gameMode: 'human-vs-human' | 'human-vs-ai';
   aiColor: 'w' | 'b' | null; // Which color the AI is playing
   aiDifficulty: DifficultyLevel;
+  nukeAvailable: {
+    white: boolean;
+    black: boolean;
+  };
+  nukeModeActive: {
+    white: boolean;
+    black: boolean;
+  };
 }
 
 interface GameContextType {
@@ -68,6 +76,10 @@ interface GameContextType {
   setAIDifficulty: (difficulty: DifficultyLevel) => Promise<void>;
   canUndo: boolean;
   canRedo: boolean;
+  activateNukeMode: (color: 'w' | 'b') => void;
+  cancelNukeMode: () => void;
+  executeNuke: (targetSquare: Square) => boolean;
+  canUseNuke: (color: 'w' | 'b') => boolean;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -117,6 +129,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     gameMode: 'human-vs-human',
     aiColor: null,
     aiDifficulty: 'medium',
+    nukeAvailable: {
+      white: true,
+      black: true,
+    },
+    nukeModeActive: {
+      white: false,
+      black: false,
+    },
   });
 
   // Get auth context for user stats updates
@@ -722,6 +742,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       gameMode: gameMode,
       aiColor: aiColor,
       aiDifficulty: aiDifficulty,
+      nukeAvailable: {
+        white: true,
+        black: true,
+      },
+      nukeModeActive: {
+        white: false,
+        black: false,
+      },
     });
   }, [gameState]);
 
@@ -1022,6 +1050,57 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       }
     };
 
+    const handleSocketNukeModeActivated = (event: CustomEvent) => {
+      const { color } = event.detail;
+      setGameState(prev => ({
+        ...prev,
+        nukeModeActive: {
+          white: color === 'w',
+          black: color === 'b',
+        },
+      }));
+    };
+
+    const handleSocketNukeExecuted = (event: CustomEvent) => {
+      const { targetSquare, fen, nukerColor } = event.detail;
+      const newGame = new Chess(fen);
+      
+      setGameState(prev => ({
+        ...prev,
+        game: newGame,
+        nukeAvailable: {
+          white: nukerColor === 'w' ? false : prev.nukeAvailable.white,
+          black: nukerColor === 'b' ? false : prev.nukeAvailable.black,
+        },
+        nukeModeActive: {
+          white: false,
+          black: false,
+        },
+        history: [...prev.history, {
+          from: targetSquare,
+          to: targetSquare,
+          color: nukerColor,
+          flags: 'n',
+          piece: event.detail.piece.type,
+          san: `Nuke ${targetSquare}`,
+          lan: `nuke${targetSquare}`,
+          before: prev.game.fen(),
+          after: fen,
+        } as Move],
+        currentMoveIndex: prev.currentMoveIndex + 1,
+      }));
+    };
+
+    const handleSocketNukeCancelled = () => {
+      setGameState(prev => ({
+        ...prev,
+        nukeModeActive: {
+          white: false,
+          black: false,
+        },
+      }));
+    };
+
     // Add event listeners
     window.addEventListener('socketMoveMade', handleSocketMoveMade as EventListener);
     window.addEventListener('socketGameEnded', handleSocketGameEnded as EventListener);
@@ -1029,6 +1108,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     window.addEventListener('socketTimerUpdate', handleSocketTimerUpdate as EventListener);
     window.addEventListener('socketGameRestored', handleSocketGameRestored as EventListener);
     window.addEventListener('socketRoomJoined', handleSocketRoomJoined as EventListener);
+    window.addEventListener('socketNukeModeActivated', handleSocketNukeModeActivated as EventListener);
+    window.addEventListener('socketNukeExecuted', handleSocketNukeExecuted as EventListener);
+    window.addEventListener('socketNukeCancelled', handleSocketNukeCancelled);
 
     return () => {
       // Clean up event listeners
@@ -1038,11 +1120,99 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       window.removeEventListener('socketTimerUpdate', handleSocketTimerUpdate as EventListener);
       window.removeEventListener('socketGameRestored', handleSocketGameRestored as EventListener);
       window.removeEventListener('socketRoomJoined', handleSocketRoomJoined as EventListener);
+      window.removeEventListener('socketNukeModeActivated', handleSocketNukeModeActivated as EventListener);
+      window.removeEventListener('socketNukeExecuted', handleSocketNukeExecuted as EventListener);
+      window.removeEventListener('socketNukeCancelled', handleSocketNukeCancelled);
     };
   }, []);
 
   const canUndo = gameState.currentMoveIndex >= 0;
   const canRedo = gameState.currentMoveIndex < gameState.history.length - 1;
+
+  // Nuclear Chess functions
+  const canUseNuke = useCallback((color: 'w' | 'b'): boolean => {
+    // Only available in human vs human mode
+    if (gameState.gameMode !== 'human-vs-human') return false;
+    
+    // Only available in first 10 moves (20 half-moves)
+    const moveCount = gameState.game.history().length;
+    if (moveCount >= 20) return false;
+    
+    // Check if this color hasn't used their nuke yet
+    return color === 'w' ? gameState.nukeAvailable.white : gameState.nukeAvailable.black;
+  }, [gameState.gameMode, gameState.game, gameState.nukeAvailable]);
+
+  const activateNukeMode = useCallback((color: 'w' | 'b') => {
+    if (!canUseNuke(color)) return;
+    
+    setGameState(prev => ({
+      ...prev,
+      nukeModeActive: {
+        white: color === 'w',
+        black: color === 'b',
+      },
+    }));
+  }, [canUseNuke]);
+
+  const cancelNukeMode = useCallback(() => {
+    setGameState(prev => ({
+      ...prev,
+      nukeModeActive: {
+        white: false,
+        black: false,
+      },
+    }));
+  }, []);
+
+  const executeNuke = useCallback((targetSquare: Square): boolean => {
+    const activeNukeColor = gameState.nukeModeActive.white ? 'w' : 
+                          gameState.nukeModeActive.black ? 'b' : null;
+    
+    if (!activeNukeColor) return false;
+    
+    // Get the piece at the target square
+    const piece = gameState.game.get(targetSquare);
+    if (!piece) return false;
+    
+    // Can't nuke your own pieces
+    if (piece.color === activeNukeColor) return false;
+    
+    // Can't nuke Kings or Queens
+    if (piece.type === 'k' || piece.type === 'q') return false;
+    
+    // Create a new game instance with the piece removed
+    const newGame = new Chess(gameState.game.fen());
+    newGame.remove(targetSquare);
+    
+    // Update game state
+    setGameState(prev => ({
+      ...prev,
+      game: newGame,
+      nukeAvailable: {
+        white: activeNukeColor === 'w' ? false : prev.nukeAvailable.white,
+        black: activeNukeColor === 'b' ? false : prev.nukeAvailable.black,
+      },
+      nukeModeActive: {
+        white: false,
+        black: false,
+      },
+      // Add a special move to history to track the nuke
+      history: [...prev.history, {
+        from: targetSquare,
+        to: targetSquare,
+        color: activeNukeColor,
+        flags: 'n', // 'n' for nuke
+        piece: piece.type,
+        san: `Nuke ${targetSquare}`,
+        lan: `nuke${targetSquare}`,
+        before: prev.game.fen(),
+        after: newGame.fen(),
+      } as Move],
+      currentMoveIndex: prev.currentMoveIndex + 1,
+    }));
+    
+    return true;
+  }, [gameState.nukeModeActive, gameState.game]);
 
   const value: GameContextType = {
     gameState,
@@ -1065,6 +1235,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     setAIDifficulty,
     canUndo,
     canRedo,
+    activateNukeMode,
+    cancelNukeMode,
+    executeNuke,
+    canUseNuke,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

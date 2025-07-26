@@ -28,6 +28,9 @@ interface SocketContextType {
   acceptDraw: () => void;
   declineDraw: () => void;
   leaveRoom: () => void;
+  activateNuke: (color: 'w' | 'b') => void;
+  executeNuke: (targetSquare: string, nukerColor: 'w' | 'b') => void;
+  cancelNuke: () => void;
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -267,6 +270,22 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           // Broadcast to GameContext or other components via custom event
           window.dispatchEvent(new CustomEvent('socketTimerUpdate', { detail: data }));
         });
+
+        // Nuke-related events
+        socketInstance.on('nukeModeActivated', (data) => {
+          console.log('Nuke mode activated:', data);
+          window.dispatchEvent(new CustomEvent('socketNukeModeActivated', { detail: data }));
+        });
+
+        socketInstance.on('nukeExecuted', (data) => {
+          console.log('Nuke executed:', data);
+          window.dispatchEvent(new CustomEvent('socketNukeExecuted', { detail: data }));
+        });
+
+        socketInstance.on('nukeCancelled', () => {
+          console.log('Nuke cancelled');
+          window.dispatchEvent(new CustomEvent('socketNukeCancelled'));
+        });
       } catch (error) {
         console.error('Failed to connect socket:', error);
       }
@@ -335,6 +354,24 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     }
   };
 
+  const activateNuke = (color: 'w' | 'b') => {
+    if (socket && isConnected && roomCode) {
+      socket.emit('activateNuke', color);
+    }
+  };
+
+  const executeNuke = (targetSquare: string, nukerColor: 'w' | 'b') => {
+    if (socket && isConnected && roomCode) {
+      socket.emit('executeNuke', { targetSquare, nukerColor });
+    }
+  };
+
+  const cancelNuke = () => {
+    if (socket && isConnected && roomCode) {
+      socket.emit('cancelNuke');
+    }
+  };
+
   const value: SocketContextType = {
     socket,
     isConnected,
@@ -350,6 +387,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     acceptDraw,
     declineDraw,
     leaveRoom,
+    activateNuke,
+    executeNuke,
+    cancelNuke,
   };
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;

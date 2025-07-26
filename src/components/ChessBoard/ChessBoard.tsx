@@ -7,8 +7,8 @@ import { useOnlineGame } from '../../hooks/useOnlineGame';
 import { useAuth } from '../../hooks/useAuth';
 
 const ChessBoard: React.FC = () => {
-  const { gameState, makeMove } = useGame();
-  const { roomCode, assignedColor, makeMove: socketMakeMove } = useSocket();
+  const { gameState, makeMove, executeNuke } = useGame();
+  const { roomCode, assignedColor, makeMove: socketMakeMove, executeNuke: socketExecuteNuke } = useSocket();
   const { isOnlineGame } = useOnlineGame();
   const { profile } = useAuth();
   const [moveFrom, setMoveFrom] = useState<Square | null>(null);
@@ -77,6 +77,26 @@ const ChessBoard: React.FC = () => {
     // Clear right-clicked squares
     setRightClickedSquares([]);
 
+    // Handle nuke mode
+    const isNukeModeActive = gameState.nukeModeActive.white || gameState.nukeModeActive.black;
+    if (isNukeModeActive) {
+      // In nuke mode, clicking executes the nuke
+      const activeNukeColor = gameState.nukeModeActive.white ? 'w' : 'b';
+      
+      if (isOnlineGame && roomCode) {
+        // For online games, use socket
+        socketExecuteNuke(square, activeNukeColor);
+      } else {
+        // For local games, use direct execution
+        if (executeNuke(square)) {
+          // Nuke successful - clear any selection
+          setMoveFrom(null);
+          setOptionSquares({});
+        }
+      }
+      return;
+    }
+
     // If clicking the same square, deselect it
     if (moveFrom === square) {
       setMoveFrom(null);
@@ -138,6 +158,12 @@ const ChessBoard: React.FC = () => {
       return false;
     }
     
+    // Don't allow drag and drop in nuke mode
+    const isNukeModeActive = gameState.nukeModeActive.white || gameState.nukeModeActive.black;
+    if (isNukeModeActive) {
+      return false;
+    }
+    
     let moveSuccessful = false;
     
     if (isOnlineGame && roomCode) {
@@ -159,6 +185,12 @@ const ChessBoard: React.FC = () => {
   const onDragBegin = (piece: string, sourceSquare: Square) => {
     // Don't allow drag if game has ended
     if (gameState.gameResult) {
+      return false;
+    }
+
+    // Don't allow drag in nuke mode
+    const isNukeModeActive = gameState.nukeModeActive.white || gameState.nukeModeActive.black;
+    if (isNukeModeActive) {
       return false;
     }
 
@@ -189,9 +221,37 @@ const ChessBoard: React.FC = () => {
 
   // Custom square styles for highlights
   const customSquareStyles = useMemo(() => {
-    const styles: Partial<Record<Square, { backgroundColor?: string; background?: string }>> = {};
+    const styles: Partial<Record<Square, { backgroundColor?: string; background?: string; cursor?: string }>> = {};
     
-    // Highlight the selected square
+    // Handle nuke mode highlighting
+    const isNukeModeActive = gameState.nukeModeActive.white || gameState.nukeModeActive.black;
+    if (isNukeModeActive) {
+      const activeNukeColor = gameState.nukeModeActive.white ? 'w' : 'b';
+      
+      // Highlight all opponent pieces that can be nuked (not King or Queen)
+      const allSquares: Square[] = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8',
+                                    'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8',
+                                    'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8',
+                                    'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8',
+                                    'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8',
+                                    'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8',
+                                    'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8',
+                                    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8'];
+      
+      allSquares.forEach((square) => {
+        const piece = gameState.game.get(square);
+        if (piece && piece.color !== activeNukeColor && piece.type !== 'k' && piece.type !== 'q') {
+          styles[square] = { 
+            backgroundColor: 'rgba(255, 0, 0, 0.5)',
+            cursor: 'crosshair'
+          };
+        }
+      });
+      
+      return styles;
+    }
+    
+    // Normal move highlighting (when not in nuke mode)
     if (moveFrom) {
       styles[moveFrom] = { backgroundColor: 'rgba(255, 255, 0, 0.4)' };
     }
@@ -214,7 +274,7 @@ const ChessBoard: React.FC = () => {
     }
     
     return styles;
-  }, [moveFrom, rightClickedSquares, optionSquares, gameState.history, gameState.currentMoveIndex]);
+  }, [moveFrom, rightClickedSquares, optionSquares, gameState.history, gameState.currentMoveIndex, gameState.nukeModeActive, gameState.game]);
 
   // Get piece style class for CSS filters
   const getPieceStyleClass = () => {

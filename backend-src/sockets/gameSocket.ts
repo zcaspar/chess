@@ -547,6 +547,77 @@ export class GameSocketHandler {
       }
     });
 
+    // Handle nuke mode activation
+    socket.on('activateNuke', (color: 'w' | 'b') => {
+      const roomCode = this.playerRooms.get(socket.id);
+      if (!roomCode) return;
+
+      const room = this.rooms.get(roomCode);
+      if (!room) return;
+
+      // Verify it's the player's turn and color
+      const isWhitePlayer = room.whitePlayer?.socketId === socket.id;
+      const isBlackPlayer = room.blackPlayer?.socketId === socket.id;
+      
+      if (!isWhitePlayer && !isBlackPlayer) return;
+      
+      const playerColor = isWhitePlayer ? 'w' : 'b';
+      if (playerColor !== color) return;
+
+      // Broadcast nuke mode activation to all in room
+      this.io.to(roomCode).emit('nukeModeActivated', { color });
+    });
+
+    // Handle nuke execution
+    socket.on('executeNuke', async (data: { targetSquare: string; nukerColor: 'w' | 'b' }) => {
+      const roomCode = this.playerRooms.get(socket.id);
+      if (!roomCode) return;
+
+      const room = this.rooms.get(roomCode);
+      if (!room) return;
+
+      // Verify it's the player's color
+      const isWhitePlayer = room.whitePlayer?.socketId === socket.id;
+      const isBlackPlayer = room.blackPlayer?.socketId === socket.id;
+      
+      if (!isWhitePlayer && !isBlackPlayer) return;
+      
+      const playerColor = isWhitePlayer ? 'w' : 'b';
+      if (playerColor !== data.nukerColor) return;
+
+      // Get the piece at the target square
+      const piece = room.game.get(data.targetSquare);
+      if (!piece || piece.color === data.nukerColor || piece.type === 'k' || piece.type === 'q') {
+        socket.emit('error', { message: 'Invalid nuke target' });
+        return;
+      }
+
+      // Remove the piece
+      room.game.remove(data.targetSquare);
+
+      // Broadcast the nuke to all players
+      this.io.to(roomCode).emit('nukeExecuted', {
+        targetSquare: data.targetSquare,
+        nukerColor: data.nukerColor,
+        piece: piece,
+        fen: room.game.fen()
+      });
+
+      // Check if game ended due to nuke
+      if (room.game.isCheckmate()) {
+        const winner = room.game.turn() === 'w' ? 'black' : 'white';
+        await this.endGame(roomCode, winner, 'checkmate');
+      }
+    });
+
+    // Handle nuke mode cancellation
+    socket.on('cancelNuke', () => {
+      const roomCode = this.playerRooms.get(socket.id);
+      if (!roomCode) return;
+
+      this.io.to(roomCode).emit('nukeCancelled');
+    });
+
     // Handle resignation
     socket.on('resign', async () => {
       try {
