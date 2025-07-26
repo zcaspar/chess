@@ -73,6 +73,7 @@
 - 🔮 **Chess Variants**: Chess960, King of the Hill, etc.
 - 🔮 **Opening Explorer**: Database of chess openings
 - 🔮 **Puzzle Training**: Tactical puzzles for improvement
+- 💣 **Nuclear Chess Variant**: Available for implementation (see Nuclear Chess section below)
 
 ## 📊 Production System Status
 - **Frontend Deployment**: ✅ LIVE - Vercel (https://chess-pu71.vercel.app)
@@ -302,3 +303,110 @@ The app is fully functional and production-ready. All core features are working 
 - 🔮 **Chess Variants**: Chess960, King of the Hill, etc.
 - 🔮 **Opening Explorer**: Database of chess openings
 - 🔮 **Puzzle Training**: Tactical puzzles for improvement
+
+## 💣 Nuclear Chess Variant (Optional Feature)
+
+### **Status**: 🎯 FULLY IMPLEMENTED & READY FOR DEPLOYMENT
+
+The Nuclear Chess variant has been completely implemented and tested, providing an exciting twist on traditional chess that maintains the professional quality of the platform.
+
+### **Implementation Details**
+- **Branch**: `nuclear-chess` (separate from production master branch)
+- **Documentation**: `NUCLEAR_CHESS_IMPLEMENTATION.md` (comprehensive step-by-step guide)
+- **Status**: Fully functional, tested locally, ready for production deployment
+- **Last Updated**: 2025-01-26
+
+### **Core Features**
+- 💣 **Nuke Button**: Orange bomb emoji button in game controls
+- 🎯 **Targeting Mode**: Red highlighting shows nukeable pieces when activated
+- 🚫 **Smart Restrictions**: Cannot target Kings/Queens, only available in first 10 moves
+- 👥 **Human vs Human Only**: Feature only appears in human vs human games (not vs AI)
+- 🌐 **Full Multiplayer Support**: Complete socket integration for online games
+- 📝 **Game History**: Special nuke moves tracked and displayed in move history
+- ✨ **Professional Polish**: Seamless integration with existing UI/UX design
+
+### **Game Rules**
+1. **Availability**: Only in human vs human games (not against AI)
+2. **Timing**: Only available during the first 10 moves of the game
+3. **Usage**: Each player gets exactly one nuke per game
+4. **Targets**: Can target any opponent piece except Kings and Queens
+5. **Effect**: Targeted piece is instantly removed from the board
+6. **Continuation**: Game continues normally after nuke execution
+
+### **Technical Architecture**
+- **Frontend**: React components with state management via GameContext
+- **Backend**: Socket.io event handlers for real-time multiplayer synchronization
+- **Game Logic**: Chess.js integration with custom piece removal functionality
+- **UI/UX**: Visual feedback with red targeting highlights and intuitive controls
+- **History**: Special move notation for nuke actions in game replay system
+
+### **Deployment Options**
+
+#### **Option 1: Separate Deployment** (Current Recommendation)
+- Keep traditional chess on `master` branch (current Vercel deployment)
+- Deploy nuclear chess variant by switching Vercel to `nuclear-chess` branch
+- Allows easy switching between versions
+
+#### **Option 2: Feature Integration**
+- Use `NUCLEAR_CHESS_IMPLEMENTATION.md` guide to implement on master branch
+- Integrate nuclear chess as optional feature alongside traditional chess
+- Maintains single codebase with feature toggle capability
+
+#### **Option 3: Gradual Rollout**
+- Deploy to staging/preview environment first
+- Test with limited user base
+- Full production deployment after validation
+
+### **Implementation Guide**
+Comprehensive step-by-step instructions available in `NUCLEAR_CHESS_IMPLEMENTATION.md`:
+- Frontend component modifications (GameContext, GameControls, ChessBoard)
+- Backend socket event handlers for multiplayer support
+- Testing procedures and validation steps
+- Rollback procedures if needed
+- Code snippets ready for copy-paste implementation
+
+### **Quality Assurance**
+- ✅ **Local Testing**: Fully functional in development environment
+- ✅ **Build Validation**: Clean production build with no compilation errors
+- ✅ **Code Quality**: Professional code standards with TypeScript typing
+- ✅ **User Experience**: Intuitive interface with clear visual feedback
+- ✅ **Multiplayer Sync**: Real-time synchronization between players
+- ✅ **Error Handling**: Graceful handling of invalid nuke attempts
+
+### **Business Impact**
+- **Differentiation**: Unique chess variant not available on other platforms
+- **Engagement**: Adds strategic depth and excitement to traditional chess
+- **Accessibility**: Simple rules that don't overwhelm new players
+- **Retention**: Fresh gameplay mechanics encourage return visits
+- **Viral Potential**: Shareable "nuclear chess" concept for social media
+
+### **Future Enhancements** (If Desired)
+- 🔮 Multiple nuclear variants (different piece restrictions)
+- 🔮 Tournament mode with nuclear chess brackets
+- 🔮 Statistical tracking for nuclear chess performance
+- 🔮 Achievement system for nuclear chess milestones
+- 🔮 AI opponents that can play nuclear chess
+
+### **Decision Framework**
+**Deploy Nuclear Chess If:**
+- Want to differentiate from standard chess platforms
+- Looking to add innovative features that maintain chess integrity
+- Ready to offer both traditional and variant chess options
+- Want to test market response to chess variants
+
+**Keep Traditional Only If:**
+- Prefer to maintain pure chess experience
+- Want to focus on perfecting core features first
+- Concerned about feature complexity
+- Planning other chess variants as higher priority
+
+### **Quick Deployment Guide**
+1. Switch Vercel production branch from `master` to `nuclear-chess`
+2. Verify deployment health at production URL
+3. Test nuclear chess functionality in production environment
+4. Monitor user engagement and feedback
+5. Keep `master` branch as fallback for quick reversion if needed
+
+---
+
+**Nuclear Chess Availability**: Ready for immediate deployment with complete implementation and documentation. The feature maintains all existing functionality while adding an exciting new dimension to the chess platform.
