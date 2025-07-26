@@ -22,6 +22,8 @@ const GameControls: React.FC = () => {
   } = useGame();
   
   const { updatePreferences, profile } = useAuth();
+  const { roomCode, activateNuke: activateNukeSocket, cancelNuke: cancelNukeSocket } = useSocket();
+  const { isOnlineGame } = useOnlineGame();
 
   const currentPlayer = gameState.game.turn();
   const isGameOver = gameState.game.isGameOver() || gameState.gameResult !== '';
