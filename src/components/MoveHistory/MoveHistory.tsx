@@ -20,11 +20,13 @@ const MoveHistory: React.FC = () => {
   // Group moves into pairs (one full turn)
   const movePairs: Array<{ white: string; black?: string; moveNumber: number }> = [];
   
-  // Always show all moves if the game has ended OR if we have more moves in history than current index
-  // This handles both completed games and cases where we're viewing full game history
+  // Always show all moves for live games. Only limit moves when explicitly navigating through replay.
+  // Show all moves if: game ended, game over, or we're at the latest position (live game)
+  const isAtLatestPosition = currentMoveIndex >= history.length - 1;
   const shouldShowAllMoves = gameState.gameResult !== '' || 
                              gameState.game.isGameOver() || 
-                             history.length > currentMoveIndex + 10; // If we have significantly more moves, show them all
+                             isAtLatestPosition ||
+                             history.length <= 20; // Always show all moves for shorter games
   
   const maxIndex = shouldShowAllMoves ? history.length - 1 : currentMoveIndex;
   
