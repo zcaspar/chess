@@ -100,6 +100,9 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         console.log('🔍 Attempting cleaned PGN load...');
         let cleanedPgn = game.pgn.trim();
         
+        // Remove PGN metadata tags (everything in square brackets)
+        cleanedPgn = cleanedPgn.replace(/\[.*?\]/g, '');
+        
         // Remove common PGN result markers that might cause issues
         cleanedPgn = cleanedPgn.replace(/\s*(1-0|0-1|1\/2-1\/2|\*)\s*$/, '');
         
@@ -129,6 +132,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         
         // Extract just the moves from PGN, removing move numbers and results
         let moveString = game.pgn
+          .replace(/\[.*?\]/g, '') // Remove PGN metadata tags
           .replace(/\d+\.\s*/g, '') // Remove move numbers like "1. "
           .replace(/\s*(1-0|0-1|1\/2-1\/2|\*)\s*$/, '') // Remove result
           .replace(/\s+/g, ' ') // Normalize whitespace
@@ -210,11 +214,15 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         console.log('🔍 All tokens:', tokens);
         
         for (const token of tokens) {
-          // Skip move numbers, results, and annotations
+          // Skip move numbers, results, annotations, and PGN metadata tags
           if (token.match(/^\d+\.?$/) || 
               token.match(/^(1-0|0-1|1\/2-1\/2|\*)$/) ||
               token.match(/^\{.*\}$/) ||
-              token.match(/^\(.*\)$/)) {
+              token.match(/^\(.*\)$/) ||
+              token.match(/^\[.*/) ||  // PGN tag start like [Round, [White, etc.
+              token.match(/.*\]$/) ||  // PGN tag end like "?"], 1"], etc.
+              token.match(/^".*"$/) || // Quoted strings in PGN tags
+              (token.match(/^[a-zA-Z]+$/) && token.length > 10)) { // Skip long text like FEN strings
             continue;
           }
           
@@ -447,9 +455,6 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
     }
   };
 
-  const getMoveNumber = (index: number) => {
-    return Math.floor(index / 2) + 1;
-  };
 
   const isWhiteMove = (index: number) => {
     return index % 2 === 0;
