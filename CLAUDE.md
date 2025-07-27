@@ -216,12 +216,14 @@ Expert-level position analysis feature added to game replay functionality.
 - [✅] Polished user experience with customization options
 
 ## 📝 Current Git Status
-- **Branch**: master
-- **Latest Commits** (2025-01-21):
+- **Active Development Branch**: `master` (deployed to Vercel)
+- **Alternative Branch**: `nuclear-chess` (contains Nuclear Chess variant feature)
+- **Latest Master Commits** (2025-01-27):
+  - "✨ Transform chess board into hero element with enhanced visual design"
   - "📈 Expand move history display capacity and add auto-scrolling"
   - "✨ Add drag and drop functionality for chess pieces"
 - **Railway**: All services deployed and operational
-- **Vercel**: Frontend deployed with latest features
+- **Vercel**: Frontend deployed from `master` branch with latest features
 - **Status**: Production-ready chess platform with enhanced UX features
 
 ## 🎮 Complete Production Chess Platform
@@ -276,24 +278,29 @@ Expert-level position analysis feature added to game replay functionality.
 **Solution**: Updated to show accurate ~3400+ ELO rating
 
 ---
-**Last Updated**: 2025-01-21  
-**Status**: ✅ PRODUCTION-READY - Professional chess platform with enhanced user experience!  
-**Recent**: Added drag and drop movement + fixed move history display capacity  
+**Last Updated**: 2025-01-27  
+**Status**: ✅ PRODUCTION-READY - Professional chess platform with enhanced hero board design!  
+**Recent**: Transformed chess board into hero element with enhanced visual design  
 **Live URL**: https://chess-pu71.vercel.app  
 **Backend URL**: https://chess-production-c94f.up.railway.app
 
-## 🚀 Where We Left Off (2025-01-21)
+## 🚀 Where We Left Off (2025-01-27)
 
-Just completed two user-requested enhancements:
-1. **Drag and Drop Movement** - Pieces can now be moved by dragging them in addition to the existing click-to-move functionality
-2. **Move History Display Fix** - Fixed limitation where only 10 moves were shown; now displays all moves with scrolling
+Just completed major UI enhancement:
+1. **Chess Board Hero Element** - Transformed the chess board into the visual centerpiece with:
+   - Increased board size (500px → 600px) for better prominence
+   - Multi-layered stage effect with elevation and depth
+   - Decorative corner pieces for elegant framing
+   - Glassmorphism sidebars to reduce visual weight
+   - Dynamic lighting effects based on game state
+   - Smooth animations and enhanced hover effects
 
 The app is fully functional and production-ready. All core features are working perfectly including:
 - Online multiplayer with Google authentication
 - LC0 AI integration (~3400 ELO strength)
 - Game history and replay system
 - Statistical analytics dashboard
-- Board/piece customization
+- Board/piece customization with hero visual presence
 - Position analysis
 
 **Next potential areas for development** (from the roadmap):
@@ -302,3 +309,18 @@ The app is fully functional and production-ready. All core features are working 
 - 🔮 **Chess Variants**: Chess960, King of the Hill, etc.
 - 🔮 **Opening Explorer**: Database of chess openings
 - 🔮 **Puzzle Training**: Tactical puzzles for improvement
+- 💣 **Nuclear Chess Variant**: Available on `nuclear-chess` branch (see Nuclear Chess section below)
+
+## 💣 Nuclear Chess Variant (Alternative Branch)
+
+### **Status**: 🎯 FULLY IMPLEMENTED & AVAILABLE ON SEPARATE BRANCH
+
+The Nuclear Chess variant has been completely implemented and tested on the `nuclear-chess` branch, providing an exciting twist on traditional chess while maintaining the professional quality of the platform.
+
+### **Branch Information**
+- **Branch**: `nuclear-chess` (separate from main development)
+- **Documentation**: `NUCLEAR_CHESS_IMPLEMENTATION.md` (comprehensive step-by-step guide)
+- **Status**: Fully functional, tested locally, ready for alternative deployment
+- **Last Updated**: 2025-01-26
+
+**Note**: The `nuclear-chess` branch contains all the features of master PLUS the Nuclear Chess variant. It can be deployed separately or used as reference for future chess variant implementations.
