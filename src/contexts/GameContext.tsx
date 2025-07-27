@@ -225,28 +225,90 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       // Generate PGN if not provided
       let gamePgn = pgn;
       if (!gamePgn) {
-        // Use the current game's PGN which should have the complete history
-        gamePgn = gameState.game.pgn();
+        console.log('🔧 Generating PGN for game save...');
         
-        // If that's still empty/short, try reconstructing from history
-        if (!gamePgn || gamePgn.length < 20) {
-          console.log('⚠️ Game PGN is short, reconstructing from history');
-          const pgnGame = new Chess();
-          gameState.history.forEach(move => {
-            try {
-              pgnGame.move(move);
-            } catch (e) {
-              console.log('⚠️ Error applying move to PGN reconstruction:', move, e);
+        // Get move counts from different sources for validation
+        const gameHistoryMoves = gameState.game.history();
+        const stateHistoryMoves = gameState.history;
+        const expectedMoveCount = Math.max(gameHistoryMoves.length, stateHistoryMoves.length);
+        
+        console.log('📊 Move count analysis:', {
+          gameHistoryLength: gameHistoryMoves.length,
+          stateHistoryLength: stateHistoryMoves.length,
+          expectedMoveCount,
+          gamePosition: gameState.game.fen()
+        });
+        
+        // Method 1: Use the current game's PGN (should have complete history)
+        gamePgn = gameState.game.pgn();
+        console.log('📝 Method 1 - game.pgn() result:', {
+          length: gamePgn?.length || 0,
+          preview: gamePgn?.substring(0, 100) || 'empty'
+        });
+        
+        // Method 2: Validate and potentially reconstruct
+        if (!gamePgn || gamePgn.length < 20 || expectedMoveCount === 0) {
+          console.log('⚠️ PGN appears incomplete, attempting reconstruction...');
+          
+          try {
+            const pgnGame = new Chess();
+            let successfulMoves = 0;
+            
+            // Use the longer of the two move arrays
+            const movesToUse = gameHistoryMoves.length >= stateHistoryMoves.length ? 
+                              gameHistoryMoves : stateHistoryMoves;
+            
+            console.log('🔄 Reconstructing from moves:', movesToUse.slice(0, 10), '...');
+            
+            movesToUse.forEach((move, index) => {
+              try {
+                const result = pgnGame.move(move);
+                if (result) {
+                  successfulMoves++;
+                } else {
+                  console.log(`❌ Failed to apply move ${index + 1}:`, move);
+                }
+              } catch (e) {
+                console.log(`❌ Error applying move ${index + 1}:`, move, e);
+              }
+            });
+            
+            const reconstructedPgn = pgnGame.pgn();
+            
+            console.log('✅ PGN reconstruction complete:', {
+              originalMoveCount: movesToUse.length,
+              successfulMoves,
+              reconstructedLength: reconstructedPgn.length,
+              reconstructedPreview: reconstructedPgn.substring(0, 100)
+            });
+            
+            if (reconstructedPgn && reconstructedPgn.length > gamePgn?.length) {
+              gamePgn = reconstructedPgn;
+              console.log('🔄 Using reconstructed PGN (better than original)');
             }
-          });
-          gamePgn = pgnGame.pgn();
+            
+          } catch (error) {
+            console.error('❌ PGN reconstruction failed:', error);
+          }
         }
         
-        console.log('📝 Generated PGN length:', gamePgn.length);
-        console.log('📝 Generated PGN preview:', gamePgn.substring(0, 100));
-        console.log('📝 History length used:', gameState.history.length);
-        console.log('📝 Game history length:', gameState.game.history().length);
-        console.log('📝 Final move count:', Math.max(gameState.history.length, gameState.game.history().length));
+        // Final validation
+        const finalMoveCount = gamePgn ? (gamePgn.match(/\d+\./g) || []).length : 0;
+        const isValid = gamePgn && gamePgn.length > 20 && finalMoveCount > 0;
+        
+        console.log('🎯 Final PGN validation:', {
+          isValid,
+          length: gamePgn?.length || 0,
+          estimatedMoveCount: finalMoveCount,
+          expectedMoveCount,
+          discrepancy: Math.abs(finalMoveCount - expectedMoveCount),
+          preview: gamePgn?.substring(0, 150) || 'empty'
+        });
+        
+        if (!isValid) {
+          console.error('⚠️ WARNING: PGN appears invalid or incomplete!');
+          console.error('⚠️ This game may not replay correctly in the future');
+        }
       }
       
       // Determine opponent info
@@ -271,7 +333,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         gameOutcome,
         finalFen: finalFen || gameState.game.fen(),
         pgn: gamePgn,
-        moveCount: Math.max(gameState.history.length, gameState.game.history().length),
+        moveCount: Math.max(gameState.history.length, gameState.game.history().length, finalMoveCount),
         gameDuration: gameState.timeControl ? 
           Math.floor((gameState.timeControl.initial * 2 - gameState.whiteTime - gameState.blackTime) / 1000) : 
           undefined,
