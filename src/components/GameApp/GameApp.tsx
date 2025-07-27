@@ -28,7 +28,7 @@ export const GameApp: React.FC = () => {
         </div>
         
         {/* Center - Chess Board Hero */}
-        <div className="order-1 lg:order-2 flex justify-center items-center min-h-[700px] py-8">
+        <div className="order-1 lg:order-2 flex justify-center items-start pt-8 pb-8">
           <div className="w-full max-w-[700px]">
             <ChessBoard />
           </div>

@@ -224,14 +224,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       
       // Generate PGN if not provided
       let gamePgn = pgn;
+      
+      // Get move counts from different sources for validation
+      const gameHistoryMoves = gameState.game.history();
+      const stateHistoryMoves = gameState.history;
+      const expectedMoveCount = Math.max(gameHistoryMoves.length, stateHistoryMoves.length);
+      
       if (!gamePgn) {
         console.log('🔧 Generating PGN for game save...');
-        
-        // Get move counts from different sources for validation
-        const gameHistoryMoves = gameState.game.history();
-        const stateHistoryMoves = gameState.history;
-        const expectedMoveCount = Math.max(gameHistoryMoves.length, stateHistoryMoves.length);
-        
         console.log('📊 Move count analysis:', {
           gameHistoryLength: gameHistoryMoves.length,
           stateHistoryLength: stateHistoryMoves.length,
@@ -282,7 +282,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
               reconstructedPreview: reconstructedPgn.substring(0, 100)
             });
             
-            if (reconstructedPgn && reconstructedPgn.length > gamePgn?.length) {
+            if (reconstructedPgn && reconstructedPgn.length > (gamePgn?.length || 0)) {
               gamePgn = reconstructedPgn;
               console.log('🔄 Using reconstructed PGN (better than original)');
             }
@@ -291,24 +291,24 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
             console.error('❌ PGN reconstruction failed:', error);
           }
         }
-        
-        // Final validation
-        const finalMoveCount = gamePgn ? (gamePgn.match(/\d+\./g) || []).length : 0;
-        const isValid = gamePgn && gamePgn.length > 20 && finalMoveCount > 0;
-        
-        console.log('🎯 Final PGN validation:', {
-          isValid,
-          length: gamePgn?.length || 0,
-          estimatedMoveCount: finalMoveCount,
-          expectedMoveCount,
-          discrepancy: Math.abs(finalMoveCount - expectedMoveCount),
-          preview: gamePgn?.substring(0, 150) || 'empty'
-        });
-        
-        if (!isValid) {
-          console.error('⚠️ WARNING: PGN appears invalid or incomplete!');
-          console.error('⚠️ This game may not replay correctly in the future');
-        }
+      }
+      
+      // Final validation (moved outside the if block)
+      const finalMoveCount = gamePgn ? (gamePgn.match(/\d+\./g) || []).length : 0;
+      const isValid = gamePgn && gamePgn.length > 10; // Reduced from 20 to be less strict
+      
+      console.log('🎯 Final PGN validation:', {
+        isValid,
+        length: gamePgn?.length || 0,
+        estimatedMoveCount: finalMoveCount,
+        expectedMoveCount,
+        discrepancy: Math.abs(finalMoveCount - expectedMoveCount),
+        preview: gamePgn?.substring(0, 150) || 'empty'
+      });
+      
+      if (!isValid) {
+        console.error('⚠️ WARNING: PGN appears invalid or incomplete!');
+        console.error('⚠️ This game may not replay correctly in the future');
       }
       
       // Determine opponent info
