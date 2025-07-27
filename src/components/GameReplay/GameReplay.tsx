@@ -251,8 +251,8 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
           const dummyHistory = [];
           const tempGame = new Chess();
           
-          // Try to make legal moves up to moveCount (but cap at reasonable limit)
-          const targetMoves = Math.min(game.moveCount, 100); // Increased cap for longer games
+          // Try to make legal moves up to the actual moveCount - no artificial limit
+          const targetMoves = game.moveCount;
           
           for (let i = 0; i < targetMoves; i++) {
             const legalMoves = tempGame.moves({ verbose: true });
@@ -740,7 +740,8 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                   <p className="text-sm font-medium">⚠️ Incomplete Move History</p>
                   <p className="text-xs mt-1">
                     This game was saved with limited move data. 
-                    Expected {game.moveCount} moves, showing {gameHistory.length} reconstructed moves.
+                    Expected {game.moveCount} moves, showing {gameHistory.length} available moves.
+                    Future games will save complete move history.
                   </p>
                 </div>
                 <div className="space-y-0.5" ref={moveHistoryRef}>
