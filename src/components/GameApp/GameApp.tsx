@@ -9,27 +9,39 @@ import { OnlineGameStatus } from '../OnlineGameStatus';
 
 export const GameApp: React.FC = () => {
   return (
-    <div className="max-w-7xl mx-auto px-4">
-      <div className="grid grid-cols-1 xl:grid-cols-[300px_1fr_300px] lg:grid-cols-[250px_1fr_250px] gap-4 lg:gap-6">
-        {/* Left Sidebar */}
+    <div className="max-w-[1400px] mx-auto px-4">
+      <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr_280px] lg:grid-cols-[240px_1fr_240px] gap-4 lg:gap-8">
+        {/* Left Sidebar - with glass effect */}
         <div className="order-2 lg:order-1 space-y-4">
-          <GameModeSelector />
-          <OnlineGameStatus />
-          <GameStatus />
-          <GameControls />
+          <div className="sidebar-glass">
+            <GameModeSelector />
+          </div>
+          <div className="sidebar-glass">
+            <OnlineGameStatus />
+          </div>
+          <div className="sidebar-glass">
+            <GameStatus />
+          </div>
+          <div className="sidebar-glass">
+            <GameControls />
+          </div>
         </div>
         
-        {/* Center - Chess Board */}
-        <div className="order-1 lg:order-2 flex justify-center items-start">
-          <div className="w-full max-w-[500px]">
+        {/* Center - Chess Board Hero */}
+        <div className="order-1 lg:order-2 flex justify-center items-center min-h-[700px] py-8">
+          <div className="w-full max-w-[700px]">
             <ChessBoard />
           </div>
         </div>
         
-        {/* Right Sidebar */}
+        {/* Right Sidebar - with glass effect */}
         <div className="order-3 space-y-4">
-          <MoveHistory />
-          <ChessClock />
+          <div className="sidebar-glass">
+            <MoveHistory />
+          </div>
+          <div className="sidebar-glass">
+            <ChessClock />
+          </div>
         </div>
       </div>
     </div>

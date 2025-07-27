@@ -282,27 +282,51 @@ const ChessBoard: React.FC = () => {
     return `piece-style-${pieceStyle}`;
   };
 
+  // Determine game phase for ambient effects
+  const getGamePhase = () => {
+    const moveCount = gameState.history.length;
+    if (gameState.gameResult) return 'ended';
+    if (gameState.inCheck) return 'check';
+    if (moveCount < 10) return 'opening';
+    if (moveCount < 30) return 'middlegame';
+    return 'endgame';
+  };
+
   return (
-    <div className={`chess-board-container ${getPieceStyleClass()}`}>
-      <Chessboard
-        position={gameState.game.fen()}
-        onPieceDrop={onDrop}
-        onPieceDragBegin={onDragBegin}
-        onPieceDragEnd={onDragEnd}
-        onSquareClick={onSquareClick}
-        onSquareRightClick={onSquareRightClick}
-        boardWidth={500}
-        customSquareStyles={customSquareStyles}
-        customBoardStyle={{
-          borderRadius: '4px',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-        }}
-        customLightSquareStyle={currentTheme.lightSquareStyle}
-        customDarkSquareStyle={currentTheme.darkSquareStyle}
-        boardOrientation={boardOrientation}
-        arePiecesDraggable={true}
-        showBoardNotation={true}
-      />
+    <div className={`chess-board-hero-container ${gameState.gameResult ? 'game-ended' : ''} ${gameState.inCheck ? 'in-check' : ''} phase-${getGamePhase()}`}>
+      <div className="chess-board-stage">
+        <div className="board-glow-effect"></div>
+        <div className="board-ambient-particles"></div>
+        <div className="board-frame-wrapper">
+          <div className="board-frame">
+            <div className="frame-corner top-left"></div>
+            <div className="frame-corner top-right"></div>
+            <div className="frame-corner bottom-left"></div>
+            <div className="frame-corner bottom-right"></div>
+            <div className={`chess-board-container ${getPieceStyleClass()}`}>
+              <Chessboard
+              position={gameState.game.fen()}
+              onPieceDrop={onDrop}
+              onPieceDragBegin={onDragBegin}
+              onPieceDragEnd={onDragEnd}
+              onSquareClick={onSquareClick}
+              onSquareRightClick={onSquareRightClick}
+              boardWidth={600}
+              customSquareStyles={customSquareStyles}
+              customBoardStyle={{
+                borderRadius: '8px',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              }}
+              customLightSquareStyle={currentTheme.lightSquareStyle}
+              customDarkSquareStyle={currentTheme.darkSquareStyle}
+              boardOrientation={boardOrientation}
+              arePiecesDraggable={true}
+              showBoardNotation={true}
+            />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
