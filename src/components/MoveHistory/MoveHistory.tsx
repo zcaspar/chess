@@ -20,13 +20,17 @@ const MoveHistory: React.FC = () => {
   // Group moves into pairs (one full turn)
   const movePairs: Array<{ white: string; black?: string; moveNumber: number }> = [];
   
-  for (let i = 0; i <= currentMoveIndex; i += 2) {
+  // For historic games (game is over), show all moves. For live games, show moves up to current position
+  const isGameOver = gameState.gameResult !== '';
+  const maxIndex = isGameOver ? history.length - 1 : currentMoveIndex;
+  
+  for (let i = 0; i <= maxIndex; i += 2) {
     const whiteMove = history[i];
     const blackMove = history[i + 1];
     
     movePairs.push({
       white: whiteMove?.san || '',
-      black: i + 1 <= currentMoveIndex ? blackMove?.san : undefined,
+      black: (i + 1 <= maxIndex && blackMove) ? blackMove.san : undefined,
       moveNumber: Math.floor(i / 2) + 1,
     });
   }
