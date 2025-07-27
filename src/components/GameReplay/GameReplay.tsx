@@ -251,8 +251,8 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
           const dummyHistory = [];
           const tempGame = new Chess();
           
-          // Try to make legal moves up to moveCount/2 (since each move count is both players)
-          const targetMoves = Math.min(game.moveCount, 20); // Cap at 20 to avoid infinite loops
+          // Try to make legal moves up to moveCount (but cap at reasonable limit)
+          const targetMoves = Math.min(game.moveCount, 100); // Increased cap for longer games
           
           for (let i = 0; i < targetMoves; i++) {
             const legalMoves = tempGame.moves({ verbose: true });
@@ -582,22 +582,24 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chess Board */}
-        <div className="lg:col-span-2">
-          <div className="mb-4">
-            <Chessboard
-              position={currentGame.fen()}
-              boardWidth={500}
-              customBoardStyle={{
-                borderRadius: '4px',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-              }}
-              customSquareStyles={getCustomSquareStyles()}
-              areArrowsAllowed={false}
-              arePiecesDraggable={false}
-              boardOrientation={boardOrientation}
-            />
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Chess Board - Fixed position */}
+        <div className="lg:flex-1">
+          <div className="flex justify-center">
+            <div className="sticky top-4">
+              <Chessboard
+                position={currentGame.fen()}
+                boardWidth={500}
+                customBoardStyle={{
+                  borderRadius: '4px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                }}
+                customSquareStyles={getCustomSquareStyles()}
+                areArrowsAllowed={false}
+                arePiecesDraggable={false}
+                boardOrientation={boardOrientation}
+              />
+            </div>
           </div>
 
           {/* Position Analysis - Left aligned with board */}
@@ -722,7 +724,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         </div>
 
         {/* Move History */}
-        <div className="lg:col-span-1">
+        <div className="lg:w-[300px] lg:flex-shrink-0">
           <h3 className="text-lg font-semibold mb-4">Move History</h3>
           <div className="bg-gray-50 rounded-lg p-3 h-[600px] overflow-y-auto">
             {gameHistory.length === 0 ? (
