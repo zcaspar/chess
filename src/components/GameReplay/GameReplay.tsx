@@ -732,6 +732,76 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                   <p className="text-sm mt-2">Showing final board position</p>
                 )}
               </div>
+            ) : gameHistory.length < game.moveCount / 2 ? (
+              <div className="text-center mb-4">
+                <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-3 py-2 rounded mb-3">
+                  <p className="text-sm font-medium">⚠️ Incomplete Move History</p>
+                  <p className="text-xs mt-1">
+                    This game was saved with limited move data. 
+                    Expected {game.moveCount} moves, showing {gameHistory.length} reconstructed moves.
+                  </p>
+                </div>
+                <div className="space-y-0.5" ref={moveHistoryRef}>
+                  {Array.from({ length: Math.ceil(gameHistory.length / 2) }, (_, pairIndex) => {
+                    const whiteIndex = pairIndex * 2;
+                    const blackIndex = pairIndex * 2 + 1;
+                    const whiteMove = gameHistory[whiteIndex];
+                    const blackMove = gameHistory[blackIndex];
+                    const moveNumber = pairIndex + 1;
+                    
+                    return (
+                      <div key={pairIndex} className="flex items-center gap-1">
+                        {/* Move number */}
+                        <span className="text-gray-500 text-sm w-6 text-right">{moveNumber}.</span>
+                        
+                        {/* White move */}
+                        <button
+                          onClick={() => {
+                            try {
+                              setCurrentMoveIndex(whiteIndex);
+                              setIsAutoPlaying(false);
+                            } catch (error) {
+                              console.error('Error setting move index:', error);
+                            }
+                          }}
+                          className={`px-2 py-0.5 rounded text-sm transition-colors min-w-[60px] bg-yellow-200 text-yellow-800 ${
+                            currentMoveIndex === whiteIndex
+                              ? 'bg-yellow-400 text-yellow-900'
+                              : 'hover:bg-yellow-300'
+                          }`}
+                          title="Reconstructed move - not from original game"
+                        >
+                          {whiteMove?.san || 'Invalid'}
+                        </button>
+                        
+                        {/* Black move (if exists) */}
+                        {blackMove ? (
+                          <button
+                            onClick={() => {
+                              try {
+                                setCurrentMoveIndex(blackIndex);
+                                setIsAutoPlaying(false);
+                              } catch (error) {
+                                console.error('Error setting move index:', error);
+                              }
+                            }}
+                            className={`px-2 py-0.5 rounded text-sm transition-colors min-w-[60px] bg-yellow-200 text-yellow-800 ${
+                              currentMoveIndex === blackIndex
+                                ? 'bg-yellow-400 text-yellow-900'
+                                : 'hover:bg-yellow-300'
+                            }`}
+                            title="Reconstructed move - not from original game"
+                          >
+                            {blackMove.san || 'Invalid'}
+                          </button>
+                        ) : (
+                          <div className="min-w-[60px]"></div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             ) : (
               <div className="space-y-0.5" ref={moveHistoryRef}>
                 {Array.from({ length: Math.ceil(gameHistory.length / 2) }, (_, pairIndex) => {
