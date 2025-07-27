@@ -239,10 +239,6 @@ const ChessBoard: React.FC = () => {
         <div className="board-ambient-particles"></div>
         <div className="board-frame-wrapper">
           <div className="board-frame">
-            <div className="frame-corner top-left"></div>
-            <div className="frame-corner top-right"></div>
-            <div className="frame-corner bottom-left"></div>
-            <div className="frame-corner bottom-right"></div>
             <div className={`chess-board-container ${getPieceStyleClass()}`}>
               <Chessboard
               position={gameState.game.fen()}

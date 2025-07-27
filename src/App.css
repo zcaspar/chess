@@ -71,45 +71,6 @@
   display: inline-block;
 }
 
-.frame-corner {
-  position: absolute;
-  width: 30px;
-  height: 30px;
-  border: 2px solid rgba(59, 130, 246, 0.3);
-  pointer-events: none;
-}
-
-.frame-corner.top-left {
-  top: -2px;
-  left: -2px;
-  border-right: none;
-  border-bottom: none;
-  border-top-left-radius: 12px;
-}
-
-.frame-corner.top-right {
-  top: -2px;
-  right: -2px;
-  border-left: none;
-  border-bottom: none;
-  border-top-right-radius: 12px;
-}
-
-.frame-corner.bottom-left {
-  bottom: -2px;
-  left: -2px;
-  border-right: none;
-  border-top: none;
-  border-bottom-left-radius: 12px;
-}
-
-.frame-corner.bottom-right {
-  bottom: -2px;
-  right: -2px;
-  border-left: none;
-  border-top: none;
-  border-bottom-right-radius: 12px;
-}
 
 /* Sidebar Glass Effect */
 .sidebar-glass {
@@ -205,10 +166,6 @@
 @media (prefers-color-scheme: dark) {
   .board-frame {
     background: linear-gradient(145deg, #1f2937 0%, #111827 100%);
-  }
-  
-  .frame-corner {
-    border-color: rgba(147, 197, 253, 0.3);
   }
   
   .sidebar-glass {
