@@ -249,41 +249,9 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         console.log('❌ Aggressive parsing error:', aggressiveError);
       }
       
-      // Approach 5: Create dummy move history if we have moveCount but can't parse PGN
-      try {
-        console.log('🔍 Attempting dummy move reconstruction...');
-        if (game.moveCount > 0 && game.finalFen) {
-          console.log(`⚠️ Creating ${game.moveCount} dummy moves to show final position`);
-          
-          // Create dummy moves that allow navigation
-          const dummyHistory = [];
-          const tempGame = new Chess();
-          
-          // Try to make legal moves up to the actual moveCount - no artificial limit
-          const targetMoves = game.moveCount;
-          
-          for (let i = 0; i < targetMoves; i++) {
-            const legalMoves = tempGame.moves({ verbose: true });
-            if (legalMoves.length === 0) break;
-            
-            // Make a random legal move as placeholder
-            const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
-            const move = tempGame.move(randomMove);
-            if (move) {
-              dummyHistory.push(move);
-            } else {
-              break;
-            }
-          }
-          
-          if (dummyHistory.length > 0) {
-            console.log('✅ Created dummy move history with', dummyHistory.length, 'moves');
-            return dummyHistory;
-          }
-        }
-      } catch (dummyError) {
-        console.log('❌ Dummy move reconstruction failed:', dummyError);
-      }
+      // Approach 5: If all parsing fails, return empty array
+      // DO NOT create dummy moves as they don't represent the actual game
+      console.log('❌ All PGN parsing methods failed - no moves will be shown');
       
       // If all approaches fail
       throw new Error(`Unable to parse PGN. PGN preview: "${game.pgn.substring(0, 50)}..."`);

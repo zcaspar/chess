@@ -683,8 +683,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           // Update user statistics for game completion
           updateUserStats(result, winningColor);
           
-          // Save game to history
-          saveGameToHistory(result, winningColor, gameCopy.fen(), gameCopy.pgn());
+          // Save game to history with the full PGN
+          // Reconstruct the full game from all moves to ensure complete PGN
+          const fullGameForPgn = new Chess();
+          newHistory.forEach((move) => {
+            fullGameForPgn.move({
+              from: move.from,
+              to: move.to,
+              promotion: move.promotion
+            });
+          });
+          saveGameToHistory(result, winningColor, gameCopy.fen(), fullGameForPgn.pgn());
         }
 
         return {
@@ -843,8 +852,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     // Update user statistics for resignation
     updateUserStats(result, winningColor);
     
-    // Save game to history
-    saveGameToHistory(result, winningColor);
+    // Save game to history with complete PGN
+    const finalFen = gameState.game.fen();
+    const pgn = gameState.game.pgn();
+    saveGameToHistory(result, winningColor, finalFen, pgn);
     
     // Mark game as ended in ref
     gameEndedRef.current = true;
@@ -873,8 +884,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     // Update user statistics for draw
     updateUserStats(result);
     
-    // Save game to history
-    saveGameToHistory(result);
+    // Save game to history with complete PGN
+    const finalFen = gameState.game.fen();
+    const pgn = gameState.game.pgn();
+    saveGameToHistory(result, undefined, finalFen, pgn);
     
     // Mark game as ended in ref
     gameEndedRef.current = true;
@@ -1013,12 +1026,27 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const data = event.detail;
       console.log('🌐 Socket game ended received:', data);
       
+      // Parse the result to determine winning color
+      let winningColor: 'w' | 'b' | undefined;
+      if (data.result.includes('White wins')) {
+        winningColor = 'w';
+      } else if (data.result.includes('Black wins')) {
+        winningColor = 'b';
+      }
+      
       // Update game state to show game result
-      setGameState(prev => ({
-        ...prev,
-        gameResult: `${data.result} (${data.reason})`,
-        activeColor: null,
-      }));
+      setGameState(prev => {
+        // Save game to history with PGN from socket
+        const finalFen = prev.game.fen();
+        const pgn = data.pgn || prev.game.pgn(); // Use PGN from socket if available
+        saveGameToHistory(`${data.result} (${data.reason})`, winningColor, finalFen, pgn);
+        
+        return {
+          ...prev,
+          gameResult: `${data.result} (${data.reason})`,
+          activeColor: null,
+        };
+      });
       
       // Stop the timer
       if (intervalRef.current) {
