@@ -17,6 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `CLAUDE.md` - Added troubleshooting section explaining the issue and recommended URL usage
   - **Justification**: Users often access the app through preview URLs during development/testing, and authentication failures create confusion. This fix ensures the app works from any Vercel deployment URL while maintaining security
 
+- **Game Replay PGN Parsing Errors** - Fixed "Unable to parse PGN" errors preventing game replay viewing (2025-08-04)
+  - **Issue**: Users getting "Failed to load game replay: Unable to parse PGN" error when trying to view saved games, with PGN preview showing standard chess headers like `[Event "?"] [Site "?"]`
+  - **Root Cause**: The GameReplay component's PGN parsing logic couldn't handle standard chess.js PGN format which includes metadata headers. The parsing would fail when encountering these headers, even though the move data was present
+  - **Solution**: Enhanced PGN parsing with multiple fallback approaches and improved PGN generation to create cleaner formats
+  - **Technical Details**:
+    - Improved header removal regex to properly strip `[Event "?"]` style metadata while preserving moves
+    - Enhanced cleaning logic to handle various PGN formats (with/without headers, different whitespace patterns)
+    - Modified GameContext PGN generation to create minimal PGNs without unnecessary headers for future games
+    - Added comprehensive logging to diagnose parsing failures
+    - Added fallback to display final board position even when moves cannot be parsed
+  - **Files Changed**: 
+    - `src/components/GameReplay/GameReplay.tsx` - Enhanced PGN parsing with better header handling and multiple parsing approaches
+    - `src/contexts/GameContext.tsx` - Modified PGN generation to create cleaner format without headers
+  - **Justification**: Game replay is a critical feature for learning and analysis. Users were completely unable to review their completed games due to parsing errors, making the feature unusable despite games being properly saved
+
 - **Game Replay Move History** - Fixed issue where saved games were not showing complete move history (2025-01-27)
   - **Issue**: When replaying saved games, only the last few moves or no moves at all were being displayed, despite games having many more moves
   - **Root Cause**: The PGN generation logic in `GameContext.tsx` was using `gameState.game.pgn()` which often didn't contain the complete game history. This happened because the chess.js game object was sometimes recreated from FEN positions during moves, losing the historical move context
