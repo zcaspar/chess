@@ -199,6 +199,16 @@ Expert-level position analysis feature added to game replay functionality.
 - Automatic reconnection attempts
 - Real-time engine status in `/health` endpoint
 
+## 📝 Change Log
+
+**See [CHANGELOG.md](./CHANGELOG.md) for detailed version history and justifications for all changes.**
+
+Every change made to the codebase is documented with:
+- What was changed
+- Why it was changed (justification)
+- Which files were affected
+- The issue it solved or feature it added
+
 ## 🎯 Success Criteria - ALL MET ✅
 
 - [✅] LC0 server deployed and accessible

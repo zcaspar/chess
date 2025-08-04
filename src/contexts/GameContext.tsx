@@ -239,57 +239,65 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           gamePosition: gameState.game.fen()
         });
         
-        // Method 1: Use the current game's PGN (should have complete history)
-        gamePgn = gameState.game.pgn();
-        console.log('📝 Method 1 - game.pgn() result:', {
-          length: gamePgn?.length || 0,
-          preview: gamePgn?.substring(0, 100) || 'empty'
-        });
+        // Always reconstruct PGN from move history to ensure completeness
+        // The current game object may not have full history if created from FEN
+        console.log('🔄 Reconstructing PGN from complete move history...');
         
-        // Method 2: Validate and potentially reconstruct
-        if (!gamePgn || gamePgn.length < 20 || expectedMoveCount === 0) {
-          console.log('⚠️ PGN appears incomplete, attempting reconstruction...');
+        try {
+          const pgnGame = new Chess();
+          let successfulMoves = 0;
           
-          try {
-            const pgnGame = new Chess();
-            let successfulMoves = 0;
-            
-            // Use the longer of the two move arrays
-            const movesToUse = gameHistoryMoves.length >= stateHistoryMoves.length ? 
-                              gameHistoryMoves : stateHistoryMoves;
-            
-            console.log('🔄 Reconstructing from moves:', movesToUse.slice(0, 10), '...');
-            
-            movesToUse.forEach((move, index) => {
-              try {
-                const result = pgnGame.move(move);
-                if (result) {
-                  successfulMoves++;
-                } else {
-                  console.log(`❌ Failed to apply move ${index + 1}:`, move);
-                }
-              } catch (e) {
-                console.log(`❌ Error applying move ${index + 1}:`, move, e);
+          // Always use gameState.history which should have the complete game history
+          const movesToUse = gameState.history;
+          
+          console.log('🔄 Reconstructing from gameState.history:', {
+            totalMoves: movesToUse.length,
+            firstMove: movesToUse[0]?.san || 'none',
+            lastMove: movesToUse[movesToUse.length - 1]?.san || 'none'
+          });
+          
+          movesToUse.forEach((move, index) => {
+            try {
+              // Apply move using the detailed move object
+              const result = pgnGame.move({
+                from: move.from,
+                to: move.to,
+                promotion: move.promotion
+              });
+              if (result) {
+                successfulMoves++;
+              } else {
+                console.log(`❌ Failed to apply move ${index + 1}:`, move);
               }
-            });
-            
-            const reconstructedPgn = pgnGame.pgn();
-            
-            console.log('✅ PGN reconstruction complete:', {
-              originalMoveCount: movesToUse.length,
-              successfulMoves,
-              reconstructedLength: reconstructedPgn.length,
-              reconstructedPreview: reconstructedPgn.substring(0, 100)
-            });
-            
-            if (reconstructedPgn && reconstructedPgn.length > (gamePgn?.length || 0)) {
-              gamePgn = reconstructedPgn;
-              console.log('🔄 Using reconstructed PGN (better than original)');
+            } catch (e) {
+              console.log(`❌ Error applying move ${index + 1}:`, move, e);
             }
-            
-          } catch (error) {
-            console.error('❌ PGN reconstruction failed:', error);
+          });
+          
+          gamePgn = pgnGame.pgn();
+          
+          console.log('✅ PGN reconstruction complete:', {
+            originalMoveCount: movesToUse.length,
+            successfulMoves,
+            pgnLength: gamePgn.length,
+            pgnPreview: gamePgn.substring(0, 150)
+          });
+          
+          // Fallback: if reconstruction failed, try using game.pgn()
+          if (!gamePgn || successfulMoves < movesToUse.length) {
+            console.log('⚠️ Some moves failed to reconstruct, trying game.pgn() as fallback...');
+            const fallbackPgn = gameState.game.pgn();
+            if (fallbackPgn && fallbackPgn.length > (gamePgn?.length || 0)) {
+              gamePgn = fallbackPgn;
+              console.log('📝 Using game.pgn() fallback');
+            }
           }
+          
+        } catch (error) {
+          console.error('❌ PGN reconstruction failed:', error);
+          // Last resort: use game.pgn()
+          gamePgn = gameState.game.pgn();
+          console.log('📝 Using game.pgn() as last resort');
         }
       }
       

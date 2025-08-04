@@ -174,8 +174,8 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         console.log('🔍 Attempting regex-based move extraction...');
         const chessGame = new Chess();
         
-        // Use regex to find move patterns (letters, numbers, +, #, =, x)
-        const movePattern = /[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|O-O(?:-O)?[+#]?/g;
+        // More comprehensive regex to catch various move formats
+        const movePattern = /([KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|O-O(?:-O)?[+#]?)/g;
         const extractedMoves = game.pgn.match(movePattern);
         
         console.log('🔍 Regex extracted moves:', extractedMoves);
@@ -186,11 +186,13 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
               const move = chessGame.move(moveStr.trim());
               if (!move) {
                 console.log('❌ Invalid regex move:', moveStr);
-                break;
+                // Continue instead of breaking to try more moves
+                continue;
               }
             } catch (moveErr) {
               console.log('❌ Regex move error for', moveStr, ':', moveErr);
-              break;
+              // Continue instead of breaking to try more moves
+              continue;
             }
           }
           
