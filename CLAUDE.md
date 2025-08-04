@@ -266,10 +266,19 @@ Every change made to the codebase is documented with:
 ## 🔨 Development Notes & Troubleshooting
 
 ### **Git Push Authentication**
-**Issue**: Sometimes `git push origin master` fails with "could not read Username" error
-**Solution**: Use `git push` without specifying remote/branch explicitly
+**Issue**: Sometimes `git push` fails with "could not read Username" error or "Permission denied"
+
+**Solution**: Re-authenticate with GitHub CLI using these steps:
+1. Run: `gh auth login`
+2. Choose **HTTPS** as preferred protocol (not SSH)
+3. Choose **Login with a web browser** (easiest option)
+4. Follow the browser prompts to authenticate
+
+**How often**: GitHub CLI tokens typically expire after 90 days, so you'll need to do this approximately every 3 months.
+
+**After authentication**:
 - ✅ **Working command**: `git push` 
-- ❌ **May fail**: `git push origin master`
+- ❌ **May fail**: `git push origin master` (sometimes has issues)
 
 ### **Game Replay System**
 **Issue**: Previously showing white screen or incomplete move history
