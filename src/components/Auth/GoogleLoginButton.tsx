@@ -14,10 +14,30 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ onSuccess 
   const handleGoogleSignIn = async () => {
     try {
       setIsGoogleLoading(true);
+      console.log('🔍 Starting Google Sign-In...');
+      console.log('📍 Current URL:', window.location.href);
+      console.log('🔥 Firebase config:', firebaseConfigInfo);
+      console.log('🌐 Backend URL:', process.env.REACT_APP_BACKEND_URL);
+      
       await signInWithGoogle();
+      console.log('✅ Google Sign-In successful');
       onSuccess();
     } catch (error: any) {
-      console.error('Google sign-in failed:', error);
+      console.error('❌ Google sign-in failed:', error);
+      console.error('Error type:', error.constructor.name);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      console.error('Full error object:', error);
+      
+      // Check for specific error types
+      if (error.code === 'auth/popup-blocked') {
+        alert('Popup was blocked. Please allow popups for this site and try again.');
+      } else if (error.code === 'auth/network-request-failed') {
+        alert('Network error: Unable to connect to authentication service. Please check your internet connection.');
+      } else if (error.message && error.message.includes('NetworkError')) {
+        alert('Network error detected. This might be a CORS or Firebase configuration issue.');
+      }
+      
       // Show guest fallback if Google auth fails and we don't have real credentials
       if (!firebaseConfigInfo.hasRealCredentials) {
         setShowGuestFallback(true);
