@@ -280,6 +280,22 @@ Every change made to the codebase is documented with:
 - ✅ **Working command**: `git push` 
 - ❌ **May fail**: `git push origin master` (sometimes has issues)
 
+### **Vercel App Access & CORS Issues**
+**Issue**: NetworkError when trying to sign in with Google, with console errors like:
+```
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at https://chess-production-c94f.up.railway.app/api/users/profile. (Reason: CORS header 'Access-Control-Allow-Origin' does not match 'https://chess-pu71.vercel.app').
+```
+
+**Root Cause**: Accessing the app through Vercel **preview URLs** (like `chess-pu71-git-master-caspars-projects-ada039ca.vercel.app`) instead of the main production URL.
+
+**Solution**: Always access the chess app through the **main production URL**:
+- ✅ **Correct URL**: https://chess-pu71.vercel.app
+- ❌ **Avoid**: Preview URLs like `chess-pu71-git-*.vercel.app`
+
+**Why**: The Railway backend is configured with CORS to accept requests from the main production domain. Preview URLs have different hostnames and get blocked by CORS policy.
+
+**Fixed**: Backend now supports wildcard patterns for preview URLs (as of 2025-08-04), but the main production URL is still recommended for best stability.
+
 ### **Game Replay System**
 **Issue**: Previously showing white screen or incomplete move history
 **Solution**: 

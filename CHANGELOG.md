@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Vercel Preview URL CORS Issues** - Fixed NetworkError when accessing app through Vercel preview URLs (2025-08-04)
+  - **Issue**: Users getting "NetworkError when attempting to fetch resource" and CORS errors when trying to sign in with Google from Vercel preview URLs like `chess-pu71-git-master-caspars-projects-ada039ca.vercel.app`
+  - **Root Cause**: Railway backend CORS was configured to only accept requests from the main production domain `chess-pu71.vercel.app`, blocking all preview deployment URLs
+  - **Solution**: Enhanced backend CORS configuration to support multiple origins with wildcard patterns, allowing both production and preview URLs
+  - **Files Changed**: 
+    - `backend-src/server.ts` - Modified CORS configuration to accept comma-separated origins with wildcard support
+    - `CLAUDE.md` - Added troubleshooting section explaining the issue and recommended URL usage
+  - **Justification**: Users often access the app through preview URLs during development/testing, and authentication failures create confusion. This fix ensures the app works from any Vercel deployment URL while maintaining security
+
 - **Game Replay Move History** - Fixed issue where saved games were not showing complete move history (2025-01-27)
   - **Issue**: When replaying saved games, only the last few moves or no moves at all were being displayed, despite games having many more moves
   - **Root Cause**: The PGN generation logic in `GameContext.tsx` was using `gameState.game.pgn()` which often didn't contain the complete game history. This happened because the chess.js game object was sometimes recreated from FEN positions during moves, losing the historical move context
