@@ -86,8 +86,12 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         if (success) {
           history = chessGame.history({ verbose: true });
           console.log('✅ Direct PGN load successful, moves:', history.length);
-          console.log('🔍 Sample moves from direct load:', history.slice(0, 5).map(m => m.san));
-          return history;
+          if (history.length > 0) {
+            console.log('🔍 Sample moves from direct load:', history.slice(0, 5).map(m => m.san));
+            return history;
+          } else {
+            console.log('⚠️ Direct PGN load succeeded but returned 0 moves');
+          }
         } else {
           console.log('❌ Direct PGN load failed');
         }
@@ -100,26 +104,31 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         console.log('🔍 Attempting cleaned PGN load...');
         let cleanedPgn = game.pgn.trim();
         
-        // Remove PGN metadata tags (everything in square brackets)
-        cleanedPgn = cleanedPgn.replace(/\[.*?\]/g, '');
+        // Remove PGN metadata tags (everything in square brackets) but keep newlines
+        cleanedPgn = cleanedPgn.replace(/\[.*?\]\s*/g, '');
         
         // Remove common PGN result markers that might cause issues
         cleanedPgn = cleanedPgn.replace(/\s*(1-0|0-1|1\/2-1\/2|\*)\s*$/, '');
         
-        // Remove extra whitespace and normalize
-        cleanedPgn = cleanedPgn.replace(/\s+/g, ' ').trim();
+        // Clean up multiple whitespaces but preserve structure
+        cleanedPgn = cleanedPgn.replace(/\n\s*\n/g, '\n').replace(/[ \t]+/g, ' ').trim();
         
-        console.log('🔍 Cleaned PGN:', cleanedPgn.substring(0, 100) + '...');
+        console.log('🔍 Cleaned PGN length:', cleanedPgn.length);
+        console.log('🔍 Cleaned PGN preview:', cleanedPgn.substring(0, 200));
         
-        const chessGame = new Chess();
-        const success = chessGame.loadPgn(cleanedPgn);
-        if (success) {
-          history = chessGame.history({ verbose: true });
-          console.log('✅ Cleaned PGN load successful, moves:', history.length);
-          console.log('🔍 Sample moves from cleaned load:', history.slice(0, 5).map(m => m.san));
-          return history;
+        if (cleanedPgn.length > 0) {
+          const chessGame = new Chess();
+          const success = chessGame.loadPgn(cleanedPgn);
+          if (success) {
+            history = chessGame.history({ verbose: true });
+            console.log('✅ Cleaned PGN load successful, moves:', history.length);
+            console.log('🔍 Sample moves from cleaned load:', history.slice(0, 5).map(m => m.san));
+            return history;
+          } else {
+            console.log('❌ Cleaned PGN load failed - chess.js could not parse');
+          }
         } else {
-          console.log('❌ Cleaned PGN load failed');
+          console.log('❌ Cleaned PGN is empty after removing headers');
         }
       } catch (cleanError) {
         console.log('❌ Cleaned PGN load error:', cleanError);
@@ -251,12 +260,30 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         console.log('❌ Aggressive parsing error:', aggressiveError);
       }
       
-      // Approach 5: If all parsing fails, return empty array
-      // DO NOT create dummy moves as they don't represent the actual game
-      console.log('❌ All PGN parsing methods failed - no moves will be shown');
+      // Approach 5: Last resort - try to extract moves from PGN using a different method
+      try {
+        console.log('🔍 Last resort: trying to build moves from FEN and moveCount...');
+        
+        // If we have a final FEN and move count, we can at least show the final position
+        if (game.finalFen && game.moveCount > 0) {
+          console.log('⚠️ Using final position fallback - showing end position only');
+          // Return empty array to trigger final position display
+          return [];
+        }
+      } catch (lastError) {
+        console.log('❌ Last resort failed:', lastError);
+      }
       
       // If all approaches fail
-      throw new Error(`Unable to parse PGN. PGN preview: "${game.pgn.substring(0, 50)}..."`);
+      console.log('❌ All PGN parsing methods failed - no moves will be shown');
+      console.log('🔍 PGN details:', {
+        hasRealCredentials: !!game.pgn,
+        pgnLength: game.pgn?.length || 0,
+        moveCount: game.moveCount,
+        finalFen: game.finalFen ? 'Present' : 'Missing'
+      });
+      
+      throw new Error(`Unable to parse PGN. Expected ${game.moveCount} moves but could not extract them from PGN.`);
       
     } catch (error) {
       console.error('❌ All PGN parsing methods failed:', error);

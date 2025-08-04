@@ -274,7 +274,19 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
             }
           });
           
-          gamePgn = pgnGame.pgn();
+          // Generate clean PGN - get just the moves without headers
+          const rawPgn = pgnGame.pgn();
+          
+          // Extract just the moves part (everything after the headers)
+          const lines = rawPgn.split('\n');
+          const moveLines = lines.filter(line => 
+            line.trim() && 
+            !line.startsWith('[') && 
+            !line.endsWith(']')
+          );
+          
+          // Create clean PGN with minimal headers
+          gamePgn = moveLines.length > 0 ? moveLines.join(' ').trim() : rawPgn;
           
           console.log('✅ PGN reconstruction complete:', {
             originalMoveCount: movesToUse.length,
