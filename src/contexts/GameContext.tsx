@@ -755,6 +755,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         const clearHintMove = prev.currentHint && 
                              prev.currentHint.from === from && 
                              prev.currentHint.to === to;
+                             
+        if (prev.currentHint) {
+          console.log('🎯 Move made with hint active:', {
+            hintMove: `${prev.currentHint.from}-${prev.currentHint.to}`,
+            actualMove: `${from}-${to}`,
+            matches: clearHintMove,
+            willClear: clearHintMove ? 'YES' : 'NO'
+          });
+        }
 
         return {
           ...prev,
