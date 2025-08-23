@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useGame } from '../../contexts/GameContext';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -15,8 +15,14 @@ const GameControls: React.FC = () => {
     pauseAIGame,
     resumeAIGame,
     canUndo, 
-    canRedo 
+    canRedo,
+    // Hint system
+    requestHint,
+    clearHint,
+    canUseHint
   } = useGame();
+  
+  const [isRequestingHint, setIsRequestingHint] = useState(false);
   
   const { updatePreferences, profile } = useAuth();
 
@@ -27,6 +33,23 @@ const GameControls: React.FC = () => {
     if (profile) {
       const newOrientation = profile.preferences?.boardOrientation === 'black' ? 'white' : 'black';
       await updatePreferences({ boardOrientation: newOrientation });
+    }
+  };
+
+  const handleRequestHint = async () => {
+    if (isRequestingHint || !canUseHint) return;
+    
+    setIsRequestingHint(true);
+    try {
+      const success = await requestHint();
+      if (!success) {
+        // Show error message or fallback
+        console.log('Failed to get hint - LC0 server may be unavailable');
+      }
+    } catch (error) {
+      console.error('Error requesting hint:', error);
+    } finally {
+      setIsRequestingHint(false);
     }
   };
 
@@ -82,6 +105,52 @@ const GameControls: React.FC = () => {
         </svg>
         Flip Board
       </button>
+
+      {/* Hint System */}
+      {canUseHint && (
+        <div className="space-y-2">
+          <button
+            onClick={handleRequestHint}
+            disabled={isRequestingHint || !canUseHint || isGameOver}
+            className="w-full px-3 py-2 bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Get a hint from LC0 engine (one per game)"
+          >
+            {isRequestingHint ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Getting Hint...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                💡 Show Best Move
+              </>
+            )}
+          </button>
+          {gameState.hintUsed && (
+            <p className="text-xs text-center text-gray-500">
+              Hint already used this game
+            </p>
+          )}
+          {gameState.currentHint && (
+            <div className="text-xs text-center">
+              <p className="text-green-600 font-medium">
+                💡 Best move: {gameState.currentHint.from}-{gameState.currentHint.to}
+              </p>
+              <button
+                onClick={clearHint}
+                className="mt-1 text-blue-500 hover:text-blue-700 underline"
+              >
+                Clear hint
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* AI vs AI Controls */}
       {gameState.gameMode === 'ai-vs-ai' && !isGameOver && (

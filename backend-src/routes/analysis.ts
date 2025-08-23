@@ -99,6 +99,94 @@ router.post('/position', authenticateToken, async (req: AuthenticatedRequest, re
 });
 
 /**
+ * POST /api/analysis/hint  
+ * Get a hint (best move) for the current position - for learning purposes
+ * Simplified version of position analysis focused on getting the best move
+ */
+router.post('/hint', async (req, res) => {
+  try {
+    const { fen } = req.body;
+    
+    console.log('💡 Hint request received:', { fen });
+    
+    if (!fen) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bad Request',
+        message: 'FEN position is required'
+      });
+    }
+
+    // Check if LC0 server is available
+    const LC0_SERVER_URL = process.env.LC0_SERVER_URL || 'https://web-production-4cc9.up.railway.app';
+    console.log('🔗 Calling LC0 server for hint:', LC0_SERVER_URL);
+    
+    try {
+      // Call LC0 server for best move
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // Shorter timeout for hints
+      
+      const hintResponse = await fetch(`${LC0_SERVER_URL}/move`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fen,
+          difficulty: 'expert' // Use expert level for hints
+        }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+
+      if (!hintResponse.ok) {
+        throw new Error(`LC0 server responded with ${hintResponse.status}: ${hintResponse.statusText}`);
+      }
+
+      const hintData = await hintResponse.json() as any;
+      
+      // Extract move information
+      if (hintData.move && hintData.move.uci) {
+        const bestMove = {
+          from: hintData.move.uci.substring(0, 2),
+          to: hintData.move.uci.substring(2, 4),
+          promotion: hintData.move.uci.length > 4 ? hintData.move.uci.substring(4) : undefined
+        };
+
+        res.json({
+          success: true,
+          bestMove: bestMove,
+          notation: hintData.move.san || hintData.move.uci,
+          engine: 'LC0 (~3400 ELO)',
+          responseTime: hintData.responseTime || 0
+        });
+      } else {
+        throw new Error('No valid move returned from LC0 server');
+      }
+
+    } catch (engineError) {
+      console.warn('LC0 engine unavailable for hint:', engineError);
+      
+      res.status(503).json({
+        success: false,
+        error: 'Service Unavailable',
+        message: 'LC0 engine temporarily unavailable. Please try again later.',
+        fallback: true
+      });
+    }
+
+  } catch (error) {
+    console.error('Error getting hint:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: 'Failed to get hint'
+    });
+  }
+});
+
+/**
  * GET /api/analysis/test
  * Simple test endpoint to verify route is working
  */

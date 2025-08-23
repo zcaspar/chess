@@ -48,6 +48,9 @@ interface GameState {
   // AI vs AI specific settings
   whiteAiDifficulty?: DifficultyLevel;
   blackAiDifficulty?: DifficultyLevel;
+  // Hint system
+  hintUsed: boolean;
+  currentHint: { from: Square; to: Square; promotion?: string } | null;
   aiGamePaused?: boolean;
 }
 
@@ -75,6 +78,10 @@ interface GameContextType {
   resumeAIGame: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  // Hint system
+  requestHint: () => Promise<boolean>;
+  clearHint: () => void;
+  canUseHint: boolean;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -124,6 +131,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     gameMode: 'human-vs-human',
     aiColor: null,
     aiDifficulty: 'medium',
+    // Hint system defaults
+    hintUsed: false,
+    currentHint: null,
   });
 
   // Get auth context for user stats updates
@@ -838,6 +848,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       gameMode: gameMode,
       aiColor: aiColor,
       aiDifficulty: aiDifficulty,
+      // Reset hint system
+      hintUsed: false,
+      currentHint: null,
     });
   }, [gameState]);
 
@@ -1215,6 +1228,66 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
   }, [gameState.gameMode]);
 
+  // Hint system implementation
+  const requestHint = useCallback(async (): Promise<boolean> => {
+    // Check if hint can be used
+    if (gameState.hintUsed || gameState.gameResult) {
+      return false;
+    }
+
+    // Only allow hints in human vs human or human vs AI games
+    if (gameState.gameMode === 'ai-vs-ai') {
+      return false;
+    }
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/analysis/hint`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fen: gameState.game.fen(),
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to get hint from server');
+        return false;
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.bestMove) {
+        setGameState(prev => ({
+          ...prev,
+          hintUsed: true,
+          currentHint: {
+            from: data.bestMove.from,
+            to: data.bestMove.to,
+            promotion: data.bestMove.promotion,
+          },
+        }));
+        return true;
+      }
+    } catch (error) {
+      console.error('Error requesting hint:', error);
+    }
+    
+    return false;
+  }, [gameState.hintUsed, gameState.gameResult, gameState.gameMode, gameState.game]);
+
+  const clearHint = useCallback(() => {
+    setGameState(prev => ({
+      ...prev,
+      currentHint: null,
+    }));
+  }, []);
+
+  const canUseHint = !gameState.hintUsed && 
+                    !gameState.gameResult && 
+                    gameState.gameMode !== 'ai-vs-ai';
+
   const value: GameContextType = {
     gameState,
     makeMove,
@@ -1239,6 +1312,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     resumeAIGame,
     canUndo,
     canRedo,
+    // Hint system
+    requestHint,
+    clearHint,
+    canUseHint,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

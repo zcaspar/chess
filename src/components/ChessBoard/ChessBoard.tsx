@@ -219,8 +219,24 @@ const ChessBoard: React.FC = () => {
       styles[lastMove.to as Square] = { backgroundColor: 'rgba(255, 255, 0, 0.2)' };
     }
     
+    // Highlight hint move with distinctive amber/golden styling
+    if (gameState.currentHint) {
+      styles[gameState.currentHint.from] = { 
+        background: 'radial-gradient(circle, rgba(251, 191, 36, 0.8) 20%, rgba(251, 191, 36, 0.3) 80%)',
+        border: '2px solid #F59E0B',
+        borderRadius: '4px',
+        boxShadow: '0 0 10px rgba(251, 191, 36, 0.6)'
+      };
+      styles[gameState.currentHint.to] = { 
+        background: 'radial-gradient(circle, rgba(251, 191, 36, 0.8) 20%, rgba(251, 191, 36, 0.3) 80%)',
+        border: '2px solid #F59E0B',
+        borderRadius: '4px',
+        boxShadow: '0 0 10px rgba(251, 191, 36, 0.6)'
+      };
+    }
+    
     return styles;
-  }, [moveFrom, rightClickedSquares, optionSquares, gameState.history, gameState.currentMoveIndex]);
+  }, [moveFrom, rightClickedSquares, optionSquares, gameState.history, gameState.currentMoveIndex, gameState.currentHint]);
 
   // Get piece style class for CSS filters
   const getPieceStyleClass = () => {
