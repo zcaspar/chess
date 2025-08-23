@@ -1,5 +1,14 @@
 /* Keep this file for any custom CSS if needed */
 
+/* Header mobile optimizations */
+@media (max-width: 768px) {
+  /* Ensure mobile menu appears above other elements */
+  .mobile-menu-dropdown {
+    position: relative;
+    z-index: 50;
+  }
+}
+
 /* Mobile-specific optimizations */
 @media (max-width: 768px) {
   /* Reduce padding and margins on mobile */
