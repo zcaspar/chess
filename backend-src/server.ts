@@ -20,9 +20,17 @@ const httpServer = createServer(app);
 const PORT = process.env.PORT || 3005;
 
 // Configure CORS to support multiple origins
-const allowedOrigins = process.env.CORS_ORIGIN 
+const corsOrigins = process.env.CORS_ORIGIN 
   ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
   : ['http://localhost:3000'];
+
+// Always include localhost for development purposes
+const allowedOrigins = [
+  ...corsOrigins,
+  'http://localhost:3000',
+  'http://localhost:3001', 
+  'http://127.0.0.1:3000'
+].filter((origin, index, self) => self.indexOf(origin) === index); // Remove duplicates
 
 // Initialize Socket.io
 const io = new Server(httpServer, {
