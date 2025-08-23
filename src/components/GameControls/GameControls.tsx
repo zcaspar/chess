@@ -39,15 +39,28 @@ const GameControls: React.FC = () => {
   const handleRequestHint = async () => {
     if (isRequestingHint || !canUseHint) return;
     
+    console.log('🎯 Hint request started:', {
+      canUseHint,
+      gameMode: gameState.gameMode,
+      hintUsed: gameState.hintUsed,
+      gameResult: gameState.gameResult,
+      backendUrl: process.env.REACT_APP_BACKEND_URL
+    });
+    
     setIsRequestingHint(true);
     try {
       const success = await requestHint();
+      console.log('🎯 Hint request result:', success);
       if (!success) {
         // Show error message or fallback
-        console.log('Failed to get hint - LC0 server may be unavailable');
+        console.warn('❌ Failed to get hint - Check browser network tab for errors');
+        alert('Failed to get hint. Please check the browser console for details.');
+      } else {
+        console.log('✅ Hint received successfully');
       }
     } catch (error) {
-      console.error('Error requesting hint:', error);
+      console.error('❌ Error requesting hint:', error);
+      alert('Error requesting hint: ' + (error as Error).message);
     } finally {
       setIsRequestingHint(false);
     }

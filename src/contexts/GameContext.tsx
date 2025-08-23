@@ -1241,7 +1241,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/analysis/hint`, {
+      const url = `${process.env.REACT_APP_BACKEND_URL}/api/analysis/hint`;
+      console.log('💡 Requesting hint from:', url);
+      console.log('💡 Request payload:', { fen: gameState.game.fen() });
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1251,14 +1255,23 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         }),
       });
 
+      console.log('💡 Response status:', response.status, response.statusText);
+
       if (!response.ok) {
-        console.error('Failed to get hint from server');
+        const errorText = await response.text();
+        console.error('Failed to get hint from server:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
         return false;
       }
 
       const data = await response.json();
+      console.log('💡 Response data:', data);
       
       if (data.success && data.bestMove) {
+        console.log('💡 Setting hint:', data.bestMove);
         setGameState(prev => ({
           ...prev,
           hintUsed: true,
@@ -1269,9 +1282,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           },
         }));
         return true;
+      } else {
+        console.warn('💡 Invalid response format or no best move:', data);
+        return false;
       }
     } catch (error) {
       console.error('Error requesting hint:', error);
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        console.error('💡 This is likely a CORS or network connectivity issue');
+      }
     }
     
     return false;
