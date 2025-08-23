@@ -751,6 +751,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           saveGameToHistory(result, winningColor, gameCopy.fen(), fullGameForPgn.pgn());
         }
 
+        // Check if this move matches the current hint and clear it
+        const clearHintMove = prev.currentHint && 
+                             prev.currentHint.from === from && 
+                             prev.currentHint.to === to;
+
         return {
           ...prev,
           game: gameCopy,
@@ -762,6 +767,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           blackTime: newBlackTime,
           activeColor: result ? null : (prev.timeControl && newHistory.length > 1 ? (gameCopy.turn() === 'w' ? 'w' : 'b') : null),
           startTime: result ? null : (prev.timeControl && newHistory.length > 1 ? Date.now() : null),
+          // Clear hint if the suggested move was made
+          currentHint: clearHintMove ? null : prev.currentHint,
           gameStats: updatedStats,
           statsUpdated: result ? true : prev.statsUpdated,
         };

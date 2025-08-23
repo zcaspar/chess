@@ -125,7 +125,7 @@ const GameControls: React.FC = () => {
           <button
             onClick={handleRequestHint}
             disabled={isRequestingHint || !canUseHint || isGameOver}
-            className="w-full px-3 py-2 bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Get a hint from LC0 engine (one per game)"
           >
             {isRequestingHint ? (
