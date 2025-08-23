@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, ReactNode, use
 import { Chess, Move, Square } from 'chess.js';
 import { ChessAI, DifficultyLevel } from '../utils/chessAI';
 import { useAuth } from '../hooks/useAuth';
+import { isFeatureEnabled } from '../config/gameFeatures';
 
 interface TimeControl {
   initial: number; // Initial time in seconds
@@ -52,6 +53,24 @@ interface GameState {
   hintUsed: boolean;
   currentHint: { from: Square; to: Square; promotion?: string } | null;
   aiGamePaused?: boolean;
+  // Nuclear chess system
+  nukeAvailable: {
+    white: boolean;
+    black: boolean;
+  };
+  nukeModeActive: {
+    white: boolean;
+    black: boolean;
+  };
+  // Teleportation system
+  teleportAvailable: {
+    white: boolean;
+    black: boolean;
+  };
+  teleportModeActive: {
+    white: boolean;
+    black: boolean;
+  };
 }
 
 interface GameContextType {
@@ -82,6 +101,16 @@ interface GameContextType {
   requestHint: () => Promise<boolean>;
   clearHint: () => void;
   canUseHint: boolean;
+  // Nuclear chess system
+  activateNukeMode: (color: 'w' | 'b') => void;
+  cancelNukeMode: () => void;
+  executeNuke: (targetSquare: Square) => boolean;
+  canUseNuke: (color: 'w' | 'b') => boolean;
+  // Teleportation system
+  activateTeleportMode: (color: 'w' | 'b') => void;
+  cancelTeleportMode: () => void;
+  executeTeleport: (pieceSquare: Square) => boolean;
+  canUseTeleport: (color: 'w' | 'b') => boolean;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -134,6 +163,24 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     // Hint system defaults
     hintUsed: false,
     currentHint: null,
+    // Nuclear chess defaults
+    nukeAvailable: {
+      white: true,
+      black: true,
+    },
+    nukeModeActive: {
+      white: false,
+      black: false,
+    },
+    // Teleportation defaults
+    teleportAvailable: {
+      white: true,
+      black: true,
+    },
+    teleportModeActive: {
+      white: false,
+      black: false,
+    },
   });
 
   // Get auth context for user stats updates
@@ -867,6 +914,24 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       // Reset hint system
       hintUsed: false,
       currentHint: null,
+      // Reset nuclear system
+      nukeAvailable: {
+        white: true,
+        black: true,
+      },
+      nukeModeActive: {
+        white: false,
+        black: false,
+      },
+      // Reset teleportation system
+      teleportAvailable: {
+        white: true,
+        black: true,
+      },
+      teleportModeActive: {
+        white: false,
+        black: false,
+      },
     });
   }, [gameState]);
 
@@ -1319,7 +1384,200 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }));
   }, []);
 
-  const canUseHint = !gameState.hintUsed && 
+  // Nuclear Chess functions
+  const canUseNuke = useCallback((color: 'w' | 'b'): boolean => {
+    // Check if feature is enabled
+    if (!isFeatureEnabled('NUCLEAR_CHESS')) return false;
+    
+    // Only available in human vs human mode
+    if (gameState.gameMode !== 'human-vs-human') return false;
+    
+    // Only available in first 10 moves (20 half-moves)
+    const moveCount = gameState.game.history().length;
+    if (moveCount >= 20) return false;
+    
+    // Check if this color hasn't used their nuke yet
+    return color === 'w' ? gameState.nukeAvailable.white : gameState.nukeAvailable.black;
+  }, [gameState.gameMode, gameState.game, gameState.nukeAvailable]);
+
+  const activateNukeMode = useCallback((color: 'w' | 'b') => {
+    if (!canUseNuke(color)) return;
+    
+    setGameState(prev => ({
+      ...prev,
+      nukeModeActive: {
+        white: color === 'w',
+        black: color === 'b',
+      },
+    }));
+  }, [canUseNuke]);
+
+  const cancelNukeMode = useCallback(() => {
+    setGameState(prev => ({
+      ...prev,
+      nukeModeActive: {
+        white: false,
+        black: false,
+      },
+    }));
+  }, []);
+
+  const executeNuke = useCallback((targetSquare: Square): boolean => {
+    const activeNukeColor = gameState.nukeModeActive.white ? 'w' : 
+                           gameState.nukeModeActive.black ? 'b' : null;
+    
+    if (!activeNukeColor) return false;
+    
+    // Get the piece on the target square
+    const targetPiece = gameState.game.get(targetSquare);
+    if (!targetPiece) return false;
+    
+    // Can't nuke your own pieces
+    if (targetPiece.color === activeNukeColor) return false;
+    
+    // Can't nuke Kings or Queens
+    if (targetPiece.type === 'k' || targetPiece.type === 'q') return false;
+    
+    // Create a copy of the game and remove the piece
+    const gameCopy = new Chess(gameState.game.fen());
+    gameCopy.remove(targetSquare);
+    
+    // Create a special nuke move entry
+    const nukeMove: Move = {
+      san: `💣x${targetPiece.type.toUpperCase()}${targetSquare}`,
+      from: targetSquare,
+      to: targetSquare,
+      color: activeNukeColor,
+      piece: targetPiece.type,
+      captured: targetPiece.type,
+      flags: 'n' as any, // Special flag for nuke
+    };
+    
+    setGameState(prev => ({
+      ...prev,
+      game: gameCopy,
+      history: [...prev.history, nukeMove],
+      currentMoveIndex: prev.history.length,
+      nukeAvailable: {
+        white: activeNukeColor === 'w' ? false : prev.nukeAvailable.white,
+        black: activeNukeColor === 'b' ? false : prev.nukeAvailable.black,
+      },
+      nukeModeActive: {
+        white: false,
+        black: false,
+      },
+    }));
+    
+    return true;
+  }, [gameState.nukeModeActive, gameState.game]);
+
+  // Teleportation functions
+  const canUseTeleport = useCallback((color: 'w' | 'b'): boolean => {
+    // Check if feature is enabled
+    if (!isFeatureEnabled('TELEPORTATION')) return false;
+    
+    // Only available in human vs human mode
+    if (gameState.gameMode !== 'human-vs-human') return false;
+    
+    // Only available in first 10 moves (20 half-moves)
+    const moveCount = gameState.game.history().length;
+    if (moveCount >= 20) return false;
+    
+    // Check if this color hasn't used their teleport yet
+    return color === 'w' ? gameState.teleportAvailable.white : gameState.teleportAvailable.black;
+  }, [gameState.gameMode, gameState.game, gameState.teleportAvailable]);
+
+  const activateTeleportMode = useCallback((color: 'w' | 'b') => {
+    if (!canUseTeleport(color)) return;
+    
+    setGameState(prev => ({
+      ...prev,
+      teleportModeActive: {
+        white: color === 'w',
+        black: color === 'b',
+      },
+    }));
+  }, [canUseTeleport]);
+
+  const cancelTeleportMode = useCallback(() => {
+    setGameState(prev => ({
+      ...prev,
+      teleportModeActive: {
+        white: false,
+        black: false,
+      },
+    }));
+  }, []);
+
+  const executeTeleport = useCallback((pieceSquare: Square): boolean => {
+    const activeTeleportColor = gameState.teleportModeActive.white ? 'w' : 
+                               gameState.teleportModeActive.black ? 'b' : null;
+    
+    if (!activeTeleportColor) return false;
+    
+    // Get the piece on the source square
+    const piece = gameState.game.get(pieceSquare);
+    if (!piece) return false;
+    
+    // Can only teleport your own pieces
+    if (piece.color !== activeTeleportColor) return false;
+    
+    // Get all empty squares on the board
+    const allSquares: Square[] = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8',
+                                  'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8',
+                                  'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8',
+                                  'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8',
+                                  'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8',
+                                  'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8',
+                                  'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8',
+                                  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8'];
+    
+    const emptySquares = allSquares.filter(square => !gameState.game.get(square));
+    
+    if (emptySquares.length === 0) {
+      // No empty squares available
+      return false;
+    }
+    
+    // Randomly select an empty square
+    const randomIndex = Math.floor(Math.random() * emptySquares.length);
+    const targetSquare = emptySquares[randomIndex];
+    
+    // Create a copy of the game and make the teleport move
+    const gameCopy = new Chess(gameState.game.fen());
+    gameCopy.remove(pieceSquare);
+    gameCopy.put({ type: piece.type, color: piece.color }, targetSquare);
+    
+    // Create a special teleport move entry
+    const teleportMove: Move = {
+      san: `♦${piece.type.toUpperCase()}${pieceSquare}-${targetSquare}`,
+      from: pieceSquare,
+      to: targetSquare,
+      color: activeTeleportColor,
+      piece: piece.type,
+      flags: 't' as any, // Special flag for teleport
+    };
+    
+    setGameState(prev => ({
+      ...prev,
+      game: gameCopy,
+      history: [...prev.history, teleportMove],
+      currentMoveIndex: prev.history.length,
+      teleportAvailable: {
+        white: activeTeleportColor === 'w' ? false : prev.teleportAvailable.white,
+        black: activeTeleportColor === 'b' ? false : prev.teleportAvailable.black,
+      },
+      teleportModeActive: {
+        white: false,
+        black: false,
+      },
+    }));
+    
+    return true;
+  }, [gameState.teleportModeActive, gameState.game]);
+
+  const canUseHint = isFeatureEnabled('HINTS') && 
+                    !gameState.hintUsed && 
                     !gameState.gameResult && 
                     gameState.gameMode !== 'ai-vs-ai';
 
@@ -1351,6 +1609,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     requestHint,
     clearHint,
     canUseHint,
+    // Nuclear chess system
+    activateNukeMode,
+    cancelNukeMode,
+    executeNuke,
+    canUseNuke,
+    // Teleportation system
+    activateTeleportMode,
+    cancelTeleportMode,
+    executeTeleport,
+    canUseTeleport,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

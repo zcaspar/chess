@@ -6,9 +6,10 @@ import { useSocket } from '../../contexts/SocketContext';
 import { useOnlineGame } from '../../hooks/useOnlineGame';
 import { useAuth } from '../../hooks/useAuth';
 import { useResponsiveBoardSize } from '../../hooks/useResponsiveBoardSize';
+import { isFeatureEnabled } from '../../config/gameFeatures';
 
 const ChessBoard: React.FC = () => {
-  const { gameState, makeMove } = useGame();
+  const { gameState, makeMove, executeNuke, executeTeleport } = useGame();
   const { roomCode, assignedColor, makeMove: socketMakeMove } = useSocket();
   const { isOnlineGame } = useOnlineGame();
   const { profile } = useAuth();
@@ -81,6 +82,30 @@ const ChessBoard: React.FC = () => {
     // Clear right-clicked squares
     setRightClickedSquares([]);
 
+    // Handle nuclear chess mode
+    const isNukeModeActive = isFeatureEnabled('NUCLEAR_CHESS') && (gameState.nukeModeActive.white || gameState.nukeModeActive.black);
+    if (isNukeModeActive) {
+      // In nuke mode, clicking executes the nuke
+      if (executeNuke(square)) {
+        // Nuke successful - clear any selection
+        setMoveFrom(null);
+        setOptionSquares({});
+      }
+      return;
+    }
+
+    // Handle teleportation mode
+    const isTeleportModeActive = isFeatureEnabled('TELEPORTATION') && (gameState.teleportModeActive.white || gameState.teleportModeActive.black);
+    if (isTeleportModeActive) {
+      // In teleport mode, clicking executes the teleport
+      if (executeTeleport(square)) {
+        // Teleport successful - clear any selection
+        setMoveFrom(null);
+        setOptionSquares({});
+      }
+      return;
+    }
+
     // If clicking the same square, deselect it
     if (moveFrom === square) {
       setMoveFrom(null);
@@ -142,6 +167,18 @@ const ChessBoard: React.FC = () => {
       return false;
     }
     
+    // Don't allow drag and drop in nuclear mode
+    const isNukeModeActive = isFeatureEnabled('NUCLEAR_CHESS') && (gameState.nukeModeActive.white || gameState.nukeModeActive.black);
+    if (isNukeModeActive) {
+      return false;
+    }
+    
+    // Don't allow drag and drop in teleportation mode
+    const isTeleportModeActive = isFeatureEnabled('TELEPORTATION') && (gameState.teleportModeActive.white || gameState.teleportModeActive.black);
+    if (isTeleportModeActive) {
+      return false;
+    }
+    
     let moveSuccessful = false;
     
     if (isOnlineGame && roomCode) {
@@ -163,6 +200,18 @@ const ChessBoard: React.FC = () => {
   const onDragBegin = (piece: string, sourceSquare: Square) => {
     // Don't allow drag if game has ended
     if (gameState.gameResult) {
+      return false;
+    }
+
+    // Don't allow drag in nuclear mode
+    const isNukeModeActive = isFeatureEnabled('NUCLEAR_CHESS') && (gameState.nukeModeActive.white || gameState.nukeModeActive.black);
+    if (isNukeModeActive) {
+      return false;
+    }
+
+    // Don't allow drag in teleportation mode
+    const isTeleportModeActive = isFeatureEnabled('TELEPORTATION') && (gameState.teleportModeActive.white || gameState.teleportModeActive.black);
+    if (isTeleportModeActive) {
       return false;
     }
 
@@ -195,9 +244,65 @@ const ChessBoard: React.FC = () => {
 
   // Custom square styles for highlights
   const customSquareStyles = useMemo(() => {
-    const styles: Partial<Record<Square, { backgroundColor?: string; background?: string }>> = {};
+    const styles: Partial<Record<Square, { backgroundColor?: string; background?: string; cursor?: string }>> = {};
     
-    // Highlight the selected square
+    // Handle nuclear mode highlighting
+    const isNukeModeActive = isFeatureEnabled('NUCLEAR_CHESS') && (gameState.nukeModeActive.white || gameState.nukeModeActive.black);
+    if (isNukeModeActive) {
+      const activeNukeColor = gameState.nukeModeActive.white ? 'w' : 'b';
+      
+      // Highlight all opponent pieces that can be nuked (not King or Queen)
+      const allSquares: Square[] = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8',
+                                    'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8',
+                                    'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8',
+                                    'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8',
+                                    'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8',
+                                    'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8',
+                                    'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8',
+                                    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8'];
+      
+      allSquares.forEach((square) => {
+        const piece = gameState.game.get(square);
+        if (piece && piece.color !== activeNukeColor && piece.type !== 'k' && piece.type !== 'q') {
+          styles[square] = { 
+            backgroundColor: 'rgba(255, 0, 0, 0.5)',
+            cursor: 'crosshair'
+          };
+        }
+      });
+      
+      return styles;
+    }
+
+    // Handle teleportation mode highlighting
+    const isTeleportModeActive = isFeatureEnabled('TELEPORTATION') && (gameState.teleportModeActive.white || gameState.teleportModeActive.black);
+    if (isTeleportModeActive) {
+      const activeTeleportColor = gameState.teleportModeActive.white ? 'w' : 'b';
+      
+      // Highlight all own pieces that can be teleported
+      const allSquares: Square[] = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8',
+                                    'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8',
+                                    'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8',
+                                    'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8',
+                                    'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8',
+                                    'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8',
+                                    'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8',
+                                    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8'];
+      
+      allSquares.forEach((square) => {
+        const piece = gameState.game.get(square);
+        if (piece && piece.color === activeTeleportColor) {
+          styles[square] = { 
+            backgroundColor: 'rgba(147, 51, 234, 0.5)', // purple highlight
+            cursor: 'pointer'
+          };
+        }
+      });
+      
+      return styles;
+    }
+    
+    // Normal move highlighting (when not in special modes)
     if (moveFrom) {
       styles[moveFrom] = { backgroundColor: 'rgba(255, 255, 0, 0.4)' };
     }
@@ -236,7 +341,7 @@ const ChessBoard: React.FC = () => {
     }
     
     return styles;
-  }, [moveFrom, rightClickedSquares, optionSquares, gameState.history, gameState.currentMoveIndex, gameState.currentHint]);
+  }, [moveFrom, rightClickedSquares, optionSquares, gameState.history, gameState.currentMoveIndex, gameState.currentHint, gameState.nukeModeActive, gameState.teleportModeActive, gameState.game]);
 
   // Get piece style class for CSS filters
   const getPieceStyleClass = () => {

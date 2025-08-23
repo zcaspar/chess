@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useGame } from '../../contexts/GameContext';
 import { useAuth } from '../../hooks/useAuth';
+import { isFeatureEnabled } from '../../config/gameFeatures';
 
 const GameControls: React.FC = () => {
   const { 
@@ -19,7 +20,15 @@ const GameControls: React.FC = () => {
     // Hint system
     requestHint,
     clearHint,
-    canUseHint
+    canUseHint,
+    // Nuclear chess system
+    activateNukeMode,
+    cancelNukeMode,
+    canUseNuke,
+    // Teleportation system
+    activateTeleportMode,
+    cancelTeleportMode,
+    canUseTeleport
   } = useGame();
   
   const [isRequestingHint, setIsRequestingHint] = useState(false);
@@ -120,7 +129,7 @@ const GameControls: React.FC = () => {
       </button>
 
       {/* Hint System */}
-      {canUseHint && (
+      {isFeatureEnabled('HINTS') && canUseHint && (
         <div className="space-y-2">
           <button
             onClick={handleRequestHint}
@@ -163,6 +172,124 @@ const GameControls: React.FC = () => {
             </div>
           )}
         </div>
+      )}
+
+      {/* Nuclear Chess System - Only in human vs human mode */}
+      {isFeatureEnabled('NUCLEAR_CHESS') && gameState.gameMode === 'human-vs-human' && !isGameOver && (
+        <>
+          {(canUseNuke('w') || canUseNuke('b')) && (
+            <div className="space-y-2">
+              {currentPlayer === 'w' && canUseNuke('w') && (
+                gameState.nukeModeActive.white ? (
+                  <button
+                    onClick={cancelNukeMode}
+                    className="w-full px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm flex items-center justify-center gap-2 animate-pulse"
+                    title="Cancel nuke mode"
+                  >
+                    <span>💣</span>
+                    Cancel Nuke
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => activateNukeMode('w')}
+                    className="w-full px-3 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors text-sm flex items-center justify-center gap-2"
+                    title="Activate nuke mode - remove one opponent piece"
+                  >
+                    <span>💣</span>
+                    Nuke (1 use)
+                  </button>
+                )
+              )}
+              {currentPlayer === 'b' && canUseNuke('b') && (
+                gameState.nukeModeActive.black ? (
+                  <button
+                    onClick={cancelNukeMode}
+                    className="w-full px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm flex items-center justify-center gap-2 animate-pulse"
+                    title="Cancel nuke mode"
+                  >
+                    <span>💣</span>
+                    Cancel Nuke
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => activateNukeMode('b')}
+                    className="w-full px-3 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors text-sm flex items-center justify-center gap-2"
+                    title="Activate nuke mode - remove one opponent piece"
+                  >
+                    <span>💣</span>
+                    Nuke (1 use)
+                  </button>
+                )
+              )}
+              {(gameState.nukeModeActive.white || gameState.nukeModeActive.black) && (
+                <p className="text-xs text-center text-red-600 font-semibold">
+                  Click an opponent's piece to nuke it!
+                  <br />
+                  (Cannot target King or Queen)
+                </p>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Teleportation System - Only in human vs human mode */}
+      {isFeatureEnabled('TELEPORTATION') && gameState.gameMode === 'human-vs-human' && !isGameOver && (
+        <>
+          {(canUseTeleport('w') || canUseTeleport('b')) && (
+            <div className="space-y-2">
+              {currentPlayer === 'w' && canUseTeleport('w') && (
+                gameState.teleportModeActive.white ? (
+                  <button
+                    onClick={cancelTeleportMode}
+                    className="w-full px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm flex items-center justify-center gap-2 animate-pulse"
+                    title="Cancel teleport mode"
+                  >
+                    <span>♦</span>
+                    Cancel Teleport
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => activateTeleportMode('w')}
+                    className="w-full px-3 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors text-sm flex items-center justify-center gap-2"
+                    title="Activate teleport mode - teleport one of your pieces randomly"
+                  >
+                    <span>♦</span>
+                    Teleport (1 use)
+                  </button>
+                )
+              )}
+              {currentPlayer === 'b' && canUseTeleport('b') && (
+                gameState.teleportModeActive.black ? (
+                  <button
+                    onClick={cancelTeleportMode}
+                    className="w-full px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm flex items-center justify-center gap-2 animate-pulse"
+                    title="Cancel teleport mode"
+                  >
+                    <span>♦</span>
+                    Cancel Teleport
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => activateTeleportMode('b')}
+                    className="w-full px-3 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors text-sm flex items-center justify-center gap-2"
+                    title="Activate teleport mode - teleport one of your pieces randomly"
+                  >
+                    <span>♦</span>
+                    Teleport (1 use)
+                  </button>
+                )
+              )}
+              {(gameState.teleportModeActive.white || gameState.teleportModeActive.black) && (
+                <p className="text-xs text-center text-purple-600 font-semibold">
+                  Click one of your pieces to teleport it!
+                  <br />
+                  (It will move to a random empty square)
+                </p>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* AI vs AI Controls */}

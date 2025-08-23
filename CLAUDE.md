@@ -4,9 +4,9 @@
 **STATUS**: ✅ PRODUCTION-READY - Professional chess platform with advanced features and polished user experience!
 
 ## 📍 Development Progress
-**Current Phase**: Phase 10 - Learning Features & Game Assistance (2025-01-27)
+**Current Phase**: Phase 11 - Chess Variants & Special Moves (2025-01-27)
 
-### 🔄 Current Development Branch: `hint-feature`
+### 🔄 Current Development Branch: `master`
 
 ### Completed Phases:
 - ✅ **Phase 1-2**: MVP & Core Chess Functionality
@@ -21,7 +21,8 @@
 - ✅ **Phase 8.1**: LC0 Position Analysis in Game Replay
 - ✅ **Phase 9**: Production Polish & UX Refinement (2025-01-12)
 - ✅ **Phase 9.5**: Mobile Optimization & PWA Features (2025-01-27)
-- 🔄 **Phase 10**: Learning Features & Game Assistance (IN PROGRESS)
+- ✅ **Phase 10**: Learning Features & Game Assistance (2025-01-27)
+- ✅ **Phase 11**: Chess Variants & Special Moves (2025-01-27)
 
 ### Recent Achievements (2025-01-12):
 - ✅ **Game Replay System**: Complete overhaul and fixes
@@ -59,6 +60,30 @@
   - Enhanced current move highlighting with background color
 
 ### Recent Achievements (2025-01-27):
+- ✅ **LC0 Hint System**: Learning feature with expert move suggestions
+  - One-time use hint per game for educational purposes
+  - LC0 neural network analysis (~3400 ELO strength)
+  - Green highlighting with distinctive visual feedback
+  - Automatic clearing after making suggested move
+  - Available in human vs human and human vs AI modes
+- ✅ **Nuclear Chess Variant**: Explosive chess variant with tactical depth
+  - Remove any opponent piece (except King or Queen)
+  - Available once per player in first 10 moves
+  - Orange bomb theme with red targeting system
+  - Only in human vs human mode for balanced gameplay
+  - Special move notation and game history integration
+- ✅ **Piece Teleportation**: Random teleportation mechanic
+  - Teleport any of your pieces to random empty square
+  - Available once per player in first 10 moves  
+  - Purple diamond theme with distinctive highlighting
+  - Adds unpredictability while maintaining game balance
+  - Smart targeting system with visual feedback
+- ✅ **Feature Toggle System**: Easy configuration management
+  - Clean separation of special features from core chess
+  - Simple boolean flags to enable/disable any feature
+  - Configurable through `src/config/gameFeatures.ts`
+  - Build-time optimization removes disabled features
+  - Future-proof architecture for additional variants
 - ✅ **Comprehensive Mobile Optimization**: Complete mobile experience overhaul
   - Responsive board sizing with dynamic breakpoints (280px-600px for all devices)
   - Mobile-optimized layout with bottom navigation and slide-up panels
@@ -117,6 +142,9 @@
 - ✅ **Position Analysis**: LC0-powered analysis with move highlighting
 - ✅ **Analytics Dashboard**: Performance tracking and statistics
 - ✅ **Board Customization**: Multiple themes and piece styles
+- ✅ **Learning Features**: LC0 hint system for educational gameplay
+- ✅ **Chess Variants**: Nuclear chess and teleportation mechanics
+- ✅ **Feature Management**: Toggle system for easy customization
 - ✅ **Mobile Responsive**: Works on all device sizes
 - ✅ **Production Deployment**: Stable and operational
 
@@ -364,6 +392,20 @@ Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remot
 ### **LC0 ELO Rating**
 **Issue**: Displayed ~2400 ELO instead of actual strength
 **Solution**: Updated to show accurate ~3400+ ELO rating
+
+### **Browser Caching Issues**
+**Issue**: Code changes appear to be committed and deployed but not visible on live site (e.g., hint highlighting still orange instead of green)
+
+**Root Cause**: Browser is loading cached version of the app instead of fetching the latest deployed version from Vercel.
+
+**Solution**: Force browser to fetch fresh files:
+1. **Hard Refresh**: `Ctrl+Shift+R` (Windows/Linux) or `Cmd+Shift+R` (Mac)
+2. **Developer Tools**: F12 → Right-click refresh button → "Empty Cache and Hard Reload"
+3. **Incognito Mode**: Open site in private/incognito window (no cached files)
+
+**When this happens**: After pushing code changes that modify UI/styling, especially when changes seem to work locally but not on live site.
+
+**Verification**: Check browser console for latest debugging logs to confirm you're seeing the current version.
 
 ---
 **Last Updated**: 2025-01-27  
