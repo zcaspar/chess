@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Chess Variants System** - Nuclear chess, teleportation, and feature toggle management (2025-08-23)
+  - **Feature**: Comprehensive special moves system with easy management via feature toggles
+  - **Nuclear Chess**: Integrated from nuclear-chess branch - destroy opponent pieces (excluding King/Queen) once per game
+  - **Teleportation**: New variant allowing pieces to randomly relocate to empty squares once per game  
+  - **Feature Toggles**: Centralized configuration system for easy feature removal or testing
+  - **Justification**: Users requested exciting chess variants while maintaining ability to revert to traditional chess experience
+  - **Implementation**:
+    - Created `/src/config/gameFeatures.ts` for centralized feature management with boolean flags
+    - Enhanced GameContext with nuclear and teleportation state management and validation functions
+    - Updated GameControls with color-coded variant UI (orange nuclear, purple teleportation, green hints)
+    - Modified ChessBoard to handle special move interactions with visual feedback systems
+    - All variants restricted to human-vs-human games, first 10 moves, one use per player
+    - Build-time optimization removes disabled features from bundle for performance
+  - **Files Added/Modified**:
+    - `src/config/gameFeatures.ts` - NEW: Central feature management configuration
+    - `src/contexts/GameContext.tsx` - Added nuclear/teleportation state and game logic
+    - `src/components/GameControls/GameControls.tsx` - Added variant-specific UI components
+    - `src/components/ChessBoard/ChessBoard.tsx` - Enhanced board interactions for special moves
+    - `CLAUDE.md` - Updated documentation for Phase 11: Chess Variants & Special Moves
+  - **User Experience**: Players can now use exciting chess variants for casual fun, with easy toggle system allowing administrators to disable features for tournaments or traditional play
+
 - **AI vs AI Game Mode** - Watch computer players compete against each other (2025-08-04)
   - **Feature**: Added new game mode where users can watch AI play against itself with different difficulty levels
   - **Justification**: Users wanted to observe high-level chess gameplay and learn from AI strategies without having to play themselves
