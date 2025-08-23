@@ -42,9 +42,13 @@ interface GameState {
   players: PlayerInfo;
   colorAssignment: ColorAssignment;
   gameStats: GameStats;
-  gameMode: 'human-vs-human' | 'human-vs-ai';
-  aiColor: 'w' | 'b' | null; // Which color the AI is playing
+  gameMode: 'human-vs-human' | 'human-vs-ai' | 'ai-vs-ai';
+  aiColor: 'w' | 'b' | null; // Which color the AI is playing (for human-vs-ai)
   aiDifficulty: DifficultyLevel;
+  // AI vs AI specific settings
+  whiteAiDifficulty?: DifficultyLevel;
+  blackAiDifficulty?: DifficultyLevel;
+  aiGamePaused?: boolean;
 }
 
 interface GameContextType {
@@ -64,8 +68,11 @@ interface GameContextType {
   setPlayerName: (player: 'player1' | 'player2', name: string) => void;
   swapColors: () => void;
   getPlayerByColor: (color: 'w' | 'b') => string;
-  setGameMode: (mode: 'human-vs-human' | 'human-vs-ai', aiColor?: 'w' | 'b') => Promise<void>;
+  setGameMode: (mode: 'human-vs-human' | 'human-vs-ai' | 'ai-vs-ai', aiColor?: 'w' | 'b') => Promise<void>;
   setAIDifficulty: (difficulty: DifficultyLevel) => Promise<void>;
+  setAIvAIDifficulties: (whiteDifficulty: DifficultyLevel, blackDifficulty: DifficultyLevel) => void;
+  pauseAIGame: () => void;
+  resumeAIGame: () => void;
   canUndo: boolean;
   canRedo: boolean;
 }
@@ -521,13 +528,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     };
   }, [gameState.activeColor, gameState.startTime, gameState.gameResult, gameState.timeControl, updateGameStats, updateUserStats, saveGameToHistory]);
 
-  // AI move effect
+  // AI move effect (handles both human-vs-ai and ai-vs-ai)
   useEffect(() => {
     const currentTurn = gameState.game.turn();
     const shouldAIMove = 
-      gameState.gameMode === 'human-vs-ai' &&
-      gameState.aiColor !== null &&
-      gameState.aiColor === currentTurn &&
+      ((gameState.gameMode === 'human-vs-ai' &&
+        gameState.aiColor !== null &&
+        gameState.aiColor === currentTurn) ||
+       (gameState.gameMode === 'ai-vs-ai' &&
+        !gameState.aiGamePaused)) &&
       !gameState.gameResult &&
       !isAiThinking.current;
 
@@ -554,6 +563,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
             return;
           }
           
+          // Determine which difficulty to use for AI vs AI
+          let difficultyToUse = gameState.aiDifficulty;
+          if (gameState.gameMode === 'ai-vs-ai') {
+            difficultyToUse = currentTurn === 'w' ? 
+              (gameState.whiteAiDifficulty || 'medium') : 
+              (gameState.blackAiDifficulty || 'medium');
+            
+            // Update the AI engine with the correct difficulty
+            await aiRef.current.setDifficulty(difficultyToUse);
+          }
+          
           const aiMove = await aiRef.current.getBestMove(gameState.game);
           console.log('🤖 AI found move:', aiMove, 'for gameId:', gameState.gameId);
           
@@ -567,6 +587,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
               console.log('🤖 Applying valid AI move:', aiMove.san || `${aiMove.from}-${aiMove.to}`);
               console.log('🤖 Board before AI move:', gameState.game.fen());
               // Use the makeMove function which properly updates the game state
+              // Add delay for AI vs AI games to make them watchable
+              if (gameState.gameMode === 'ai-vs-ai') {
+                await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+              }
+              
               const moveResult = makeMove(aiMove.from as Square, aiMove.to as Square, aiMove.promotion);
               if (!moveResult) {
                 console.log('🤖 AI move rejected - game has ended');
@@ -955,16 +980,19 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     return gameState.players[playerKey];
   }, [gameState.colorAssignment, gameState.players]);
 
-  const setGameMode = useCallback(async (mode: 'human-vs-human' | 'human-vs-ai', aiColor: 'w' | 'b' = 'b') => {
+  const setGameMode = useCallback(async (mode: 'human-vs-human' | 'human-vs-ai' | 'ai-vs-ai', aiColor: 'w' | 'b' = 'b') => {
     console.log('🎮 Setting game mode:', mode, 'AI color:', mode === 'human-vs-ai' ? aiColor : 'N/A');
     setGameState(prev => {
       const newState = {
         ...prev,
         gameMode: mode,
         aiColor: mode === 'human-vs-ai' ? aiColor : null,
+        aiGamePaused: mode === 'ai-vs-ai' ? false : undefined,
+        whiteAiDifficulty: mode === 'ai-vs-ai' ? (prev.whiteAiDifficulty || 'medium') : undefined,
+        blackAiDifficulty: mode === 'ai-vs-ai' ? (prev.blackAiDifficulty || 'medium') : undefined,
       };
 
-      // Update player names when switching to AI mode
+      // Update player names based on mode
       if (mode === 'human-vs-ai') {
         const aiPlayerKey = (aiColor === 'w' && prev.colorAssignment.white === 'player1') || 
                             (aiColor === 'b' && prev.colorAssignment.black === 'player1') ? 'player1' : 'player2';
@@ -972,11 +1000,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           ...prev.players,
           [aiPlayerKey]: 'Computer',
         };
+      } else if (mode === 'ai-vs-ai') {
+        // Both players are AI
+        newState.players = {
+          player1: prev.colorAssignment.white === 'player1' ? 'White AI' : 'Black AI',
+          player2: prev.colorAssignment.white === 'player2' ? 'White AI' : 'Black AI',
+        };
       } else {
         // Reset to default names when switching back to human vs human
         newState.players = {
-          player1: prev.players.player1 === 'Computer' ? 'Player 1' : prev.players.player1,
-          player2: prev.players.player2 === 'Computer' ? 'Player 2' : prev.players.player2,
+          player1: (prev.players.player1 === 'Computer' || prev.players.player1 === 'White AI' || prev.players.player1 === 'Black AI') ? 'Player 1' : prev.players.player1,
+          player2: (prev.players.player2 === 'Computer' || prev.players.player2 === 'White AI' || prev.players.player2 === 'Black AI') ? 'Player 2' : prev.players.player2,
         };
       }
 
@@ -984,7 +1018,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     });
     
     // Initialize LC0 engine when switching to AI mode
-    if (mode === 'human-vs-ai') {
+    if (mode === 'human-vs-ai' || mode === 'ai-vs-ai') {
       try {
         console.log('Initializing LC0 engine...');
         await aiRef.current.initializeLc0();
@@ -1149,10 +1183,37 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       window.removeEventListener('socketGameRestored', handleSocketGameRestored as EventListener);
       window.removeEventListener('socketRoomJoined', handleSocketRoomJoined as EventListener);
     };
-  }, []);
+  }, [saveGameToHistory]);
 
   const canUndo = gameState.currentMoveIndex >= 0;
   const canRedo = gameState.currentMoveIndex < gameState.history.length - 1;
+
+  // Add AI vs AI specific functions
+  const setAIvAIDifficulties = useCallback((whiteDifficulty: DifficultyLevel, blackDifficulty: DifficultyLevel) => {
+    setGameState(prev => ({
+      ...prev,
+      whiteAiDifficulty: whiteDifficulty,
+      blackAiDifficulty: blackDifficulty,
+    }));
+  }, []);
+
+  const pauseAIGame = useCallback(() => {
+    if (gameState.gameMode === 'ai-vs-ai') {
+      setGameState(prev => ({
+        ...prev,
+        aiGamePaused: true,
+      }));
+    }
+  }, [gameState.gameMode]);
+
+  const resumeAIGame = useCallback(() => {
+    if (gameState.gameMode === 'ai-vs-ai') {
+      setGameState(prev => ({
+        ...prev,
+        aiGamePaused: false,
+      }));
+    }
+  }, [gameState.gameMode]);
 
   const value: GameContextType = {
     gameState,
@@ -1173,6 +1234,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     getPlayerByColor,
     setGameMode,
     setAIDifficulty,
+    setAIvAIDifficulties,
+    pauseAIGame,
+    resumeAIGame,
     canUndo,
     canRedo,
   };

@@ -12,6 +12,8 @@ const GameControls: React.FC = () => {
     offerDraw,
     acceptDraw,
     declineDraw,
+    pauseAIGame,
+    resumeAIGame,
     canUndo, 
     canRedo 
   } = useGame();
@@ -80,6 +82,35 @@ const GameControls: React.FC = () => {
         </svg>
         Flip Board
       </button>
+
+      {/* AI vs AI Controls */}
+      {gameState.gameMode === 'ai-vs-ai' && !isGameOver && (
+        <div className="space-y-2">
+          <div className="text-sm font-medium text-gray-700">AI Game Controls</div>
+          {gameState.aiGamePaused ? (
+            <button
+              onClick={resumeAIGame}
+              className="w-full px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors text-sm flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Resume Game
+            </button>
+          ) : (
+            <button
+              onClick={pauseAIGame}
+              className="w-full px-3 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors text-sm flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Pause Game
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Draw Controls */}
       {!isGameOver && (

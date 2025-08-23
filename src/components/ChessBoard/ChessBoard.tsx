@@ -5,15 +5,19 @@ import { useGame } from '../../contexts/GameContext';
 import { useSocket } from '../../contexts/SocketContext';
 import { useOnlineGame } from '../../hooks/useOnlineGame';
 import { useAuth } from '../../hooks/useAuth';
+import { useResponsiveBoardSize } from '../../hooks/useResponsiveBoardSize';
 
 const ChessBoard: React.FC = () => {
   const { gameState, makeMove } = useGame();
   const { roomCode, assignedColor, makeMove: socketMakeMove } = useSocket();
   const { isOnlineGame } = useOnlineGame();
   const { profile } = useAuth();
+  const boardSize = useResponsiveBoardSize();
   const [moveFrom, setMoveFrom] = useState<Square | null>(null);
   const [rightClickedSquares, setRightClickedSquares] = useState<Square[]>([]);
   const [optionSquares, setOptionSquares] = useState<Partial<Record<Square, { background: string }>>>({});
+  const [isDragging, setIsDragging] = useState(false);
+  const [touchStartTime, setTouchStartTime] = useState<number>(0);
   
   // Board theme configurations
   const boardThemes = {
@@ -176,6 +180,7 @@ const ChessBoard: React.FC = () => {
     }
 
     // Highlight the source square and show move options
+    setIsDragging(true);
     setMoveFrom(sourceSquare);
     setOptionSquares(getMoveOptions(sourceSquare));
     return true;
@@ -183,6 +188,7 @@ const ChessBoard: React.FC = () => {
 
   const onDragEnd = () => {
     // Clear highlights when drag ends
+    setIsDragging(false);
     setMoveFrom(null);
     setOptionSquares({});
   };
@@ -239,7 +245,30 @@ const ChessBoard: React.FC = () => {
         <div className="board-ambient-particles"></div>
         <div className="board-frame-wrapper">
           <div className="board-frame">
-            <div className={`chess-board-container ${getPieceStyleClass()}`}>
+            <div 
+              className={`chess-board-container ${getPieceStyleClass()} ${isDragging ? 'dragging' : ''}`}
+              onTouchStart={(e) => {
+                setTouchStartTime(Date.now());
+                // Prevent pull-to-refresh on mobile
+                if (e.touches[0].clientY < 100) {
+                  e.preventDefault();
+                }
+              }}
+              onTouchMove={(e) => {
+                // Prevent scrolling while dragging
+                if (isDragging) {
+                  e.preventDefault();
+                }
+              }}
+              onTouchEnd={() => {
+                // Check for long press (for right-click simulation)
+                const touchDuration = Date.now() - touchStartTime;
+                if (touchDuration > 500 && !isDragging) {
+                  // Long press detected, could show context menu
+                }
+              }}
+              style={{ touchAction: isDragging ? 'none' : 'auto' }}
+            >
               <Chessboard
               position={gameState.game.fen()}
               onPieceDrop={onDrop}
@@ -247,7 +276,7 @@ const ChessBoard: React.FC = () => {
               onPieceDragEnd={onDragEnd}
               onSquareClick={onSquareClick}
               onSquareRightClick={onSquareRightClick}
-              boardWidth={600}
+              boardWidth={boardSize}
               customSquareStyles={customSquareStyles}
               customBoardStyle={{
                 borderRadius: '8px',

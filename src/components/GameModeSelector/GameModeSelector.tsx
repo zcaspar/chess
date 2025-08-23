@@ -5,12 +5,12 @@ import { OnlineGameModal } from '../OnlineGameModal';
 import { useSocket } from '../../contexts/SocketContext';
 
 const GameModeSelector: React.FC = () => {
-  const { gameState, setGameMode, setAIDifficulty } = useGame();
-  const { gameMode, aiColor, aiDifficulty } = gameState;
+  const { gameState, setGameMode, setAIDifficulty, setAIvAIDifficulties } = useGame();
+  const { gameMode, aiColor, aiDifficulty, whiteAiDifficulty, blackAiDifficulty } = gameState;
   const { roomCode, leaveRoom } = useSocket();
   const [showOnlineModal, setShowOnlineModal] = useState(false);
 
-  const handleModeChange = async (mode: 'human-vs-human' | 'human-vs-ai') => {
+  const handleModeChange = async (mode: 'human-vs-human' | 'human-vs-ai' | 'ai-vs-ai') => {
     // Leave online room if switching away from online play
     if (roomCode) {
       leaveRoom();
@@ -74,6 +74,22 @@ const GameModeSelector: React.FC = () => {
           <div>
             <div className="font-semibold">Human vs Computer</div>
             <div className="text-sm text-gray-600">Play against AI opponent</div>
+          </div>
+        </label>
+
+        {/* AI vs AI */}
+        <label className="flex items-center cursor-pointer">
+          <input
+            type="radio"
+            name="gameMode"
+            value="ai-vs-ai"
+            checked={gameMode === 'ai-vs-ai'}
+            onChange={() => handleModeChange('ai-vs-ai')}
+            className="mr-3"
+          />
+          <div>
+            <div className="font-semibold">Computer vs Computer</div>
+            <div className="text-sm text-gray-600">Watch AI play against itself</div>
           </div>
         </label>
 
@@ -143,6 +159,61 @@ const GameModeSelector: React.FC = () => {
           </div>
         )}
 
+        {/* AI vs AI Settings */}
+        {gameMode === 'ai-vs-ai' && (
+          <div className="ml-6 pl-4 border-l-2 border-gray-200 space-y-4">
+            {/* White AI Difficulty */}
+            <div>
+              <div className="text-sm font-medium mb-2">White AI Difficulty:</div>
+              <div className="space-y-2">
+                {Object.entries(difficultyLabels).map(([level, info]) => (
+                  <label key={`white-${level}`} className="flex items-start cursor-pointer">
+                    <input
+                      type="radio"
+                      name="whiteDifficulty"
+                      value={level}
+                      checked={(whiteAiDifficulty || 'medium') === level}
+                      onChange={() => setAIvAIDifficulties(level as DifficultyLevel, blackAiDifficulty || 'medium')}
+                      className="mr-3 mt-0.5"
+                    />
+                    <div>
+                      <div className="text-sm font-medium">
+                        {info.name} <span className="text-gray-500">({info.elo} ELO)</span>
+                      </div>
+                      <div className="text-xs text-gray-600">{info.description}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Black AI Difficulty */}
+            <div>
+              <div className="text-sm font-medium mb-2">Black AI Difficulty:</div>
+              <div className="space-y-2">
+                {Object.entries(difficultyLabels).map(([level, info]) => (
+                  <label key={`black-${level}`} className="flex items-start cursor-pointer">
+                    <input
+                      type="radio"
+                      name="blackDifficulty"
+                      value={level}
+                      checked={(blackAiDifficulty || 'medium') === level}
+                      onChange={() => setAIvAIDifficulties(whiteAiDifficulty || 'medium', level as DifficultyLevel)}
+                      className="mr-3 mt-0.5"
+                    />
+                    <div>
+                      <div className="text-sm font-medium">
+                        {info.name} <span className="text-gray-500">({info.elo} ELO)</span>
+                      </div>
+                      <div className="text-xs text-gray-600">{info.description}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Online Multiplayer */}
         <div className="pt-3 mt-3 border-t border-gray-200">
           <button
@@ -163,7 +234,9 @@ const GameModeSelector: React.FC = () => {
           Current: <span className="font-semibold">
             {gameMode === 'human-vs-human' 
               ? 'Human vs Human (Local)' 
-              : `Human vs AI (${difficultyLabels[aiDifficulty].name}, AI plays ${aiColor === 'w' ? 'White' : 'Black'})`
+              : gameMode === 'human-vs-ai'
+              ? `Human vs AI (${difficultyLabels[aiDifficulty].name}, AI plays ${aiColor === 'w' ? 'White' : 'Black'})`
+              : `AI vs AI (White: ${difficultyLabels[whiteAiDifficulty || 'medium'].name}, Black: ${difficultyLabels[blackAiDifficulty || 'medium'].name})`
             }
           </span>
         </div>

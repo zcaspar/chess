@@ -1,5 +1,74 @@
 /* Keep this file for any custom CSS if needed */
 
+/* Mobile-specific optimizations */
+@media (max-width: 768px) {
+  /* Reduce padding and margins on mobile */
+  .chess-board-stage {
+    padding: 1rem;
+  }
+  
+  .board-frame {
+    padding: 0.5rem;
+  }
+  
+  /* Hide decorative effects on mobile for performance */
+  .board-ambient-particles,
+  .board-glow-effect {
+    display: none;
+  }
+  
+  /* Optimize touch targets */
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Prevent iOS bounce scrolling but allow app to scroll */
+  html, body {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Ensure proper scrolling in panels */
+  .mobile-panel {
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+  }
+}
+
+/* Landscape mobile optimizations */
+@media (max-height: 500px) and (orientation: landscape) {
+  .chess-board-stage {
+    padding: 0.5rem;
+  }
+  
+  /* Hide less critical elements in landscape */
+  .board-frame {
+    padding: 0.25rem;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+  /* Larger touch targets */
+  .chess-board-container [data-square] {
+    cursor: pointer !important;
+  }
+  
+  /* Remove hover effects on touch devices */
+  .chess-board-stage:hover {
+    background: radial-gradient(ellipse at center, rgba(59, 130, 246, 0.08), transparent 70%);
+    box-shadow: none;
+  }
+  
+  /* Optimize drag feedback */
+  .chess-board-container.dragging {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
 /* Chess Board Hero Styling */
 .chess-board-hero-container {
   position: relative;
@@ -157,9 +226,11 @@
   }
 }
 
-/* Enhanced hover effects */
-.chess-board-stage:hover .board-ambient-particles {
-  opacity: 0.6;
+/* Enhanced hover effects - desktop only */
+@media (hover: hover) and (pointer: fine) {
+  .chess-board-stage:hover .board-ambient-particles {
+    opacity: 0.6;
+  }
 }
 
 /* Dark mode support */

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **AI vs AI Game Mode** - Watch computer players compete against each other (2025-08-04)
+  - **Feature**: Added new game mode where users can watch AI play against itself with different difficulty levels
+  - **Justification**: Users wanted to observe high-level chess gameplay and learn from AI strategies without having to play themselves
+  - **Implementation**: 
+    - Added 'ai-vs-ai' game mode type to GameContext with separate difficulty settings for white and black AI
+    - Implemented automatic move scheduling system that alternates between white and black AI moves
+    - Added pause/resume functionality to control the AI game flow
+    - Enhanced GameModeSelector with separate difficulty controls for each AI player
+    - Added dedicated AI vs AI controls in GameControls component with pause/resume buttons
+    - AI moves are scheduled with 2-second delays for better viewing experience
+    - Supports all 5 difficulty levels (Beginner ~800 to Expert ~3400+ ELO) for each AI
+  - **Files Added/Modified**:
+    - `src/contexts/GameContext.tsx` - Added AI vs AI game logic, state management, and move scheduling
+    - `src/components/GameModeSelector/GameModeSelector.tsx` - Added AI vs AI mode selection with dual difficulty controls
+    - `src/components/GameControls/GameControls.tsx` - Added pause/resume controls for AI games
+  - **User Experience**: Users can now select different difficulty combinations (e.g., Expert vs Beginner) and watch AI games unfold, learning strategies and opening patterns from high-level play
+
 ### Fixed
 - **Vercel Preview URL CORS Issues** - Fixed NetworkError when accessing app through Vercel preview URLs (2025-08-04)
   - **Issue**: Users getting "NetworkError when attempting to fetch resource" and CORS errors when trying to sign in with Google from Vercel preview URLs like `chess-pu71-git-master-caspars-projects-ada039ca.vercel.app`
