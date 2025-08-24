@@ -37,6 +37,7 @@ const GameControls: React.FC = () => {
 
   const currentPlayer = gameState.game.turn();
   const isGameOver = gameState.game.isGameOver() || gameState.gameResult !== '';
+
   
   const handleFlipBoard = async () => {
     if (profile) {
@@ -51,7 +52,7 @@ const GameControls: React.FC = () => {
     console.log('🎯 Hint request started:', {
       canUseHint,
       gameMode: gameState.gameMode,
-      hintUsed: gameState.hintUsed,
+      hintAvailable: gameState.hintAvailable,
       gameResult: gameState.gameResult,
       backendUrl: process.env.REACT_APP_BACKEND_URL
     });
@@ -135,7 +136,7 @@ const GameControls: React.FC = () => {
             onClick={handleRequestHint}
             disabled={isRequestingHint || !canUseHint || isGameOver}
             className="w-full px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Get a hint from LC0 engine (one per game)"
+            title="Get a hint from LC0 engine (once per player)"
           >
             {isRequestingHint ? (
               <>
@@ -153,9 +154,10 @@ const GameControls: React.FC = () => {
               </>
             )}
           </button>
-          {gameState.hintUsed && (
+          {((currentPlayer === 'w' && !gameState.hintAvailable.white) || 
+            (currentPlayer === 'b' && !gameState.hintAvailable.black)) && (
             <p className="text-xs text-center text-gray-500">
-              Hint already used this game
+              Hint already used by {currentPlayer === 'w' ? 'White' : 'Black'}
             </p>
           )}
           {gameState.currentHint && (

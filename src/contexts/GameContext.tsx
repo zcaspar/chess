@@ -50,7 +50,10 @@ interface GameState {
   whiteAiDifficulty?: DifficultyLevel;
   blackAiDifficulty?: DifficultyLevel;
   // Hint system
-  hintUsed: boolean;
+  hintAvailable: {
+    white: boolean;
+    black: boolean;
+  };
   currentHint: { from: Square; to: Square; promotion?: string } | null;
   aiGamePaused?: boolean;
   // Nuclear chess system
@@ -161,7 +164,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     aiColor: null,
     aiDifficulty: 'medium',
     // Hint system defaults
-    hintUsed: false,
+    hintAvailable: {
+      white: true,
+      black: true,
+    },
     currentHint: null,
     // Nuclear chess defaults
     nukeAvailable: {
@@ -912,7 +918,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       aiColor: aiColor,
       aiDifficulty: aiDifficulty,
       // Reset hint system
-      hintUsed: false,
+      hintAvailable: {
+        white: true,
+        black: true,
+      },
       currentHint: null,
       // Reset nuclear system
       nukeAvailable: {
@@ -1153,20 +1162,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   useEffect(() => {
     const handleSocketMoveMade = (event: CustomEvent) => {
       const data = event.detail;
-      console.log('🌐 Socket move made received:', data);
+      console.log('🌐 Socket move made received - updating timers only:', data);
       
-      // Update game state with the move and timer information
-      const updatedGame = new Chess(data.fen);
-      const moveCount = updatedGame.history().length;
-      
+      // Only update timer information here
+      // The actual move is handled by useOnlineGame hook calling makeMove
       setGameState(prev => ({
         ...prev,
-        game: updatedGame,
         whiteTime: data.whiteTime,
         blackTime: data.blackTime,
         // Only start timer for next player if this is not the first move
-        activeColor: moveCount > 1 ? data.turn : null,
-        startTime: moveCount > 1 ? Date.now() : null,
+        activeColor: prev.history.length > 0 ? data.turn : null,
+        startTime: prev.history.length > 0 ? Date.now() : null,
       }));
     };
 
@@ -1245,19 +1251,31 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     const handleSocketRoomJoined = (event: CustomEvent) => {
       const data = event.detail;
       console.log('🌐 Socket room joined received:', data);
+      console.log('🎮 Game state from server:', data.gameState);
       
-      // Sync GameContext time control with room's time control
-      if (data.timeControl) {
-        console.log('🔄 Syncing GameContext time control with room:', data.timeControl);
-        
-        setGameState(prev => ({
-          ...prev,
-          timeControl: data.timeControl,
-          whiteTime: data.whiteTime || data.timeControl.initial,
-          blackTime: data.blackTime || data.timeControl.initial,
-          activeColor: data.gameState.turn,
-        }));
+      // Initialize the game with the server's state
+      const serverGame = new Chess(data.gameState.fen);
+      
+      // If there's a history from the server, rebuild it
+      let gameHistory: Move[] = [];
+      if (data.gameState.history && data.gameState.history.length > 0) {
+        console.log('🔄 Rebuilding game history from server moves:', data.gameState.history.length);
+        gameHistory = data.gameState.history;
       }
+      
+      setGameState(prev => ({
+        ...prev,
+        game: serverGame,
+        history: gameHistory,
+        currentMoveIndex: gameHistory.length - 1,
+        timeControl: data.timeControl || prev.timeControl,
+        whiteTime: data.whiteTime || (data.timeControl ? data.timeControl.initial : prev.whiteTime),
+        blackTime: data.blackTime || (data.timeControl ? data.timeControl.initial : prev.blackTime),
+        activeColor: data.gameState.turn,
+        gameMode: 'human-vs-human', // Online games are always human vs human
+      }));
+      
+      console.log('✅ Game state synchronized with server');
     };
 
     // Add event listeners
@@ -1311,8 +1329,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   // Hint system implementation
   const requestHint = useCallback(async (): Promise<boolean> => {
-    // Check if hint can be used
-    if (gameState.hintUsed || gameState.gameResult) {
+    // Check if hint can be used by current player
+    const currentPlayer = gameState.game.turn();
+    const hintAvailable = currentPlayer === 'w' ? gameState.hintAvailable.white : gameState.hintAvailable.black;
+    
+    if (!hintAvailable || gameState.gameResult) {
       return false;
     }
 
@@ -1353,9 +1374,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       
       if (data.success && data.bestMove) {
         console.log('💡 Setting hint:', data.bestMove);
+        const currentPlayer = gameState.game.turn();
         setGameState(prev => ({
           ...prev,
-          hintUsed: true,
+          hintAvailable: {
+            white: currentPlayer === 'w' ? false : prev.hintAvailable.white,
+            black: currentPlayer === 'b' ? false : prev.hintAvailable.black,
+          },
           currentHint: {
             from: data.bestMove.from,
             to: data.bestMove.to,
@@ -1375,7 +1400,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
     
     return false;
-  }, [gameState.hintUsed, gameState.gameResult, gameState.gameMode, gameState.game]);
+  }, [gameState.hintAvailable, gameState.gameResult, gameState.gameMode, gameState.game]);
 
   const clearHint = useCallback(() => {
     setGameState(prev => ({
@@ -1442,6 +1467,20 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     const gameCopy = new Chess(gameState.game.fen());
     gameCopy.remove(targetSquare);
     
+    // Advance the turn after the nuke (since this counts as a move)
+    // Chess.js doesn't automatically advance turns for direct manipulation
+    const currentFen = gameCopy.fen();
+    const fenParts = currentFen.split(' ');
+    fenParts[1] = activeNukeColor === 'w' ? 'b' : 'w'; // Switch turn
+    // Increment full move number if it was black's turn
+    if (activeNukeColor === 'b') {
+      fenParts[5] = (parseInt(fenParts[5]) + 1).toString();
+    }
+    // Reset half-move clock since this is a capturing move
+    fenParts[4] = '0';
+    const newFen = fenParts.join(' ');
+    const finalGame = new Chess(newFen);
+    
     // Create a special nuke move entry
     const nukeMove: Move = {
       san: `💣x${targetPiece.type.toUpperCase()}${targetSquare}`,
@@ -1455,7 +1494,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     
     setGameState(prev => ({
       ...prev,
-      game: gameCopy,
+      game: finalGame,
       history: [...prev.history, nukeMove],
       currentMoveIndex: prev.history.length,
       nukeAvailable: {
@@ -1548,6 +1587,20 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     gameCopy.remove(pieceSquare);
     gameCopy.put({ type: piece.type, color: piece.color }, targetSquare);
     
+    // Advance the turn after the teleportation (since this counts as a move)
+    // Chess.js doesn't automatically advance turns for direct manipulation
+    const currentFen = gameCopy.fen();
+    const fenParts = currentFen.split(' ');
+    fenParts[1] = activeTeleportColor === 'w' ? 'b' : 'w'; // Switch turn
+    // Increment full move number if it was black's turn
+    if (activeTeleportColor === 'b') {
+      fenParts[5] = (parseInt(fenParts[5]) + 1).toString();
+    }
+    // Increment half-move clock since this is not a capturing/pawn move
+    fenParts[4] = (parseInt(fenParts[4]) + 1).toString();
+    const newFen = fenParts.join(' ');
+    const finalGame = new Chess(newFen);
+    
     // Create a special teleport move entry
     const teleportMove: Move = {
       san: `♦${piece.type.toUpperCase()}${pieceSquare}-${targetSquare}`,
@@ -1560,7 +1613,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     
     setGameState(prev => ({
       ...prev,
-      game: gameCopy,
+      game: finalGame,
       history: [...prev.history, teleportMove],
       currentMoveIndex: prev.history.length,
       teleportAvailable: {
@@ -1576,8 +1629,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     return true;
   }, [gameState.teleportModeActive, gameState.game]);
 
+  const currentPlayer = gameState.game.turn();
   const canUseHint = isFeatureEnabled('HINTS') && 
-                    !gameState.hintUsed && 
+                    (currentPlayer === 'w' ? gameState.hintAvailable.white : gameState.hintAvailable.black) && 
                     !gameState.gameResult && 
                     gameState.gameMode !== 'ai-vs-ai';
 
