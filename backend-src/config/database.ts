@@ -15,11 +15,16 @@ const poolConfig: PoolConfig = {
         password: process.env.PGPASSWORD || process.env.DB_PASSWORD || 'chess_password',
       }),
   
-  // Connection pool settings
-  max: parseInt(process.env.DB_POOL_MAX || '20'), // Maximum number of connections
-  min: parseInt(process.env.DB_POOL_MIN || '5'),  // Minimum number of connections
-  idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000'),
-  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '2000'),
+  // Optimized connection pool settings for higher concurrency
+  max: parseInt(process.env.DB_POOL_MAX || '50'), // Increased from 20 to 50
+  min: parseInt(process.env.DB_POOL_MIN || '10'), // Increased minimum to reduce connection overhead
+  idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '60000'), // Increased idle timeout
+  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '5000'), // Increased connection timeout
+  acquireTimeoutMillis: parseInt(process.env.DB_ACQUIRE_TIMEOUT || '60000'), // Max time to wait for connection
+  
+  // Additional optimizations
+  allowExitOnIdle: true, // Allow process to exit when no connections are active
+  maxUses: parseInt(process.env.DB_MAX_USES || '7500'), // Max uses per connection before recycling
   
   // SSL configuration (enable in production)
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
@@ -28,11 +33,48 @@ const poolConfig: PoolConfig = {
 // Create connection pool
 export const pool = new Pool(poolConfig);
 
-// Handle pool errors
+// Enhanced pool monitoring and error handling
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
-  process.exit(-1);
+  console.error('🔴 Unexpected error on idle client', err);
+  // Don't exit immediately in production, allow for recovery
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(-1);
+  }
 });
+
+pool.on('connect', (client) => {
+  console.log('🟢 New database client connected');
+});
+
+pool.on('acquire', (client) => {
+  console.log('🔵 Database client acquired from pool');
+});
+
+pool.on('release', (client) => {
+  console.log('🟡 Database client released back to pool');
+});
+
+// Pool monitoring function
+export const getPoolStatus = () => {
+  return {
+    totalCount: pool.totalCount,
+    idleCount: pool.idleCount,
+    waitingCount: pool.waitingCount,
+    maxConnections: poolConfig.max,
+    minConnections: poolConfig.min,
+    utilizationPercent: ((pool.totalCount - pool.idleCount) / (poolConfig.max || 50)) * 100
+  };
+};
+
+// Log pool status periodically in development
+if (process.env.NODE_ENV === 'development') {
+  setInterval(() => {
+    const status = getPoolStatus();
+    if (status.totalCount > 0) {
+      console.log('📊 DB Pool Status:', status);
+    }
+  }, 30000); // Every 30 seconds
+}
 
 // Test database connection
 export const testConnection = async (): Promise<boolean> => {
@@ -73,22 +115,53 @@ export const testConnection = async (): Promise<boolean> => {
   }
 };
 
-// Helper function to execute queries
-export const query = async (text: string, params?: any[]) => {
+// Enhanced query function with better monitoring and connection management
+export const query = async (text: string, params?: any[], options?: { timeout?: number }) => {
   const start = Date.now();
+  const queryId = Math.random().toString(36).substring(7);
+  
   try {
+    // Add query timeout if specified
+    const queryOptions = options?.timeout ? { ...options } : undefined;
+    
     const res = await pool.query(text, params);
     const duration = Date.now() - start;
     
+    // Enhanced logging in development
     if (process.env.NODE_ENV === 'development') {
-      console.log('Executed query', { text, duration, rows: res.rowCount });
+      console.log(`🔍 Query ${queryId}:`, { 
+        text: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+        duration, 
+        rows: res.rowCount,
+        poolStatus: getPoolStatus()
+      });
+    }
+    
+    // Warn about slow queries
+    if (duration > 1000) {
+      console.warn(`⚠️ Slow query detected (${duration}ms):`, text.substring(0, 200));
     }
     
     return res;
   } catch (error) {
-    console.error('Database query error:', { text, error });
+    const duration = Date.now() - start;
+    console.error(`❌ Query ${queryId} failed after ${duration}ms:`, { 
+      text: text.substring(0, 200),
+      error: error instanceof Error ? error.message : error,
+      poolStatus: getPoolStatus()
+    });
     throw error;
   }
+};
+
+// Optimized query for read-only operations (can use read replicas in future)
+export const queryRead = async (text: string, params?: any[]) => {
+  return query(text, params, { timeout: 5000 }); // Shorter timeout for reads
+};
+
+// Optimized query for write operations
+export const queryWrite = async (text: string, params?: any[]) => {
+  return query(text, params, { timeout: 10000 }); // Longer timeout for writes
 };
 
 // Graceful shutdown

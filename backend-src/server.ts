@@ -10,8 +10,10 @@ import gameHistoryRoutes from './routes/gameHistory';
 import analyticsRoutes from './routes/analytics';
 import analysisRoutes from './routes/analysis';
 import headToHeadRoutes from './routes/headToHead';
+import systemRoutes from './routes/system';
 import { GameSocketHandler } from './sockets/gameSocket';
-import { testConnection } from './config/database';
+import { testConnection, getPoolStatus, closePool } from './config/database';
+import { initializeRedis, RedisManager, closeRedis } from './config/redis';
 
 // Load environment variables
 dotenv.config();
@@ -150,16 +152,46 @@ app.use('/api/head-to-head', headToHeadRoutes);
 console.log('✅ Head-to-head routes registered at /api/head-to-head');
 console.log('🤝 Head-to-head endpoints: /api/head-to-head, /api/head-to-head/:opponentId');
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  // Fast health check - avoid any blocking operations
-  res.status(200).json({ 
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    environment: process.env.NODE_ENV || 'development'
-  });
+console.log('🔗 Registering system monitoring routes...');
+app.use('/api/system', systemRoutes);
+console.log('✅ System routes registered at /api/system');
+console.log('📊 System endpoints: /api/system/status, /api/system/metrics');
+
+// Enhanced health check endpoint with pool status and Redis
+app.get('/health', async (req, res) => {
+  try {
+    const poolStatus = getPoolStatus();
+    const memoryUsage = process.memoryUsage();
+    const redisHealth = await RedisManager.healthCheck();
+    
+    res.status(200).json({ 
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      version: '1.0.0',
+      database: {
+        connected: poolStatus.totalCount > 0,
+        poolUtilization: `${poolStatus.totalCount - poolStatus.idleCount}/${poolStatus.maxConnections}`,
+        waitingConnections: poolStatus.waitingCount
+      },
+      redis: {
+        connected: redisHealth.connected,
+        latency: redisHealth.latency
+      },
+      memory: {
+        heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
+        rss: Math.round(memoryUsage.rss / 1024 / 1024)
+      },
+      environment: process.env.NODE_ENV || 'development'
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 // Database health check endpoint
@@ -673,6 +705,20 @@ async function startServer() {
       console.log('⚠️  Continuing without database. Basic chess features will work.');
     }
     
+    // Initialize Redis (non-blocking)
+    try {
+      const redisConnected = await initializeRedis();
+      if (redisConnected) {
+        RedisManager.setAvailable(true);
+        console.log('✅ Redis initialization completed');
+      } else {
+        console.log('⚠️  Continuing without Redis. Session and game state will use memory storage.');
+      }
+    } catch (redisError) {
+      console.error('⚠️  Redis initialization error:', redisError);
+      console.log('⚠️  Continuing without Redis. Session and game state will use memory storage.');
+    }
+    
     // Initialize engines (non-blocking)
     try {
       await initializeEngines();
@@ -708,3 +754,49 @@ async function startServer() {
 }
 
 startServer();
+
+// Graceful shutdown handling
+const gracefulShutdown = async (signal: string) => {
+  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+  
+  try {
+    // Close Redis connection
+    await closeRedis();
+    console.log('✅ Redis connection closed');
+    
+    // Close database pool
+    await closePool();
+    console.log('✅ Database pool closed');
+    
+    // Close HTTP server
+    httpServer.close(() => {
+      console.log('✅ HTTP server closed');
+      process.exit(0);
+    });
+    
+    // Force exit after 10 seconds
+    setTimeout(() => {
+      console.log('⚠️  Forced shutdown after 10 seconds');
+      process.exit(1);
+    }, 10000);
+    
+  } catch (error) {
+    console.error('❌ Error during graceful shutdown:', error);
+    process.exit(1);
+  }
+};
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('💥 Uncaught Exception:', error);
+  gracefulShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('unhandledRejection');
+});
