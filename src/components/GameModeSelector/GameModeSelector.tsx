@@ -9,8 +9,17 @@ const GameModeSelector: React.FC = () => {
   const { gameMode, aiColor, aiDifficulty, whiteAiDifficulty, blackAiDifficulty } = gameState;
   const { roomCode, leaveRoom } = useSocket();
   const [showOnlineModal, setShowOnlineModal] = useState(false);
+  
+  // Check if we're in an online game
+  const isOnlineGame = !!roomCode;
 
   const handleModeChange = async (mode: 'human-vs-human' | 'human-vs-ai' | 'ai-vs-ai') => {
+    // Don't change mode if we're in an online game
+    if (isOnlineGame) {
+      console.log('Cannot change game mode while in online room');
+      return;
+    }
+    
     // Leave online room if switching away from online play
     if (roomCode) {
       leaveRoom();
@@ -44,31 +53,57 @@ const GameModeSelector: React.FC = () => {
     <div className="bg-white rounded-lg shadow-md p-4">
       <h3 className="font-bold text-lg mb-3">Game Mode</h3>
       
+      {/* Online Game Notice */}
+      {isOnlineGame && (
+        <div className="mb-4 p-3 bg-green-50 border border-green-300 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold text-green-800">Online Game Active</div>
+              <div className="text-xs text-green-600">Room Code: {roomCode}</div>
+            </div>
+            <button
+              onClick={() => {
+                if (confirm('Are you sure you want to leave the online game?')) {
+                  leaveRoom();
+                }
+              }}
+              className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition"
+            >
+              Leave Room
+            </button>
+          </div>
+        </div>
+      )}
+      
       <div className="space-y-3">
         {/* Human vs Human */}
-        <label className="flex items-center cursor-pointer">
+        <label className={`flex items-center ${isOnlineGame ? 'opacity-50' : 'cursor-pointer'}`}>
           <input
             type="radio"
             name="gameMode"
             value="human-vs-human"
-            checked={gameMode === 'human-vs-human'}
+            checked={isOnlineGame || gameMode === 'human-vs-human'}
             onChange={() => handleModeChange('human-vs-human')}
+            disabled={isOnlineGame}
             className="mr-3"
           />
           <div>
             <div className="font-semibold">Human vs Human</div>
-            <div className="text-sm text-gray-600">Play against another person</div>
+            <div className="text-sm text-gray-600">
+              {isOnlineGame ? 'Currently in online game' : 'Play against another person'}
+            </div>
           </div>
         </label>
 
         {/* Human vs AI */}
-        <label className="flex items-center cursor-pointer">
+        <label className={`flex items-center ${isOnlineGame ? 'opacity-50' : 'cursor-pointer'}`}>
           <input
             type="radio"
             name="gameMode"
             value="human-vs-ai"
-            checked={gameMode === 'human-vs-ai'}
+            checked={!isOnlineGame && gameMode === 'human-vs-ai'}
             onChange={() => handleModeChange('human-vs-ai')}
+            disabled={isOnlineGame}
             className="mr-3"
           />
           <div>
@@ -78,13 +113,14 @@ const GameModeSelector: React.FC = () => {
         </label>
 
         {/* AI vs AI */}
-        <label className="flex items-center cursor-pointer">
+        <label className={`flex items-center ${isOnlineGame ? 'opacity-50' : 'cursor-pointer'}`}>
           <input
             type="radio"
             name="gameMode"
             value="ai-vs-ai"
-            checked={gameMode === 'ai-vs-ai'}
+            checked={!isOnlineGame && gameMode === 'ai-vs-ai'}
             onChange={() => handleModeChange('ai-vs-ai')}
+            disabled={isOnlineGame}
             className="mr-3"
           />
           <div>
@@ -232,7 +268,9 @@ const GameModeSelector: React.FC = () => {
       <div className="mt-4 pt-3 border-t border-gray-200">
         <div className="text-xs text-gray-600">
           Current: <span className="font-semibold">
-            {gameMode === 'human-vs-human' 
+            {isOnlineGame
+              ? `Online Multiplayer (Room: ${roomCode})`
+              : gameMode === 'human-vs-human' 
               ? 'Human vs Human (Local)' 
               : gameMode === 'human-vs-ai'
               ? `Human vs AI (${difficultyLabels[aiDifficulty].name}, AI plays ${aiColor === 'w' ? 'White' : 'Black'})`
