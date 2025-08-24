@@ -1,5 +1,6 @@
 import express from 'express';
 import { GameHistoryModel, SaveGameRequest } from '../models/GameHistory';
+import { HeadToHeadModel } from '../models/HeadToHead';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 
 const router = express.Router();
@@ -77,6 +78,30 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
     };
 
     const savedGame = await GameHistoryModel.saveGame(gameData);
+    
+    // Update head-to-head record if it's a human vs human game
+    if (gameMode === 'human-vs-human' && opponentId && opponentId !== 'ai') {
+      try {
+        // Determine winner ID
+        let winnerId: string | null = null;
+        if (gameOutcome === 'win') {
+          winnerId = req.user!.uid;
+        } else if (gameOutcome === 'loss') {
+          winnerId = opponentId;
+        }
+        // If draw, winnerId remains null
+        
+        await HeadToHeadModel.updateRecord(
+          req.user!.uid,
+          opponentId,
+          winnerId,
+          gameId
+        );
+      } catch (h2hError) {
+        // Don't fail the request if head-to-head update fails
+        console.error('Failed to update head-to-head record:', h2hError);
+      }
+    }
     
     res.status(201).json({
       success: true,

@@ -9,6 +9,7 @@ import userRoutes from './routes/users';
 import gameHistoryRoutes from './routes/gameHistory';
 import analyticsRoutes from './routes/analytics';
 import analysisRoutes from './routes/analysis';
+import headToHeadRoutes from './routes/headToHead';
 import { GameSocketHandler } from './sockets/gameSocket';
 import { testConnection } from './config/database';
 
@@ -143,6 +144,11 @@ console.log('🔗 Registering analysis routes...');
 app.use('/api/analysis', analysisRoutes);
 console.log('✅ Analysis routes registered at /api/analysis');
 console.log('🧠 Analysis endpoints: /api/analysis/position, /api/analysis/health');
+
+console.log('🔗 Registering head-to-head routes...');
+app.use('/api/head-to-head', headToHeadRoutes);
+console.log('✅ Head-to-head routes registered at /api/head-to-head');
+console.log('🤝 Head-to-head endpoints: /api/head-to-head, /api/head-to-head/:opponentId');
 
 // Health check endpoint
 app.get('/health', (req, res) => {

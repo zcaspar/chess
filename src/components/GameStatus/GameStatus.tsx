@@ -1,13 +1,23 @@
 import React from 'react';
 import { useGame } from '../../contexts/GameContext';
+import HeadToHead from '../HeadToHead/HeadToHead';
+import { useAuth } from '../../hooks/useAuth';
 
 const GameStatus: React.FC = () => {
   const { gameState, getPlayerByColor } = useGame();
+  const { user } = useAuth();
   const { game, gameResult } = gameState;
   
   const turn = game.turn();
   const isCheck = game.isCheck();
   const currentPlayer = getPlayerByColor(turn);
+  
+  // Get opponent info for head-to-head display
+  const isOnlineGame = gameState.gameMode === 'human-vs-human' && gameState.onlineGameRoom;
+  const opponentId = isOnlineGame ? gameState.onlineGameRoom?.opponentId || null : null;
+  const opponentName = isOnlineGame && gameState.onlineGameRoom?.opponentName 
+    ? gameState.onlineGameRoom.opponentName 
+    : null;
 
   // Replace player names in game result
   const displayResult = gameResult
@@ -48,6 +58,17 @@ const GameStatus: React.FC = () => {
               Draw offered by {getPlayerByColor(gameState.drawOffer.by!)}
             </div>
           )}
+        </div>
+      )}
+      
+      {/* Head-to-Head Stats */}
+      {user && opponentId && (
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <HeadToHead 
+            opponentId={opponentId} 
+            opponentName={opponentName || undefined}
+            compact={true}
+          />
         </div>
       )}
       

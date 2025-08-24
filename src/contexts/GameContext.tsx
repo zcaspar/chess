@@ -407,11 +407,18 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       
       if (gameState.gameMode === 'human-vs-ai') {
         opponentName = `Computer (${gameState.aiDifficulty})`;
+        opponentId = 'ai'; // Mark AI games
       } else {
-        // For human vs human, use the other player's name
+        // For human vs human, use the other player's name and ID
         const opponentPlayerKey = playerColor === 'w' ? 'black' : 'white';
         const opponentKey = gameState.colorAssignment[opponentPlayerKey];
         opponentName = gameState.players[opponentKey];
+        
+        // Get opponent ID from online game room if available
+        if (gameState.onlineGameRoom) {
+          opponentId = gameState.onlineGameRoom.opponentId;
+          opponentName = gameState.onlineGameRoom.opponentName || opponentName;
+        }
       }
       
       const gameHistoryData = {

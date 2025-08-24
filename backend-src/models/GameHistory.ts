@@ -262,8 +262,9 @@ export class GameHistoryModel {
         throw new Error(`Database connection failed: ${connectionError.message}`);
       }
       
-      // Try to read the schema file, if it fails, use inline SQL
+      // Try to read the schema files, if it fails, use inline SQL
       let schema: string;
+      let h2hSchema: string = '';
       
       try {
         const fs = require('fs');
@@ -271,6 +272,15 @@ export class GameHistoryModel {
         const schemaPath = path.join(__dirname, '../db/schema.sql');
         schema = fs.readFileSync(schemaPath, 'utf8');
         console.log('📁 Schema loaded from file');
+        
+        // Try to load head-to-head schema
+        try {
+          const h2hSchemaPath = path.join(__dirname, '../db/head-to-head-schema.sql');
+          h2hSchema = fs.readFileSync(h2hSchemaPath, 'utf8');
+          console.log('📁 Head-to-head schema loaded from file');
+        } catch (h2hFileError) {
+          console.log('📝 Head-to-head schema file not found, will be included in inline schema');
+        }
       } catch (fileError) {
         console.log('📝 Using inline schema (file not found)');
         // Simplified inline schema as fallback - minimal setup for production
@@ -294,11 +304,34 @@ export class GameHistoryModel {
               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
               updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           );
+          
+          -- Head-to-head records table
+          CREATE TABLE IF NOT EXISTS head_to_head_records (
+              id SERIAL PRIMARY KEY,
+              player1_id VARCHAR(255) NOT NULL,
+              player2_id VARCHAR(255) NOT NULL,
+              player1_wins INTEGER DEFAULT 0,
+              player2_wins INTEGER DEFAULT 0,
+              draws INTEGER DEFAULT 0,
+              total_games INTEGER DEFAULT 0,
+              last_game_at TIMESTAMP,
+              last_game_id VARCHAR(255),
+              last_winner VARCHAR(255),
+              win_streak_player VARCHAR(255),
+              win_streak_count INTEGER DEFAULT 0,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              CONSTRAINT check_player_order CHECK (player1_id < player2_id),
+              CONSTRAINT unique_player_pair UNIQUE (player1_id, player2_id)
+          );
         `;
       }
       
+      // Combine schemas
+      const fullSchema = schema + '\n' + h2hSchema;
+      
       // Split by semicolon and execute each statement
-      const statements = schema.split(';').filter((stmt: string) => stmt.trim().length > 0);
+      const statements = fullSchema.split(';').filter((stmt: string) => stmt.trim().length > 0);
       
       console.log(`🔄 Executing ${statements.length} SQL statements...`);
       
