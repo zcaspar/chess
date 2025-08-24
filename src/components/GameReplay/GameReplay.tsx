@@ -374,10 +374,17 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
       const pairIndex = Math.floor(currentMoveIndex / 2);
       const moveElement = moveHistoryRef.current.children[pairIndex] as HTMLElement;
       if (moveElement) {
-        moveElement.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'nearest' 
-        });
+        // Only scroll the move history container, not the entire page
+        const container = moveHistoryRef.current;
+        const containerRect = container.getBoundingClientRect();
+        const elementRect = moveElement.getBoundingClientRect();
+        
+        // Check if element is outside visible area of container
+        if (elementRect.top < containerRect.top || elementRect.bottom > containerRect.bottom) {
+          // Scroll element into view within the container only
+          const scrollTop = moveElement.offsetTop - container.offsetTop;
+          container.scrollTop = scrollTop - (container.clientHeight / 2) + (moveElement.clientHeight / 2);
+        }
       }
     }
   }, [currentMoveIndex]);
@@ -585,22 +592,25 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
-        {/* Chess Board - Fixed position */}
+        {/* Chess Board - Responsive */}
         <div className="lg:flex-1">
           <div className="flex justify-center">
-            <div className="sticky top-4">
-              <Chessboard
-                position={currentGame.fen()}
-                boardWidth={500}
-                customBoardStyle={{
-                  borderRadius: '4px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                }}
-                customSquareStyles={getCustomSquareStyles()}
-                areArrowsAllowed={false}
-                arePiecesDraggable={false}
-                boardOrientation={boardOrientation}
-              />
+            <div className="w-full max-w-[500px] lg:sticky lg:top-4">
+              <div className="relative w-full" style={{ paddingBottom: '100%' }}>
+                <div className="absolute inset-0">
+                  <Chessboard
+                    position={currentGame.fen()}
+                    customBoardStyle={{
+                      borderRadius: '4px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }}
+                    customSquareStyles={getCustomSquareStyles()}
+                    areArrowsAllowed={false}
+                    arePiecesDraggable={false}
+                    boardOrientation={boardOrientation}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -728,7 +738,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         {/* Move History */}
         <div className="lg:w-[300px] lg:flex-shrink-0">
           <h3 className="text-lg font-semibold mb-4">Move History</h3>
-          <div className="bg-gray-50 rounded-lg p-3 h-[600px] overflow-y-auto">
+          <div className="bg-gray-50 rounded-lg p-3 h-[600px] overflow-y-auto" ref={moveHistoryRef}>
             {gameHistory.length === 0 ? (
               <div className="text-gray-500 text-center">
                 <p>No move history available</p>
@@ -746,7 +756,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                     Future games will save complete move history.
                   </p>
                 </div>
-                <div className="space-y-0.5" ref={moveHistoryRef}>
+                <div className="space-y-0.5">
                   {Array.from({ length: Math.ceil(gameHistory.length / 2) }, (_, pairIndex) => {
                     const whiteIndex = pairIndex * 2;
                     const blackIndex = pairIndex * 2 + 1;
@@ -808,7 +818,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                 </div>
               </div>
             ) : (
-              <div className="space-y-0.5" ref={moveHistoryRef}>
+              <div className="space-y-0.5">
                 {Array.from({ length: Math.ceil(gameHistory.length / 2) }, (_, pairIndex) => {
                   const whiteIndex = pairIndex * 2;
                   const blackIndex = pairIndex * 2 + 1;
