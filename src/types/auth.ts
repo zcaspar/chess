@@ -30,6 +30,7 @@ export interface UserPreferences {
   autoPromoteQueen?: boolean;
   showLegalMoves?: boolean;
   animationSpeed?: 'slow' | 'normal' | 'fast';
+  ainaraMode?: boolean;
 }
 
 export interface UserStats {

@@ -6,7 +6,6 @@ import { useSocket } from '../../contexts/SocketContext';
 import { useOnlineGame } from '../../hooks/useOnlineGame';
 import { useAuth } from '../../hooks/useAuth';
 import { useResponsiveBoardSize } from '../../hooks/useResponsiveBoardSize';
-import { isFeatureEnabled } from '../../config/gameFeatures';
 
 const ChessBoard: React.FC = () => {
   const { gameState, makeMove, executeNuke, executeTeleport } = useGame();
@@ -83,7 +82,7 @@ const ChessBoard: React.FC = () => {
     setRightClickedSquares([]);
 
     // Handle nuclear chess mode
-    const isNukeModeActive = isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('NUCLEAR_CHESS') && (gameState.nukeModeActive.white || gameState.nukeModeActive.black);
+    const isNukeModeActive = (gameState.nukeModeActive.white || gameState.nukeModeActive.black);
     if (isNukeModeActive) {
       // In nuke mode, clicking executes the nuke
       if (executeNuke(square)) {
@@ -95,7 +94,7 @@ const ChessBoard: React.FC = () => {
     }
 
     // Handle teleportation mode
-    const isTeleportModeActive = isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('TELEPORTATION') && (gameState.teleportModeActive.white || gameState.teleportModeActive.black);
+    const isTeleportModeActive = (gameState.teleportModeActive.white || gameState.teleportModeActive.black);
     if (isTeleportModeActive) {
       // In teleport mode, clicking executes the teleport
       if (executeTeleport(square)) {
@@ -168,13 +167,13 @@ const ChessBoard: React.FC = () => {
     }
     
     // Don't allow drag and drop in nuclear mode
-    const isNukeModeActive = isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('NUCLEAR_CHESS') && (gameState.nukeModeActive.white || gameState.nukeModeActive.black);
+    const isNukeModeActive = (gameState.nukeModeActive.white || gameState.nukeModeActive.black);
     if (isNukeModeActive) {
       return false;
     }
     
     // Don't allow drag and drop in teleportation mode
-    const isTeleportModeActive = isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('TELEPORTATION') && (gameState.teleportModeActive.white || gameState.teleportModeActive.black);
+    const isTeleportModeActive = (gameState.teleportModeActive.white || gameState.teleportModeActive.black);
     if (isTeleportModeActive) {
       return false;
     }
@@ -204,13 +203,13 @@ const ChessBoard: React.FC = () => {
     }
 
     // Don't allow drag in nuclear mode
-    const isNukeModeActive = isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('NUCLEAR_CHESS') && (gameState.nukeModeActive.white || gameState.nukeModeActive.black);
+    const isNukeModeActive = (gameState.nukeModeActive.white || gameState.nukeModeActive.black);
     if (isNukeModeActive) {
       return false;
     }
 
     // Don't allow drag in teleportation mode
-    const isTeleportModeActive = isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('TELEPORTATION') && (gameState.teleportModeActive.white || gameState.teleportModeActive.black);
+    const isTeleportModeActive = (gameState.teleportModeActive.white || gameState.teleportModeActive.black);
     if (isTeleportModeActive) {
       return false;
     }
@@ -247,7 +246,7 @@ const ChessBoard: React.FC = () => {
     const styles: Partial<Record<Square, { backgroundColor?: string; background?: string; cursor?: string }>> = {};
     
     // Handle nuclear mode highlighting
-    const isNukeModeActive = isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('NUCLEAR_CHESS') && (gameState.nukeModeActive.white || gameState.nukeModeActive.black);
+    const isNukeModeActive = (gameState.nukeModeActive.white || gameState.nukeModeActive.black);
     if (isNukeModeActive) {
       const activeNukeColor = gameState.nukeModeActive.white ? 'w' : 'b';
       
@@ -275,7 +274,7 @@ const ChessBoard: React.FC = () => {
     }
 
     // Handle teleportation mode highlighting
-    const isTeleportModeActive = isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('TELEPORTATION') && (gameState.teleportModeActive.white || gameState.teleportModeActive.black);
+    const isTeleportModeActive = (gameState.teleportModeActive.white || gameState.teleportModeActive.black);
     if (isTeleportModeActive) {
       const activeTeleportColor = gameState.teleportModeActive.white ? 'w' : 'b';
       

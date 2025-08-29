@@ -38,6 +38,9 @@ const GameControls: React.FC = () => {
   const currentPlayer = gameState.game.turn();
   const isGameOver = gameState.game.isGameOver() || gameState.gameResult !== '';
 
+  // Check if Ainara Mode is enabled for the current user
+  const isAinaraModeEnabled = isFeatureEnabled('AINARA_MODE') && (profile?.preferences?.ainaraMode ?? false);
+
   
   const handleFlipBoard = async () => {
     if (profile) {
@@ -130,7 +133,7 @@ const GameControls: React.FC = () => {
       </button>
 
       {/* Ainara Mode Section */}
-      {isFeatureEnabled('AINARA_MODE') && (
+      {isAinaraModeEnabled && (
         <div className="border-t pt-3 mt-3">
           <h4 className="text-sm font-semibold text-indigo-600 mb-2 flex items-center gap-1">
             ✨ Ainara Mode
@@ -139,7 +142,7 @@ const GameControls: React.FC = () => {
       )}
 
       {/* Ainara Mode - Best Move (Hint System) */}
-      {isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('HINTS') && canUseHint && (
+      {canUseHint && (
         <div className="space-y-2">
           <button
             onClick={handleRequestHint}
@@ -186,7 +189,7 @@ const GameControls: React.FC = () => {
       )}
 
       {/* Ainara Mode - Nuke System (Only in human vs human mode) */}
-      {isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('NUCLEAR_CHESS') && gameState.gameMode === 'human-vs-human' && !isGameOver && (
+      {gameState.gameMode === 'human-vs-human' && !isGameOver && (
         <>
           {(canUseNuke('w') || canUseNuke('b')) && (
             <div className="space-y-2">
@@ -245,7 +248,7 @@ const GameControls: React.FC = () => {
       )}
 
       {/* Ainara Mode - Teleportation System (Only in human vs human mode) */}
-      {isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('TELEPORTATION') && gameState.gameMode === 'human-vs-human' && !isGameOver && (
+      {gameState.gameMode === 'human-vs-human' && !isGameOver && (
         <>
           {(canUseTeleport('w') || canUseTeleport('b')) && (
             <div className="space-y-2">

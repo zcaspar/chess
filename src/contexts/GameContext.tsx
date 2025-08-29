@@ -1418,8 +1418,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   // Nuclear Chess functions
   const canUseNuke = useCallback((color: 'w' | 'b'): boolean => {
-    // Check if feature is enabled
-    if (!isFeatureEnabled('AINARA_MODE') || !isFeatureEnabled('NUCLEAR_CHESS')) return false;
+    // Check if Ainara Mode and nuclear chess feature are enabled
+    const ainaraModeEnabled = isFeatureEnabled('AINARA_MODE') && (authContext.profile?.preferences?.ainaraMode ?? false);
+    if (!ainaraModeEnabled || !isFeatureEnabled('NUCLEAR_CHESS')) return false;
     
     // Only available in human vs human mode
     if (gameState.gameMode !== 'human-vs-human') return false;
@@ -1430,7 +1431,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     
     // Check if this color hasn't used their nuke yet
     return color === 'w' ? gameState.nukeAvailable.white : gameState.nukeAvailable.black;
-  }, [gameState.gameMode, gameState.game, gameState.nukeAvailable]);
+  }, [gameState.gameMode, gameState.game, gameState.nukeAvailable, authContext.profile?.preferences?.ainaraMode]);
 
   const activateNukeMode = useCallback((color: 'w' | 'b') => {
     if (!canUseNuke(color)) return;
@@ -1519,8 +1520,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   // Teleportation functions
   const canUseTeleport = useCallback((color: 'w' | 'b'): boolean => {
-    // Check if feature is enabled
-    if (!isFeatureEnabled('AINARA_MODE') || !isFeatureEnabled('TELEPORTATION')) return false;
+    // Check if Ainara Mode and teleportation feature are enabled
+    const ainaraModeEnabled = isFeatureEnabled('AINARA_MODE') && (authContext.profile?.preferences?.ainaraMode ?? false);
+    if (!ainaraModeEnabled || !isFeatureEnabled('TELEPORTATION')) return false;
     
     // Only available in human vs human mode
     if (gameState.gameMode !== 'human-vs-human') return false;
@@ -1531,7 +1533,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     
     // Check if this color hasn't used their teleport yet
     return color === 'w' ? gameState.teleportAvailable.white : gameState.teleportAvailable.black;
-  }, [gameState.gameMode, gameState.game, gameState.teleportAvailable]);
+  }, [gameState.gameMode, gameState.game, gameState.teleportAvailable, authContext.profile?.preferences?.ainaraMode]);
 
   const activateTeleportMode = useCallback((color: 'w' | 'b') => {
     if (!canUseTeleport(color)) return;
@@ -1637,7 +1639,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   }, [gameState.teleportModeActive, gameState.game]);
 
   const currentPlayer = gameState.game.turn();
-  const canUseHint = isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('HINTS') && 
+  const ainaraModeEnabled = isFeatureEnabled('AINARA_MODE') && (authContext.profile?.preferences?.ainaraMode ?? false);
+  const canUseHint = ainaraModeEnabled && isFeatureEnabled('HINTS') && 
                     (currentPlayer === 'w' ? gameState.hintAvailable.white : gameState.hintAvailable.black) && 
                     !gameState.gameResult && 
                     gameState.gameMode !== 'ai-vs-ai';

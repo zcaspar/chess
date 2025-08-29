@@ -283,6 +283,22 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
                   Show legal moves
                 </label>
               </div>
+
+              <div className="flex items-center pt-4 border-t border-gray-200 dark:border-gray-600">
+                <input
+                  type="checkbox"
+                  id="ainaraMode"
+                  checked={profile.preferences.ainaraMode ?? false}
+                  onChange={(e) => handlePreferenceChange('ainaraMode', e.target.checked)}
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                />
+                <label htmlFor="ainaraMode" className="ml-2 block text-sm text-gray-900 dark:text-white">
+                  ✨ Enable Ainara Mode
+                  <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Unlocks special powers: Best Move hints, Nuke, and Teleport
+                  </span>
+                </label>
+              </div>
             </div>
           )}
 
