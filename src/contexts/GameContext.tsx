@@ -1419,7 +1419,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   // Nuclear Chess functions
   const canUseNuke = useCallback((color: 'w' | 'b'): boolean => {
     // Check if feature is enabled
-    if (!isFeatureEnabled('NUCLEAR_CHESS')) return false;
+    if (!isFeatureEnabled('AINARA_MODE') || !isFeatureEnabled('NUCLEAR_CHESS')) return false;
     
     // Only available in human vs human mode
     if (gameState.gameMode !== 'human-vs-human') return false;
@@ -1520,7 +1520,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   // Teleportation functions
   const canUseTeleport = useCallback((color: 'w' | 'b'): boolean => {
     // Check if feature is enabled
-    if (!isFeatureEnabled('TELEPORTATION')) return false;
+    if (!isFeatureEnabled('AINARA_MODE') || !isFeatureEnabled('TELEPORTATION')) return false;
     
     // Only available in human vs human mode
     if (gameState.gameMode !== 'human-vs-human') return false;
@@ -1637,7 +1637,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   }, [gameState.teleportModeActive, gameState.game]);
 
   const currentPlayer = gameState.game.turn();
-  const canUseHint = isFeatureEnabled('HINTS') && 
+  const canUseHint = isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('HINTS') && 
                     (currentPlayer === 'w' ? gameState.hintAvailable.white : gameState.hintAvailable.black) && 
                     !gameState.gameResult && 
                     gameState.gameMode !== 'ai-vs-ai';

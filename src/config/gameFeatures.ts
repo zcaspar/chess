@@ -6,10 +6,9 @@
  */
 
 export const GAME_FEATURES = {
-  // Learning and assistance features
+  // Ainara mode features (special powers)
+  AINARA_MODE: true,     // Enable Ainara mode (includes all special powers)
   HINTS: true,           // LC0-powered best move suggestions
-  
-  // Special chess variant features  
   NUCLEAR_CHESS: true,   // Nuke opponent pieces (not King/Queen)
   TELEPORTATION: true,   // Teleport your pieces randomly
   
@@ -29,6 +28,13 @@ export const isFeatureEnabled = (feature: GameFeature): boolean => {
 };
 
 /**
+ * Check if Ainara mode is enabled (convenience function)
+ */
+export const isAinaraModeEnabled = (): boolean => {
+  return GAME_FEATURES.AINARA_MODE;
+};
+
+/**
  * Get all enabled features
  */
 export const getEnabledFeatures = (): GameFeature[] => {
@@ -41,20 +47,26 @@ export const getEnabledFeatures = (): GameFeature[] => {
  * Feature display configuration
  */
 export const FEATURE_CONFIG = {
+  AINARA_MODE: {
+    name: 'Ainara Mode',
+    icon: '✨',
+    color: 'indigo',
+    description: 'Special powers: Best Move, Nuke, and Teleport',
+  },
   HINTS: {
-    name: 'Hints',
+    name: 'Best Move (Ainara)',
     icon: '💡',
     color: 'green',
     description: 'Get LC0-powered move suggestions',
   },
   NUCLEAR_CHESS: {
-    name: 'Nuclear Chess',
+    name: 'Nuke (Ainara)',
     icon: '💣',
     color: 'orange',
     description: 'Remove opponent pieces (not King/Queen)',
   },
   TELEPORTATION: {
-    name: 'Teleportation',
+    name: 'Teleport (Ainara)',
     icon: '♦',
     color: 'purple',
     description: 'Teleport your pieces to random locations',

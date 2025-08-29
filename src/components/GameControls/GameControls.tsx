@@ -129,8 +129,17 @@ const GameControls: React.FC = () => {
         Flip Board
       </button>
 
-      {/* Hint System */}
-      {isFeatureEnabled('HINTS') && canUseHint && (
+      {/* Ainara Mode Section */}
+      {isFeatureEnabled('AINARA_MODE') && (
+        <div className="border-t pt-3 mt-3">
+          <h4 className="text-sm font-semibold text-indigo-600 mb-2 flex items-center gap-1">
+            ✨ Ainara Mode
+          </h4>
+        </div>
+      )}
+
+      {/* Ainara Mode - Best Move (Hint System) */}
+      {isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('HINTS') && canUseHint && (
         <div className="space-y-2">
           <button
             onClick={handleRequestHint}
@@ -150,7 +159,7 @@ const GameControls: React.FC = () => {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
-                💡 Show Best Move
+                💡 Best Move (Ainara)
               </>
             )}
           </button>
@@ -176,8 +185,8 @@ const GameControls: React.FC = () => {
         </div>
       )}
 
-      {/* Nuclear Chess System - Only in human vs human mode */}
-      {isFeatureEnabled('NUCLEAR_CHESS') && gameState.gameMode === 'human-vs-human' && !isGameOver && (
+      {/* Ainara Mode - Nuke System (Only in human vs human mode) */}
+      {isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('NUCLEAR_CHESS') && gameState.gameMode === 'human-vs-human' && !isGameOver && (
         <>
           {(canUseNuke('w') || canUseNuke('b')) && (
             <div className="space-y-2">
@@ -198,7 +207,7 @@ const GameControls: React.FC = () => {
                     title="Activate nuke mode - remove one opponent piece"
                   >
                     <span>💣</span>
-                    Nuke (1 use)
+                    Nuke (Ainara)
                   </button>
                 )
               )}
@@ -219,7 +228,7 @@ const GameControls: React.FC = () => {
                     title="Activate nuke mode - remove one opponent piece"
                   >
                     <span>💣</span>
-                    Nuke (1 use)
+                    Nuke (Ainara)
                   </button>
                 )
               )}
@@ -235,8 +244,8 @@ const GameControls: React.FC = () => {
         </>
       )}
 
-      {/* Teleportation System - Only in human vs human mode */}
-      {isFeatureEnabled('TELEPORTATION') && gameState.gameMode === 'human-vs-human' && !isGameOver && (
+      {/* Ainara Mode - Teleportation System (Only in human vs human mode) */}
+      {isFeatureEnabled('AINARA_MODE') && isFeatureEnabled('TELEPORTATION') && gameState.gameMode === 'human-vs-human' && !isGameOver && (
         <>
           {(canUseTeleport('w') || canUseTeleport('b')) && (
             <div className="space-y-2">
@@ -257,7 +266,7 @@ const GameControls: React.FC = () => {
                     title="Activate teleport mode - teleport one of your pieces randomly"
                   >
                     <span>♦</span>
-                    Teleport (1 use)
+                    Teleport (Ainara)
                   </button>
                 )
               )}
@@ -278,7 +287,7 @@ const GameControls: React.FC = () => {
                     title="Activate teleport mode - teleport one of your pieces randomly"
                   >
                     <span>♦</span>
-                    Teleport (1 use)
+                    Teleport (Ainara)
                   </button>
                 )
               )}

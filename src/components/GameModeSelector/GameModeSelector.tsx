@@ -63,7 +63,7 @@ const GameModeSelector: React.FC = () => {
             </div>
             <button
               onClick={() => {
-                if (confirm('Are you sure you want to leave the online game?')) {
+                if (window.confirm('Are you sure you want to leave the online game?')) {
                   leaveRoom();
                 }
               }}
