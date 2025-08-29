@@ -284,8 +284,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
                 </label>
               </div>
 
-              {/* Ainara Mode Toggle - DEBUG: Should always show */}
-              <div className="flex items-center pt-4 border-t border-gray-200 dark:border-gray-600" style={{backgroundColor: '#f0f0f0', padding: '8px', margin: '4px 0'}}>
+              {/* Ainara Mode Toggle */}
+              <div className="flex items-center pt-4 border-t border-gray-200 dark:border-gray-600">
                 <input
                   type="checkbox"
                   id="ainaraMode"
@@ -294,18 +294,11 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
                   className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                 />
                 <label htmlFor="ainaraMode" className="ml-2 block text-sm text-gray-900 dark:text-white">
-                  ✨ Enable Ainara Mode [DEBUG VISIBLE]
+                  ✨ Enable Ainara Mode
                   <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Unlocks special powers: Best Move hints, Nuke, and Teleport
                   </span>
                 </label>
-              </div>
-              
-              {/* Debug Info */}
-              <div className="text-xs text-red-600 mt-2 p-2 bg-yellow-100">
-                DEBUG: Profile loaded: {profile ? 'YES' : 'NO'} | 
-                Preferences: {profile?.preferences ? 'YES' : 'NO'} |
-                Current Ainara: {profile?.preferences?.ainaraMode ? 'ENABLED' : 'DISABLED'}
               </div>
             </div>
           )}
