@@ -284,6 +284,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
                 </label>
               </div>
 
+              {/* Ainara Mode Toggle */}
               <div className="flex items-center pt-4 border-t border-gray-200 dark:border-gray-600">
                 <input
                   type="checkbox"
