@@ -77,10 +77,10 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
       
       // Try multiple approaches to parse the game
       let history: any[] = [];
-      
-      // Approach 1: Direct PGN loading
+      let chessGame = new Chess();
+
+      // Approach 1: Direct PGN loading (works for properly formatted PGN)
       try {
-        const chessGame = new Chess();
         console.log('🔍 Attempting direct PGN load...');
         const success = chessGame.loadPgn(game.pgn);
         if (success) {
@@ -93,12 +93,48 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
             console.log('⚠️ Direct PGN load succeeded but returned 0 moves');
           }
         } else {
-          console.log('❌ Direct PGN load failed');
+          console.log('❌ Direct PGN load failed, trying alternative methods...');
         }
       } catch (pgnError) {
         console.log('❌ Direct PGN load error:', pgnError);
       }
-      
+
+      // Reset game for next attempt
+      chessGame = new Chess();
+
+      // Approach 1.5: Try adding PGN headers if they're missing
+      try {
+        console.log('🔍 Attempting PGN with headers...');
+        const hasPgnHeaders = game.pgn.includes('[Event') || game.pgn.includes('[White');
+
+        if (!hasPgnHeaders) {
+          // Add minimal PGN headers if missing
+          const pgnWithHeaders = `[Event "Saved Game"]
+[Site "Chess App"]
+[Date "${new Date(game.createdAt).toISOString().split('T')[0].replace(/-/g, '.')}"]
+[White "${game.playerColor === 'w' ? 'Player' : game.opponentName}"]
+[Black "${game.playerColor === 'b' ? 'Player' : game.opponentName}"]
+[Result "${game.gameResult.includes('1-0') ? '1-0' : game.gameResult.includes('0-1') ? '0-1' : game.gameResult.includes('1/2') ? '1/2-1/2' : '*'}"]
+
+${game.pgn}`;
+
+          console.log('🔍 Added PGN headers, trying to load...');
+          const success = chessGame.loadPgn(pgnWithHeaders);
+          if (success) {
+            history = chessGame.history({ verbose: true });
+            console.log('✅ PGN with headers load successful, moves:', history.length);
+            if (history.length > 0) {
+              return history;
+            }
+          }
+        }
+      } catch (headerError) {
+        console.log('❌ PGN with headers error:', headerError);
+      }
+
+      // Reset game for next attempt
+      chessGame = new Chess();
+
       // Approach 2: Try cleaning the PGN and removing result markers
       try {
         console.log('🔍 Attempting cleaned PGN load...');
