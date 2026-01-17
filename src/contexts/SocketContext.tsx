@@ -323,8 +323,12 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   };
 
   const offerDraw = () => {
+    console.log('[SocketContext] offerDraw called', { socket: !!socket, isConnected, roomCode });
     if (socket && isConnected && roomCode) {
+      console.log('[SocketContext] Emitting offerDraw event');
       socket.emit('offerDraw');
+    } else {
+      console.log('[SocketContext] Cannot emit offerDraw - missing socket, connection, or roomCode');
     }
   };
 

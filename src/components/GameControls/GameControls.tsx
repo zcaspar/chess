@@ -52,11 +52,24 @@ const GameControls: React.FC = () => {
     ? (assignedColor === 'white' ? 'w' : assignedColor === 'black' ? 'b' : null)
     : currentPlayer;
 
+  // Debug logging for draw offer system
+  console.log('[GameControls] Draw offer state:', {
+    roomCode,
+    assignedColor,
+    myColor,
+    currentPlayer,
+    drawOfferState: gameState.drawOffer,
+    isGameOver
+  });
+
   // Handlers for draw offers - use socket for online games
   const handleOfferDraw = () => {
+    console.log('[GameControls] handleOfferDraw called', { roomCode, myColor, isConnected: !!roomCode });
     if (roomCode) {
+      console.log('[GameControls] Calling socketOfferDraw for online game');
       socketOfferDraw();
     } else if (myColor) {
+      console.log('[GameControls] Calling local offerDraw for offline game');
       offerDraw(myColor);
     }
   };
