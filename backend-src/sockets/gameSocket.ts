@@ -580,9 +580,15 @@ export class GameSocketHandler {
       const isBlackPlayer = room.blackPlayer?.socketId === socket.id;
 
       if (isWhitePlayer || isBlackPlayer) {
+        const offerorColor = isWhitePlayer ? 'w' : 'b';
         const opponent = isWhitePlayer ? room.blackPlayer : room.whitePlayer;
+
+        // Notify the offeror that their draw offer was sent (so their UI updates)
+        socket.emit('drawOfferSent', { by: offerorColor });
+
         if (opponent) {
-          this.io.to(opponent.socketId).emit('drawOffered');
+          // Notify the opponent that a draw was offered
+          this.io.to(opponent.socketId).emit('drawOffered', { by: offerorColor });
         }
       }
     });
@@ -592,6 +598,27 @@ export class GameSocketHandler {
       if (!roomCode) return;
 
       await this.endGame(roomCode, 'draw', 'agreement');
+    });
+
+    socket.on('declineDraw', () => {
+      const roomCode = this.playerRooms.get(socket.id);
+      if (!roomCode) return;
+
+      const room = this.rooms.get(roomCode);
+      if (!room) return;
+
+      const isWhitePlayer = room.whitePlayer?.socketId === socket.id;
+      const isBlackPlayer = room.blackPlayer?.socketId === socket.id;
+
+      if (isWhitePlayer || isBlackPlayer) {
+        const opponent = isWhitePlayer ? room.blackPlayer : room.whitePlayer;
+        if (opponent) {
+          // Notify the opponent (who offered the draw) that it was declined
+          this.io.to(opponent.socketId).emit('drawDeclined');
+        }
+        // Also notify the decliner to clear their draw state
+        socket.emit('drawDeclined');
+      }
     });
 
     // Handle leaving room

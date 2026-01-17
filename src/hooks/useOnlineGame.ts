@@ -38,30 +38,24 @@ export const useOnlineGame = () => {
     // TODO: Update GameContext to handle remote game endings
   }, []);
 
-  const handleDrawOffered = useCallback(() => {
-    // Show draw offer UI
-    console.log('[useOnlineGame] Draw offered by opponent');
-    // TODO: Implement draw offer UI
-  }, []);
-
   useEffect(() => {
     if (!roomCode) return;
 
     // Listen for custom events dispatched by SocketContext
     // SocketContext receives raw socket events and converts them to CustomEvents
+    // Note: Draw events (socketDrawOffered, socketDrawOfferSent, socketDrawDeclined)
+    // are handled by GameContext directly
     console.log('[useOnlineGame] Setting up event listeners for room:', roomCode);
 
     window.addEventListener('socketMoveMade', handleMoveMade);
     window.addEventListener('socketGameEnded', handleGameEnded);
-    window.addEventListener('socketDrawOffered', handleDrawOffered);
 
     return () => {
       console.log('[useOnlineGame] Cleaning up event listeners');
       window.removeEventListener('socketMoveMade', handleMoveMade);
       window.removeEventListener('socketGameEnded', handleGameEnded);
-      window.removeEventListener('socketDrawOffered', handleDrawOffered);
     };
-  }, [roomCode, handleMoveMade, handleGameEnded, handleDrawOffered]);
+  }, [roomCode, handleMoveMade, handleGameEnded]);
 
   // Get socket functions at hook level
   const { makeMove: socketMakeMove } = useSocket();

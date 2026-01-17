@@ -1219,15 +1219,45 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       gameEndedRef.current = true;
     };
 
-    const handleSocketDrawOffered = () => {
-      console.log('🌐 Socket draw offered received');
-      
+    const handleSocketDrawOffered = (event: Event) => {
+      const customEvent = event as CustomEvent<{ by: 'w' | 'b' }>;
+      const data = customEvent.detail;
+      console.log('🌐 Socket draw offered received from:', data?.by);
+
       // Update draw offer state
       setGameState(prev => ({
         ...prev,
         drawOffer: {
           offered: true,
-          by: prev.game.turn() === 'w' ? 'b' : 'w', // The other player offered
+          by: data?.by || (prev.game.turn() === 'w' ? 'b' : 'w'), // Use server data or fallback
+        },
+      }));
+    };
+
+    const handleSocketDrawOfferSent = (event: Event) => {
+      const customEvent = event as CustomEvent<{ by: 'w' | 'b' }>;
+      const data = customEvent.detail;
+      console.log('🌐 Socket draw offer sent confirmation:', data?.by);
+
+      // Update local state to show we offered a draw
+      setGameState(prev => ({
+        ...prev,
+        drawOffer: {
+          offered: true,
+          by: data?.by || prev.game.turn(),
+        },
+      }));
+    };
+
+    const handleSocketDrawDeclined = () => {
+      console.log('🌐 Socket draw declined received');
+
+      // Clear draw offer state
+      setGameState(prev => ({
+        ...prev,
+        drawOffer: {
+          offered: false,
+          by: null,
         },
       }));
     };
@@ -1288,7 +1318,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     // Add event listeners
     window.addEventListener('socketMoveMade', handleSocketMoveMade as EventListener);
     window.addEventListener('socketGameEnded', handleSocketGameEnded as EventListener);
-    window.addEventListener('socketDrawOffered', handleSocketDrawOffered);
+    window.addEventListener('socketDrawOffered', handleSocketDrawOffered as EventListener);
+    window.addEventListener('socketDrawOfferSent', handleSocketDrawOfferSent as EventListener);
+    window.addEventListener('socketDrawDeclined', handleSocketDrawDeclined);
     window.addEventListener('socketTimerUpdate', handleSocketTimerUpdate as EventListener);
     window.addEventListener('socketGameRestored', handleSocketGameRestored as EventListener);
     window.addEventListener('socketRoomJoined', handleSocketRoomJoined as EventListener);
@@ -1297,7 +1329,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       // Clean up event listeners
       window.removeEventListener('socketMoveMade', handleSocketMoveMade as EventListener);
       window.removeEventListener('socketGameEnded', handleSocketGameEnded as EventListener);
-      window.removeEventListener('socketDrawOffered', handleSocketDrawOffered);
+      window.removeEventListener('socketDrawOffered', handleSocketDrawOffered as EventListener);
+      window.removeEventListener('socketDrawOfferSent', handleSocketDrawOfferSent as EventListener);
+      window.removeEventListener('socketDrawDeclined', handleSocketDrawDeclined);
       window.removeEventListener('socketTimerUpdate', handleSocketTimerUpdate as EventListener);
       window.removeEventListener('socketGameRestored', handleSocketGameRestored as EventListener);
       window.removeEventListener('socketRoomJoined', handleSocketRoomJoined as EventListener);

@@ -241,10 +241,22 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           window.dispatchEvent(new CustomEvent('socketGameEnded', { detail: data }));
         });
 
-        socketInstance.on('drawOffered', () => {
-          console.log('Draw offered');
+        socketInstance.on('drawOffered', (data: { by: 'w' | 'b' }) => {
+          console.log('Draw offered by:', data?.by);
           // Broadcast to GameContext or other components via custom event
-          window.dispatchEvent(new CustomEvent('socketDrawOffered'));
+          window.dispatchEvent(new CustomEvent('socketDrawOffered', { detail: data }));
+        });
+
+        socketInstance.on('drawOfferSent', (data: { by: 'w' | 'b' }) => {
+          console.log('Draw offer sent confirmation:', data?.by);
+          // Broadcast to GameContext - confirms your draw offer was sent
+          window.dispatchEvent(new CustomEvent('socketDrawOfferSent', { detail: data }));
+        });
+
+        socketInstance.on('drawDeclined', () => {
+          console.log('Draw declined');
+          // Broadcast to GameContext - draw offer was declined
+          window.dispatchEvent(new CustomEvent('socketDrawDeclined'));
         });
 
         socketInstance.on('gameRestored', (data) => {
