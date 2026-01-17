@@ -1,21 +1,22 @@
 import React, { useState } from 'react';
 import { useGame } from '../../contexts/GameContext';
+import { useSocket } from '../../contexts/SocketContext';
 import { useAuth } from '../../hooks/useAuth';
 import { isFeatureEnabled } from '../../config/gameFeatures';
 
 const GameControls: React.FC = () => {
-  const { 
-    gameState, 
-    resetGame, 
-    undoMove, 
-    redoMove, 
-    resign, 
+  const {
+    gameState,
+    resetGame,
+    undoMove,
+    redoMove,
+    resign,
     offerDraw,
     acceptDraw,
     declineDraw,
     pauseAIGame,
     resumeAIGame,
-    canUndo, 
+    canUndo,
     canRedo,
     // Hint system
     requestHint,
@@ -30,13 +31,49 @@ const GameControls: React.FC = () => {
     cancelTeleportMode,
     canUseTeleport
   } = useGame();
-  
+
+  const {
+    assignedColor,
+    roomCode,
+    offerDraw: socketOfferDraw,
+    acceptDraw: socketAcceptDraw,
+    declineDraw: socketDeclineDraw
+  } = useSocket();
+
   const [isRequestingHint, setIsRequestingHint] = useState(false);
-  
+
   const { updatePreferences, profile } = useAuth();
 
   const currentPlayer = gameState.game.turn();
   const isGameOver = gameState.game.isGameOver() || gameState.gameResult !== '';
+
+  // For draw offers, use assigned color in online games, otherwise use current turn
+  const myColor: 'w' | 'b' | null = roomCode && assignedColor
+    ? (assignedColor === 'white' ? 'w' : assignedColor === 'black' ? 'b' : null)
+    : currentPlayer;
+
+  // Handlers for draw offers - use socket for online games
+  const handleOfferDraw = () => {
+    if (roomCode) {
+      socketOfferDraw();
+    } else if (myColor) {
+      offerDraw(myColor);
+    }
+  };
+
+  const handleAcceptDraw = () => {
+    if (roomCode) {
+      socketAcceptDraw();
+    }
+    acceptDraw(); // Also update local state
+  };
+
+  const handleDeclineDraw = () => {
+    if (roomCode) {
+      socketDeclineDraw();
+    }
+    declineDraw(); // Also update local state
+  };
 
   // Check if Ainara Mode is enabled for the current user
   const isAinaraModeEnabled = isFeatureEnabled('AINARA_MODE') && (profile?.preferences?.ainaraMode ?? false);
@@ -336,29 +373,29 @@ const GameControls: React.FC = () => {
       )}
 
       {/* Draw Controls */}
-      {!isGameOver && (
+      {!isGameOver && myColor && (
         <div>
           {!gameState.drawOffer.offered ? (
             <button
-              onClick={() => offerDraw(currentPlayer)}
+              onClick={handleOfferDraw}
               className="w-full px-3 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors text-sm"
             >
               Offer Draw
             </button>
-          ) : gameState.drawOffer.by !== currentPlayer ? (
+          ) : gameState.drawOffer.by !== myColor ? (
             <div className="space-y-2">
               <p className="text-sm text-center">
                 {gameState.drawOffer.by === 'w' ? 'White' : 'Black'} offers a draw
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <button
-                  onClick={acceptDraw}
+                  onClick={handleAcceptDraw}
                   className="px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors text-sm"
                 >
                   Accept
                 </button>
                 <button
-                  onClick={declineDraw}
+                  onClick={handleDeclineDraw}
                   className="px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors text-sm"
                 >
                   Decline
