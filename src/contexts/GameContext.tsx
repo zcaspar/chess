@@ -1289,17 +1289,23 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const data = event.detail;
       console.log('🌐 Socket room joined received:', data);
       console.log('🎮 Game state from server:', data.gameState);
-      
+      console.log('👥 Players from server:', data.players);
+
       // Initialize the game with the server's state
       const serverGame = new Chess(data.gameState.fen);
-      
+
       // If there's a history from the server, rebuild it
       let gameHistory: Move[] = [];
       if (data.gameState.history && data.gameState.history.length > 0) {
         console.log('🔄 Rebuilding game history from server moves:', data.gameState.history.length);
         gameHistory = data.gameState.history;
       }
-      
+
+      // Get player display names from server data
+      const whitePlayerName = data.players?.white?.displayName || data.players?.white?.username || 'Player 1';
+      const blackPlayerName = data.players?.black?.displayName || data.players?.black?.username || 'Player 2';
+      console.log(`📛 Setting player names: White=${whitePlayerName}, Black=${blackPlayerName}`);
+
       setGameState(prev => ({
         ...prev,
         game: serverGame,
@@ -1310,9 +1316,33 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         blackTime: data.blackTime || (data.timeControl ? data.timeControl.initial : prev.blackTime),
         activeColor: data.gameState.turn,
         gameMode: 'human-vs-human', // Online games are always human vs human
+        // Set player names based on color assignment
+        players: {
+          player1: prev.colorAssignment.player1 === 'w' ? whitePlayerName : blackPlayerName,
+          player2: prev.colorAssignment.player2 === 'w' ? whitePlayerName : blackPlayerName,
+        },
       }));
-      
+
       console.log('✅ Game state synchronized with server');
+    };
+
+    const handleSocketGameStarted = (event: CustomEvent) => {
+      const data = event.detail;
+      console.log('🎮 Socket game started received:', data);
+
+      // Get player display names from server data
+      const whitePlayerName = data.white?.displayName || data.white?.username || 'Player 1';
+      const blackPlayerName = data.black?.displayName || data.black?.username || 'Player 2';
+      console.log(`📛 Game started - White: ${whitePlayerName}, Black: ${blackPlayerName}`);
+
+      // Update player names based on color assignment
+      setGameState(prev => ({
+        ...prev,
+        players: {
+          player1: prev.colorAssignment.player1 === 'w' ? whitePlayerName : blackPlayerName,
+          player2: prev.colorAssignment.player2 === 'w' ? whitePlayerName : blackPlayerName,
+        },
+      }));
     };
 
     // Add event listeners
@@ -1324,6 +1354,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     window.addEventListener('socketTimerUpdate', handleSocketTimerUpdate as EventListener);
     window.addEventListener('socketGameRestored', handleSocketGameRestored as EventListener);
     window.addEventListener('socketRoomJoined', handleSocketRoomJoined as EventListener);
+    window.addEventListener('socketGameStarted', handleSocketGameStarted as EventListener);
 
     return () => {
       // Clean up event listeners
@@ -1335,6 +1366,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       window.removeEventListener('socketTimerUpdate', handleSocketTimerUpdate as EventListener);
       window.removeEventListener('socketGameRestored', handleSocketGameRestored as EventListener);
       window.removeEventListener('socketRoomJoined', handleSocketRoomJoined as EventListener);
+      window.removeEventListener('socketGameStarted', handleSocketGameStarted as EventListener);
     };
   }, [saveGameToHistory]);
 

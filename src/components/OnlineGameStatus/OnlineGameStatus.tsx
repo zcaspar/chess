@@ -58,11 +58,11 @@ export const OnlineGameStatus: React.FC = () => {
           <div className="text-sm">
             <div className="flex justify-between">
               <span>White:</span>
-              <span>{players.white?.username || 'Waiting...'}</span>
+              <span>{players.white?.displayName || players.white?.username || 'Waiting...'}</span>
             </div>
             <div className="flex justify-between">
               <span>Black:</span>
-              <span>{players.black?.username || 'Waiting...'}</span>
+              <span>{players.black?.displayName || players.black?.username || 'Waiting...'}</span>
             </div>
           </div>
         </div>

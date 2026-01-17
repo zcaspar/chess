@@ -21,6 +21,7 @@ interface GameRoom {
 interface PlayerData {
   id: string;
   username: string;
+  displayName?: string;
   socketId: string;
 }
 
@@ -134,11 +135,11 @@ export class GameSocketHandler {
     });
 
     // Create a new game room
-    socket.on('createRoom', async (data: { timeControl?: { initial: number; increment: number } }) => {
+    socket.on('createRoom', async (data: { timeControl?: { initial: number; increment: number }; displayName?: string }) => {
       try {
         const roomCode = this.generateRoomCode();
-        console.log(`🎮 Creating new room ${roomCode} for socket ${socket.id} (${socket.data.username})`);
-        
+        console.log(`🎮 Creating new room ${roomCode} for socket ${socket.id} (${data.displayName || socket.data.username})`);
+
         const room: GameRoom = {
           id: roomCode,
           roomCode,
@@ -156,6 +157,7 @@ export class GameSocketHandler {
         const creatorData: PlayerData = {
           id: socket.data.userId,
           username: socket.data.username,
+          displayName: data.displayName || socket.data.username,
           socketId: socket.id,
         };
         
@@ -233,9 +235,12 @@ export class GameSocketHandler {
     });
 
     // Join an existing room
-    socket.on('joinRoom', async (roomCode: string) => {
+    socket.on('joinRoom', async (data: string | { roomCode: string; displayName?: string }) => {
       try {
-        console.log(`🔗 Socket ${socket.id} (${socket.data.username}) attempting to join room ${roomCode}`);
+        // Support both old format (string) and new format (object)
+        const roomCode = typeof data === 'string' ? data : data.roomCode;
+        const displayName = typeof data === 'object' ? data.displayName : undefined;
+        console.log(`🔗 Socket ${socket.id} (${displayName || socket.data.username}) attempting to join room ${roomCode}`);
         console.log(`Socket auth data: userId=${socket.data.userId}, username=${socket.data.username}`);
         console.log(`Current active rooms: [${Array.from(this.rooms.keys()).join(', ')}]`);
         const room = this.rooms.get(roomCode);
@@ -290,6 +295,7 @@ export class GameSocketHandler {
         const playerData: PlayerData = {
           id: socket.data.userId,
           username: socket.data.username,
+          displayName: displayName || socket.data.username,
           socketId: socket.id,
         };
 

@@ -8,8 +8,8 @@ interface SocketContextType {
   roomCode: string | null;
   assignedColor: 'white' | 'black' | 'spectator' | null;
   players: {
-    white: { id: string; username: string } | null;
-    black: { id: string; username: string } | null;
+    white: { id: string; username: string; displayName?: string } | null;
+    black: { id: string; username: string; displayName?: string } | null;
   };
   gameState: {
     fen: string;
@@ -50,8 +50,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [assignedColor, setAssignedColor] = useState<'white' | 'black' | 'spectator' | null>(null);
   const [players, setPlayers] = useState<{
-    white: { id: string; username: string } | null;
-    black: { id: string; username: string } | null;
+    white: { id: string; username: string; displayName?: string } | null;
+    black: { id: string; username: string; displayName?: string } | null;
   }>({ white: null, black: null });
   
   const [gameState, setGameState] = useState<{
@@ -64,7 +64,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     timeControl: { initial: number; increment: number } | null;
   } | null>(null);
   
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   useEffect(() => {
     if (!user) return;
@@ -156,6 +156,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             white: data.white,
             black: data.black,
           });
+          // Broadcast to GameContext to update player names
+          window.dispatchEvent(new CustomEvent('socketGameStarted', { detail: data }));
         });
 
         socketInstance.on('playerDisconnected', (data) => {
@@ -294,13 +296,17 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
   const createRoom = (timeControl?: { initial: number; increment: number }) => {
     if (socket && isConnected) {
-      socket.emit('createRoom', { timeControl });
+      // Pass display name to server for player identification
+      const displayName = profile?.displayName || profile?.username || user?.displayName || 'Player';
+      socket.emit('createRoom', { timeControl, displayName });
     }
   };
 
   const joinRoom = (code: string) => {
     if (socket && isConnected) {
-      socket.emit('joinRoom', code);
+      // Pass display name to server for player identification
+      const displayName = profile?.displayName || profile?.username || user?.displayName || 'Player';
+      socket.emit('joinRoom', { roomCode: code, displayName });
     }
   };
 
