@@ -29,22 +29,30 @@ export class GameSocketHandler {
   private io: Server;
   private rooms: Map<string, GameRoom> = new Map();
   private playerRooms: Map<string, string> = new Map(); // socketId -> roomCode
+  private saveInterval: ReturnType<typeof setInterval> | null = null;
+  private timerInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(io: Server) {
     this.io = io;
-    
+
     // Restore rooms from persistence on startup
     this.restorePersistedRooms();
-    
+
     // Save rooms periodically
-    setInterval(() => {
+    this.saveInterval = setInterval(() => {
       RoomPersistence.saveRooms(this.rooms);
     }, 30000); // Every 30 seconds
-    
+
     // Timer update broadcast - send timer updates every second
-    setInterval(() => {
+    this.timerInterval = setInterval(() => {
       this.broadcastTimerUpdates();
     }, 1000);
+  }
+
+  shutdown() {
+    if (this.saveInterval) clearInterval(this.saveInterval);
+    if (this.timerInterval) clearInterval(this.timerInterval);
+    RoomPersistence.saveRooms(this.rooms);
   }
   
   private restorePersistedRooms() {
@@ -115,11 +123,12 @@ export class GameSocketHandler {
         
         // Check if this is a Firebase Admin configuration issue
         const errorMessage = (error as Error)?.message || '';
-        if (errorMessage.includes('auth/invalid-project-id') || 
+        if (process.env.NODE_ENV !== 'production' && (
+            errorMessage.includes('auth/invalid-project-id') ||
             errorMessage.includes('no-app') ||
             errorMessage.includes('app/invalid-credential') ||
             errorMessage.includes('Firebase Admin SDK') ||
-            errorMessage.includes('project')) {
+            errorMessage.includes('project'))) {
           console.warn(`Firebase Admin not configured, using demo auth for socket ${socket.id}`);
           // Create a mock user for development/demo purposes
           socket.data.userId = 'demo-user-' + Date.now() + '-' + socket.id;
@@ -401,6 +410,11 @@ export class GameSocketHandler {
     // Handle moves
     socket.on('makeMove', async (data: { from: string; to: string; promotion?: string }) => {
       try {
+        if (!socket.data.userId) {
+          socket.emit('error', { message: 'Not authenticated' });
+          return;
+        }
+
         const roomCode = this.playerRooms.get(socket.id);
         if (!roomCode) {
           socket.emit('error', { message: 'Not in a room' });
@@ -556,6 +570,7 @@ export class GameSocketHandler {
     // Handle resignation
     socket.on('resign', async () => {
       try {
+        if (!socket.data.userId) return;
         const roomCode = this.playerRooms.get(socket.id);
         if (!roomCode) return;
 
@@ -718,33 +733,29 @@ export class GameSocketHandler {
       if (room.timeControl && !room.game.isGameOver() && room.whitePlayer && room.blackPlayer && room.game.history().length > 0) {
         const now = Date.now();
         const elapsed = (now - room.lastMoveTime) / 1000;
-        
-        let updatedWhiteTime = room.whiteTime;
-        let updatedBlackTime = room.blackTime;
-        
-        // Deduct time from the active player
+
+        // Compute display times WITHOUT mutating room state.
+        // room.whiteTime/blackTime are only updated authoritatively in makeMove.
+        let displayWhiteTime = room.whiteTime;
+        let displayBlackTime = room.blackTime;
+
         if (room.game.turn() === 'w') {
-          updatedWhiteTime = Math.max(0, room.whiteTime - elapsed);
+          displayWhiteTime = Math.max(0, room.whiteTime - elapsed);
         } else {
-          updatedBlackTime = Math.max(0, room.blackTime - elapsed);
+          displayBlackTime = Math.max(0, room.blackTime - elapsed);
         }
-        
-        // Update room time
-        room.whiteTime = updatedWhiteTime;
-        room.blackTime = updatedBlackTime;
-        room.lastMoveTime = now;
-        
+
         // Check for timeout
-        if (updatedWhiteTime <= 0 || updatedBlackTime <= 0) {
-          const winner = updatedWhiteTime <= 0 ? 'black' : 'white';
+        if (displayWhiteTime <= 0 || displayBlackTime <= 0) {
+          const winner = displayWhiteTime <= 0 ? 'black' : 'white';
           this.endGame(roomCode, winner, 'timeout');
           continue;
         }
-        
+
         // Broadcast timer update to all players in the room
         this.io.to(roomCode).emit('timerUpdate', {
-          whiteTime: updatedWhiteTime,
-          blackTime: updatedBlackTime,
+          whiteTime: displayWhiteTime,
+          blackTime: displayBlackTime,
           turn: room.game.turn(),
         });
       }
@@ -764,6 +775,7 @@ export class GameSocketHandler {
     const room = this.rooms.get(roomCode);
     if (!room || !room.gameId) return;
 
+    try {
     // Update database
     await query(
       'UPDATE games SET result = $1, ended_at = CURRENT_TIMESTAMP, metadata = jsonb_set(metadata, \'{endReason}\', $2) WHERE id = $3',
@@ -828,5 +840,10 @@ export class GameSocketHandler {
     setTimeout(() => {
       this.rooms.delete(roomCode);
     }, 300000); // 5 minutes
+    } catch (error) {
+      console.error(`Error ending game in room ${roomCode}:`, error);
+      // Still notify players even if DB update failed
+      this.io.to(roomCode).emit('gameEnded', { result, reason });
+    }
   }
 }

@@ -1,30 +1,57 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useGame } from '../../contexts/GameContext';
 import { useSocket } from '../../contexts/SocketContext';
 
 const ChessClock: React.FC = () => {
   const { gameState, setTimeControl, pauseClock, getPlayerByColor } = useGame();
-  const { whiteTime, blackTime, activeColor, timeControl } = gameState;
+  const { whiteTime, blackTime, activeColor, timeControl, startTime } = gameState;
   const { roomCode, gameState: socketGameState } = useSocket();
   const [showTimeSelector, setShowTimeSelector] = useState(false);
   const [customMinutes, setCustomMinutes] = useState('5');
   const inputRef = useRef<HTMLInputElement>(null);
+  // Local display times updated at high frequency without triggering global re-renders
+  const [displayWhiteTime, setDisplayWhiteTime] = useState(whiteTime);
+  const [displayBlackTime, setDisplayBlackTime] = useState(blackTime);
+
+  // High-frequency local timer for smooth display
+  useEffect(() => {
+    if (!activeColor || !startTime || gameState.gameResult) {
+      setDisplayWhiteTime(whiteTime);
+      setDisplayBlackTime(blackTime);
+      return;
+    }
+
+    const tick = () => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      if (activeColor === 'w') {
+        setDisplayWhiteTime(Math.max(0, whiteTime - elapsed));
+        setDisplayBlackTime(blackTime);
+      } else {
+        setDisplayWhiteTime(whiteTime);
+        setDisplayBlackTime(Math.max(0, blackTime - elapsed));
+      }
+    };
+
+    tick(); // immediate first tick
+    const id = setInterval(tick, 100);
+    return () => clearInterval(id);
+  }, [activeColor, startTime, whiteTime, blackTime, gameState.gameResult]);
 
   // Check if we're in an online multiplayer room
   const isInOnlineRoom = Boolean(roomCode);
-  
+
   // Use online room's time control if available, otherwise use local game state
-  const effectiveTimeControl = isInOnlineRoom && socketGameState?.timeControl 
-    ? socketGameState.timeControl 
+  const effectiveTimeControl = isInOnlineRoom && socketGameState?.timeControl
+    ? socketGameState.timeControl
     : timeControl;
-  
-  const effectiveWhiteTime = isInOnlineRoom && socketGameState 
-    ? socketGameState.whiteTime 
-    : whiteTime;
-    
-  const effectiveBlackTime = isInOnlineRoom && socketGameState 
-    ? socketGameState.blackTime 
-    : blackTime;
+
+  const effectiveWhiteTime = isInOnlineRoom && socketGameState
+    ? socketGameState.whiteTime
+    : displayWhiteTime;
+
+  const effectiveBlackTime = isInOnlineRoom && socketGameState
+    ? socketGameState.blackTime
+    : displayBlackTime;
 
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);

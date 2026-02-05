@@ -9,7 +9,7 @@ export class BackendAI {
 
   constructor() {
     // Call LC0 server directly since main backend doesn't have AI endpoints
-    this.lc0ServerUrl = 'https://web-production-4cc9.up.railway.app';
+    this.lc0ServerUrl = process.env.REACT_APP_LC0_SERVER_URL || 'https://web-production-4cc9.up.railway.app';
   }
 
   async getBestMove(fen: string, difficulty: DifficultyLevel = 'medium'): Promise<Move | null> {
@@ -33,7 +33,13 @@ export class BackendAI {
 
       const data = await response.json();
       console.log(`⚡ LC0 neural network responded in ${data.responseTime}ms with engine: ${data.engine}`);
-      
+
+      // Validate response structure
+      if (!data.move || !data.move.from || !data.move.to) {
+        console.error('LC0 returned invalid move format:', data);
+        return null;
+      }
+
       // Convert LC0 response to chess.js Move format
       const move = {
         from: data.move.from,
@@ -41,7 +47,7 @@ export class BackendAI {
         promotion: data.move.uci && data.move.uci.length > 4 ? data.move.uci[4] : undefined,
         san: data.move.uci // Will be updated when move is validated
       };
-      
+
       return move as Move;
       
     } catch (error) {

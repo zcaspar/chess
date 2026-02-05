@@ -343,7 +343,11 @@ router.delete('/:id', authenticateToken, async (req: AuthenticatedRequest, res) 
  */
 router.get('/admin/recent', authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
-    // TODO: Add admin role check here when role system is implemented
+    // Restrict to known admin UIDs until a full role system is implemented
+    const ADMIN_UIDS = (process.env.ADMIN_UIDS || '').split(',').filter(Boolean);
+    if (ADMIN_UIDS.length > 0 && !ADMIN_UIDS.includes(req.user!.uid)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
     const limit = parseInt(req.query.limit as string) || 20;
 
     if (limit > 100) {

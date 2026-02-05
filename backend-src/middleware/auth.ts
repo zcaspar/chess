@@ -50,9 +50,10 @@ export const verifyFirebaseToken = async (
       
       // Check if this is a Firebase Admin configuration issue
       const errorMessage = (error as Error)?.message || '';
-      if (errorMessage.includes('auth/invalid-project-id') || 
+      if (process.env.NODE_ENV !== 'production' && (
+          errorMessage.includes('auth/invalid-project-id') ||
           errorMessage.includes('no-app') ||
-          errorMessage.includes('app/invalid-credential')) {
+          errorMessage.includes('app/invalid-credential'))) {
         console.warn('Firebase Admin not properly configured, using mock auth for development');
         // Create a mock user for development/demo purposes
         req.user = {

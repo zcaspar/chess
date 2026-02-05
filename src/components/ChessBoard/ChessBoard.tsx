@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { Square } from 'chess.js';
 import { useGame } from '../../contexts/GameContext';
@@ -6,6 +6,18 @@ import { useSocket } from '../../contexts/SocketContext';
 import { useOnlineGame } from '../../hooks/useOnlineGame';
 import { useAuth } from '../../hooks/useAuth';
 import { useResponsiveBoardSize } from '../../hooks/useResponsiveBoardSize';
+
+// Pre-computed constant: all 64 board squares
+const ALL_SQUARES: Square[] = [
+  'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8',
+  'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8',
+  'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8',
+  'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8',
+  'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8',
+  'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8',
+  'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8',
+];
 
 const ChessBoard: React.FC = () => {
   const { gameState, makeMove, executeNuke, executeTeleport } = useGame();
@@ -52,7 +64,7 @@ const ChessBoard: React.FC = () => {
     }
   }, [gameState.gameResult]);
 
-  const getMoveOptions = (square: Square) => {
+  const getMoveOptions = useCallback((square: Square) => {
     const moves = gameState.game.moves({
       square,
       verbose: true,
@@ -70,9 +82,9 @@ const ChessBoard: React.FC = () => {
     });
     
     return options;
-  };
+  }, [gameState.game]);
 
-  const onSquareClick = (square: Square) => {
+  const onSquareClick = useCallback((square: Square) => {
     // Don't allow any interaction if game has ended
     if (gameState.gameResult) {
       return;
@@ -151,16 +163,16 @@ const ChessBoard: React.FC = () => {
         setOptionSquares({});
       }
     }
-  };
+  }, [gameState.gameResult, gameState.nukeModeActive, gameState.teleportModeActive, gameState.game, moveFrom, isOnlineGame, roomCode, assignedColor, socketMakeMove, makeMove, executeNuke, executeTeleport, getMoveOptions]);
 
-  const onSquareRightClick = (square: Square) => {
+  const onSquareRightClick = useCallback((square: Square) => {
     const newSquares = rightClickedSquares.includes(square)
       ? rightClickedSquares.filter((s) => s !== square)
       : [...rightClickedSquares, square];
     setRightClickedSquares(newSquares);
-  };
+  }, [rightClickedSquares]);
 
-  const onDrop = (sourceSquare: Square, targetSquare: Square) => {
+  const onDrop = useCallback((sourceSquare: Square, targetSquare: Square) => {
     // Don't allow drag and drop if game has ended
     if (gameState.gameResult) {
       return false;
@@ -194,9 +206,9 @@ const ChessBoard: React.FC = () => {
     setMoveFrom(null);
     setOptionSquares({});
     return moveSuccessful;
-  };
+  }, [gameState.gameResult, gameState.nukeModeActive, gameState.teleportModeActive, gameState.game, isOnlineGame, roomCode, assignedColor, socketMakeMove, makeMove]);
 
-  const onDragBegin = (piece: string, sourceSquare: Square) => {
+  const onDragBegin = useCallback((piece: string, sourceSquare: Square) => {
     // Don't allow drag if game has ended
     if (gameState.gameResult) {
       return false;
@@ -232,14 +244,14 @@ const ChessBoard: React.FC = () => {
     setMoveFrom(sourceSquare);
     setOptionSquares(getMoveOptions(sourceSquare));
     return true;
-  };
+  }, [gameState.gameResult, gameState.nukeModeActive, gameState.teleportModeActive, gameState.game, isOnlineGame, roomCode, assignedColor, getMoveOptions]);
 
-  const onDragEnd = () => {
+  const onDragEnd = useCallback(() => {
     // Clear highlights when drag ends
     setIsDragging(false);
     setMoveFrom(null);
     setOptionSquares({});
-  };
+  }, []);
 
   // Custom square styles for highlights
   const customSquareStyles = useMemo(() => {
@@ -251,16 +263,7 @@ const ChessBoard: React.FC = () => {
       const activeNukeColor = gameState.nukeModeActive.white ? 'w' : 'b';
       
       // Highlight all opponent pieces that can be nuked (not King or Queen)
-      const allSquares: Square[] = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8',
-                                    'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8',
-                                    'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8',
-                                    'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8',
-                                    'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8',
-                                    'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8',
-                                    'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8',
-                                    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8'];
-      
-      allSquares.forEach((square) => {
+      ALL_SQUARES.forEach((square) => {
         const piece = gameState.game.get(square);
         if (piece && piece.color !== activeNukeColor && piece.type !== 'k' && piece.type !== 'q') {
           styles[square] = { 
@@ -279,16 +282,7 @@ const ChessBoard: React.FC = () => {
       const activeTeleportColor = gameState.teleportModeActive.white ? 'w' : 'b';
       
       // Highlight all own pieces that can be teleported
-      const allSquares: Square[] = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8',
-                                    'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8',
-                                    'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8',
-                                    'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8',
-                                    'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8',
-                                    'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8',
-                                    'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8',
-                                    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8'];
-      
-      allSquares.forEach((square) => {
+      ALL_SQUARES.forEach((square) => {
         const piece = gameState.game.get(square);
         if (piece && piece.color === activeTeleportColor) {
           styles[square] = { 

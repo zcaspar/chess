@@ -41,6 +41,7 @@ const GameControls: React.FC = () => {
   } = useSocket();
 
   const [isRequestingHint, setIsRequestingHint] = useState(false);
+  const [hintError, setHintError] = useState<string | null>(null);
 
   const { updatePreferences, profile } = useAuth();
 
@@ -104,29 +105,17 @@ const GameControls: React.FC = () => {
 
   const handleRequestHint = async () => {
     if (isRequestingHint || !canUseHint) return;
-    
-    console.log('🎯 Hint request started:', {
-      canUseHint,
-      gameMode: gameState.gameMode,
-      hintAvailable: gameState.hintAvailable,
-      gameResult: gameState.gameResult,
-      backendUrl: process.env.REACT_APP_BACKEND_URL
-    });
-    
+
+    setHintError(null);
     setIsRequestingHint(true);
     try {
       const success = await requestHint();
-      console.log('🎯 Hint request result:', success);
       if (!success) {
-        // Show error message or fallback
-        console.warn('❌ Failed to get hint - Check browser network tab for errors');
-        alert('Failed to get hint. Please check the browser console for details.');
-      } else {
-        console.log('✅ Hint received successfully');
+        setHintError('Hint unavailable. The engine may be offline.');
       }
     } catch (error) {
-      console.error('❌ Error requesting hint:', error);
-      alert('Error requesting hint: ' + (error as Error).message);
+      console.error('Error requesting hint:', error);
+      setHintError('Failed to get hint. Please try again.');
     } finally {
       setIsRequestingHint(false);
     }
@@ -219,7 +208,12 @@ const GameControls: React.FC = () => {
               </>
             )}
           </button>
-          {((currentPlayer === 'w' && !gameState.hintAvailable.white) || 
+          {hintError && (
+            <p className="text-xs text-center text-red-500 font-medium">
+              {hintError}
+            </p>
+          )}
+          {((currentPlayer === 'w' && !gameState.hintAvailable.white) ||
             (currentPlayer === 'b' && !gameState.hintAvailable.black)) && (
             <p className="text-xs text-center text-gray-500">
               Hint already used by {currentPlayer === 'w' ? 'White' : 'Black'}

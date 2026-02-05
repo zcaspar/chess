@@ -27,6 +27,9 @@ CREATE INDEX IF NOT EXISTS idx_game_history_player_id ON game_history(player_id)
 CREATE INDEX IF NOT EXISTS idx_game_history_created_at ON game_history(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_game_history_player_outcome ON game_history(player_id, game_outcome);
 CREATE INDEX IF NOT EXISTS idx_game_history_game_mode ON game_history(game_mode);
+CREATE INDEX IF NOT EXISTS idx_game_history_opponent_id ON game_history(opponent_id);
+CREATE INDEX IF NOT EXISTS idx_game_history_game_result ON game_history(game_result);
+CREATE INDEX IF NOT EXISTS idx_game_history_player_created ON game_history(player_id, created_at DESC);
 
 -- Create trigger to automatically update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()

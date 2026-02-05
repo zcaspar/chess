@@ -204,6 +204,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   const aiRef = useRef<ChessAI>(new ChessAI('medium', 1000));
   const isAiThinking = useRef<boolean>(false);
   const gameEndedRef = useRef<boolean>(false); // Track game end state to prevent race conditions
+  const aiMoveGameId = useRef<string>(''); // Track which game the AI is thinking for
 
   // Helper function to update game stats based on result
   const updateGameStats = useCallback((result: string, currentStats: GameStats, colorAssignment: ColorAssignment, players: PlayerInfo, winningColor?: 'w' | 'b', statsAlreadyUpdated: boolean = false, gameId?: string): GameStats => {
@@ -521,24 +522,22 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
   }, [authContext, gameState.gameMode, gameState.aiColor]);
 
-  // Clock ticker
+  // Clock ticker — only checks for time expiration at 1s intervals.
+  // Display updates are handled locally in ChessClock for performance
+  // (avoids re-rendering the entire app 10x/second).
   useEffect(() => {
     if (gameState.timeControl && gameState.activeColor && gameState.startTime && !gameState.gameResult) {
       intervalRef.current = setInterval(() => {
         setGameState(prev => {
-          // Check if we should still be running the timer
           if (!prev.activeColor || prev.gameResult || !prev.startTime) {
             return prev;
           }
-          
-          // For AI turns, let the timer run normally
-          // The AI computation time is separate from game time
-          
+
           const elapsed = (Date.now() - prev.startTime) / 1000;
           const timeKey = prev.activeColor === 'w' ? 'whiteTime' : 'blackTime';
           const newTime = Math.max(0, prev[timeKey] - elapsed);
-          
-          // Check for time expiration
+
+          // Only update state when time expires (not every tick)
           if (newTime === 0) {
             const losingColor = prev.activeColor!;
             const winningColor = prev.activeColor === 'w' ? 'b' : 'w';
@@ -549,22 +548,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
             const result = `${winnerName} wins on time! ${loserName} ran out of time.`;
             console.log('⏰ TIME EXPIRED:', { losingColor, loserName, result });
             const updatedStats = updateGameStats(result, prev.gameStats, prev.colorAssignment, prev.players, winningColor, prev.statsUpdated, prev.gameId);
-            
-            // Clear the timer interval immediately when game ends
+
             if (intervalRef.current) {
               clearInterval(intervalRef.current);
               intervalRef.current = null;
             }
-            
-            // Update user statistics for time expiration
+
             updateUserStats(result, winningColor);
-            
-            // Save game to history
             saveGameToHistory(result, winningColor);
-            
-            // Mark game as ended in ref to prevent race conditions
             gameEndedRef.current = true;
-            
+
             return {
               ...prev,
               [timeKey]: 0,
@@ -575,15 +568,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
               statsUpdated: true,
             };
           }
-          
-          // Update the time and refresh startTime for next calculation
-          return {
-            ...prev,
-            [timeKey]: newTime,
-            startTime: Date.now(), // Reset startTime for next interval
-          };
+
+          // No state update needed — ChessClock computes display time locally
+          return prev;
         });
-      }, 100); // Update every 100ms for smooth display
+      }, 1000); // Check expiration every second
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -622,13 +611,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
     if (shouldAIMove) {
       isAiThinking.current = true;
-      console.log('🤖 AI starting to think for gameId:', gameState.gameId);
-      
+      const currentGameId = gameState.gameId;
+      aiMoveGameId.current = currentGameId;
+      console.log('🤖 AI starting to think for gameId:', currentGameId);
+
       const makeAIMove = async () => {
         try {
-          // Double-check game hasn't ended before getting AI move (check both state and ref)
-          if (gameState.gameResult || gameEndedRef.current) {
-            console.log('🤖 AI cancelled - game already ended');
+          // Double-check game hasn't ended and we're still on the same game
+          if (gameState.gameResult || gameEndedRef.current || aiMoveGameId.current !== currentGameId) {
+            console.log('🤖 AI cancelled - game ended or game changed');
             isAiThinking.current = false;
             return;
           }
@@ -647,8 +638,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           const aiMove = await aiRef.current.getBestMove(gameState.game);
           console.log('🤖 AI found move:', aiMove, 'for gameId:', gameState.gameId);
           
-          // Check again after AI thinking - game might have ended during thinking
-          if (aiMove && !gameState.gameResult && !gameEndedRef.current) {
+          // Check again after AI thinking - game might have ended or changed during thinking
+          if (aiMove && !gameState.gameResult && !gameEndedRef.current && aiMoveGameId.current === currentGameId) {
             // Validate the move is still legal on current board
             const testGame = new Chess(gameState.game.fen());
             const testMove = testGame.move({ from: aiMove.from as Square, to: aiMove.to as Square, promotion: aiMove.promotion });
@@ -774,16 +765,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       }
 
       setGameState(prev => {
-        // Handle time increment
+        // Handle time: deduct elapsed from moving player, add increment
         let newWhiteTime = prev.whiteTime;
         let newBlackTime = prev.blackTime;
-        
-        if (prev.timeControl && prev.activeColor) {
+
+        if (prev.timeControl && prev.activeColor && prev.startTime) {
+          const elapsed = (Date.now() - prev.startTime) / 1000;
           const increment = prev.timeControl.increment;
           if (prev.activeColor === 'w') {
-            newWhiteTime = prev.whiteTime + increment;
+            newWhiteTime = Math.max(0, prev.whiteTime - elapsed) + increment;
           } else {
-            newBlackTime = prev.blackTime + increment;
+            newBlackTime = Math.max(0, prev.blackTime - elapsed) + increment;
           }
         }
 

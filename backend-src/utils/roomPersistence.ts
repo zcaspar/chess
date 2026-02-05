@@ -61,7 +61,12 @@ export class RoomPersistence {
     try {
       if (fs.existsSync(ROOM_STATE_FILE)) {
         const data = fs.readFileSync(ROOM_STATE_FILE, 'utf-8');
-        const rooms = JSON.parse(data) as PersistedRoom[];
+        const parsed = JSON.parse(data);
+        if (!Array.isArray(parsed)) {
+          console.warn('Room persistence file has unexpected format, ignoring');
+          return [];
+        }
+        const rooms = parsed as PersistedRoom[];
         console.log(`📂 Loaded ${rooms.length} persisted rooms from disk`);
         return rooms;
       }

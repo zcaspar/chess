@@ -15,9 +15,9 @@ const poolConfig: PoolConfig = {
         password: process.env.PGPASSWORD || process.env.DB_PASSWORD || 'chess_password',
       }),
   
-  // Optimized connection pool settings for higher concurrency
-  max: parseInt(process.env.DB_POOL_MAX || '50'), // Increased from 20 to 50
-  min: parseInt(process.env.DB_POOL_MIN || '10'), // Increased minimum to reduce connection overhead
+  // Connection pool settings - keep defaults conservative for hosted tiers
+  max: parseInt(process.env.DB_POOL_MAX || '20'),
+  min: parseInt(process.env.DB_POOL_MIN || '2'),
   idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '60000'), // Increased idle timeout
   connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '5000'), // Increased connection timeout
   acquireTimeoutMillis: parseInt(process.env.DB_ACQUIRE_TIMEOUT || '60000'), // Max time to wait for connection
@@ -42,16 +42,10 @@ pool.on('error', (err) => {
   }
 });
 
-pool.on('connect', (client) => {
-  console.log('🟢 New database client connected');
-});
-
-pool.on('acquire', (client) => {
-  console.log('🔵 Database client acquired from pool');
-});
-
-pool.on('release', (client) => {
-  console.log('🟡 Database client released back to pool');
+pool.on('connect', () => {
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🟢 New database client connected');
+  }
 });
 
 // Pool monitoring function
