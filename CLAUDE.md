@@ -408,15 +408,40 @@ Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remot
 **Verification**: Check browser console for latest debugging logs to confirm you're seeing the current version.
 
 ---
-**Last Updated**: 2025-01-27  
-**Status**: ✅ PRODUCTION-READY - Professional chess platform with enhanced hero board design!  
-**Recent**: Transformed chess board into hero element with enhanced visual design  
-**Live URL**: https://chess-pu71.vercel.app  
+**Last Updated**: 2026-02-05
+**Status**: ✅ PRODUCTION-READY - Security, performance & correctness hardening complete
+**Recent**: 15 fixes across security, timer correctness, performance, and error handling
+**Live URL**: https://chess-pu71.vercel.app
 **Backend URL**: https://chess-production-c94f.up.railway.app
 
-## 🚀 Where We Left Off (2025-01-27)
+## 🚀 Where We Left Off (2026-02-05)
 
-Just completed major UI enhancement:
+### Code committed & pushed to GitHub. Backend NOT yet deployed to Railway.
+
+**What was done** (commit `146d709`):
+- **Security**: Demo auth bypass disabled in production, admin endpoint protected with ADMIN_UIDS env var, LC0 URL moved to env var, socket auth checks added before game actions
+- **Timer correctness**: Fixed backend race condition (broadcastTimerUpdates no longer mutates room state), fixed frontend timer drift (no more startTime reset per tick), proper elapsed+increment deduction on move
+- **Performance**: Timer display moved to ChessClock local state (eliminates 10 global re-renders/sec), ChessBoard handlers wrapped in useCallback, ALL_SQUARES extracted as constant, DB pool defaults lowered from 50/10 to 20/2, removed verbose pool logging
+- **AI race condition**: Added aiMoveGameId ref to prevent stale/duplicate moves
+- **Error handling**: endGame wrapped in try-catch, LC0 response validated before destructuring, alert() replaced with inline error messages, room persistence JSON validated after parse
+- **Database**: Added 3 missing indexes (opponent_id, game_result, player_id+created_at)
+
+**To deploy backend to Railway**:
+1. Run `railway login` (if not already logged in)
+2. Project is already linked: `eloquent-solace` / `production`
+3. Need to specify the service name: `railway up -d --service <SERVICE_NAME>`
+   - Multiple services exist in the project — run `railway service list` or check the Railway dashboard to find the backend service name
+4. Verify with: `curl https://chess-production-c94f.up.railway.app/health`
+
+**New env vars to set on Railway** (optional but recommended):
+- `ADMIN_UIDS` — comma-separated Firebase UIDs for admin endpoint access
+- `REACT_APP_LC0_SERVER_URL` — already has a fallback, but good to set explicitly on Vercel
+
+---
+
+## Previous: Where We Left Off (2025-01-27)
+
+Completed major UI enhancement:
 1. **Chess Board Hero Element** - Transformed the chess board into the visual centerpiece with:
    - Increased board size (500px → 600px) for better prominence
    - Multi-layered stage effect with elevation and depth
