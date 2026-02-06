@@ -81,8 +81,8 @@ const GameStatus: React.FC = () => {
             <span>{Math.ceil(gameState.history.length / 2)}</span>
           </div>
           <div className="flex justify-between">
-            <span>Captured Pieces:</span>
-            <span>{getCapturedPiecesCount(gameState.history)}</span>
+            <span>Captures:</span>
+            <span>{gameState.history.filter(m => m.captured).length}</span>
           </div>
           {gameState.timeControl && (
             <div className="flex justify-between">
@@ -95,10 +95,5 @@ const GameStatus: React.FC = () => {
     </div>
   );
 };
-
-// Helper function to count captured pieces
-function getCapturedPiecesCount(history: any[]): number {
-  return history.filter(move => move.captured).length;
-}
 
 export default GameStatus;

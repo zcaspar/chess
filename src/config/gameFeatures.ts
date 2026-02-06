@@ -11,11 +11,17 @@ export const GAME_FEATURES = {
   HINTS: true,           // LC0-powered best move suggestions
   NUCLEAR_CHESS: true,   // Nuke opponent pieces (not King/Queen)
   TELEPORTATION: true,   // Teleport your pieces randomly
-  
+
   // Future features (placeholders)
   TOURNAMENTS: false,    // Tournament system
-  PUZZLE_TRAINING: false, // Tactical puzzles
-  OPENING_EXPLORER: false, // Opening database
+
+  // Professional features
+  SOUND_EFFECTS: true,      // Move/capture/check sounds
+  CAPTURED_PIECES: true,    // Visual captured pieces display
+  GAME_END_MODAL: true,     // Game over overlay modal
+  OPENING_EXPLORER: true,   // Opening name detection banner
+  PREMOVES: true,           // Pre-move system for online play
+  PUZZLE_TRAINING: true,    // Tactical puzzle solving
 } as const;
 
 export type GameFeature = keyof typeof GAME_FEATURES;
@@ -88,5 +94,29 @@ export const FEATURE_CONFIG = {
     icon: '📚',
     color: 'teal',
     description: 'Chess opening database',
+  },
+  SOUND_EFFECTS: {
+    name: 'Sound Effects',
+    icon: '🔊',
+    color: 'cyan',
+    description: 'Move and capture sound effects',
+  },
+  CAPTURED_PIECES: {
+    name: 'Captured Pieces',
+    icon: '♟',
+    color: 'gray',
+    description: 'Visual captured pieces display with material advantage',
+  },
+  GAME_END_MODAL: {
+    name: 'Game End Modal',
+    icon: '🏁',
+    color: 'green',
+    description: 'Professional game-over overlay with stats',
+  },
+  PREMOVES: {
+    name: 'Pre-moves',
+    icon: '⚡',
+    color: 'red',
+    description: 'Queue moves during opponent turn in online play',
   },
 } as const;

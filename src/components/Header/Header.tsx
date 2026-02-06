@@ -2,14 +2,16 @@ import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useGame } from '../../contexts/GameContext';
 import { AuthModal, UserProfile } from '../Auth';
+import { isFeatureEnabled } from '../../config/gameFeatures';
 
 interface HeaderProps {
   onShowHistory?: () => void;
   onShowStats?: () => void;
-  currentView?: 'game' | 'history' | 'stats';
+  onShowPuzzles?: () => void;
+  currentView?: 'game' | 'history' | 'stats' | 'puzzles';
 }
 
-export const Header: React.FC<HeaderProps> = ({ onShowHistory, onShowStats, currentView = 'game' }) => {
+export const Header: React.FC<HeaderProps> = ({ onShowHistory, onShowStats, onShowPuzzles, currentView = 'game' }) => {
   const { profile, isAuthenticated, isGuest, signOut } = useAuth();
   const { clearAllGameData } = useGame();
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -63,6 +65,18 @@ export const Header: React.FC<HeaderProps> = ({ onShowHistory, onShowStats, curr
                       }`}
                     >
                       Analytics
+                    </button>
+                  )}
+                  {onShowPuzzles && isFeatureEnabled('PUZZLE_TRAINING') && (
+                    <button
+                      onClick={() => currentView === 'puzzles' ? undefined : onShowPuzzles()}
+                      className={`px-3 py-2 text-sm font-medium transition-colors ${
+                        currentView === 'puzzles'
+                          ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                          : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Puzzles
                     </button>
                   )}
                 </nav>
@@ -202,7 +216,22 @@ export const Header: React.FC<HeaderProps> = ({ onShowHistory, onShowStats, curr
                     📊 Analytics
                   </button>
                 )}
-                
+                {onShowPuzzles && isFeatureEnabled('PUZZLE_TRAINING') && (
+                  <button
+                    onClick={() => {
+                      setShowMobileMenu(false);
+                      if (currentView !== 'puzzles') onShowPuzzles();
+                    }}
+                    className={`text-left px-2 py-2 text-sm transition-colors ${
+                      currentView === 'puzzles'
+                        ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    🧩 Puzzles
+                  </button>
+                )}
+
                 {/* Sign Out */}
                 <button
                   onClick={() => {

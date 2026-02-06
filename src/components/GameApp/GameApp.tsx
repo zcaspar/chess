@@ -7,10 +7,16 @@ import ChessClock from '../ChessClock';
 import GameModeSelector from '../GameModeSelector';
 import { OnlineGameStatus } from '../OnlineGameStatus';
 import { MobileMenu } from '../MobileMenu';
+import CapturedPieces from '../CapturedPieces/CapturedPieces';
+import GameEndModal from '../GameEndModal/GameEndModal';
+import OpeningBanner from '../OpeningBanner/OpeningBanner';
+import { useAuth } from '../../hooks/useAuth';
 
 export const GameApp: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<'game' | 'moves' | null>(null);
+  const { profile } = useAuth();
+  const boardFlipped = profile?.preferences?.boardOrientation === 'black';
 
   return (
     <div className="max-w-[1400px] mx-auto px-2 sm:px-4">
@@ -39,7 +45,10 @@ export const GameApp: React.FC = () => {
               <GameStatus />
             </div>
             <div className="lg:sticky lg:top-8">
+              <CapturedPieces color={boardFlipped ? 'w' : 'b'} />
+              <OpeningBanner />
               <ChessBoard />
+              <CapturedPieces color={boardFlipped ? 'b' : 'w'} />
             </div>
             {/* Mobile controls */}
             <div className="lg:hidden mt-2">
@@ -116,6 +125,9 @@ export const GameApp: React.FC = () => {
       {mobileMenuOpen && (
         <MobileMenu onClose={() => setMobileMenuOpen(false)} />
       )}
+
+      {/* Game End Modal */}
+      <GameEndModal />
     </div>
   );
 };

@@ -6,6 +6,8 @@ import { useSocket } from '../../contexts/SocketContext';
 import { useOnlineGame } from '../../hooks/useOnlineGame';
 import { useAuth } from '../../hooks/useAuth';
 import { useResponsiveBoardSize } from '../../hooks/useResponsiveBoardSize';
+import { useSoundEffects } from '../../hooks/useSoundEffects';
+import { isFeatureEnabled } from '../../config/gameFeatures';
 
 // Pre-computed constant: all 64 board squares
 const ALL_SQUARES: Square[] = [
@@ -25,6 +27,12 @@ const ChessBoard: React.FC = () => {
   const { isOnlineGame } = useOnlineGame();
   const { profile } = useAuth();
   const boardSize = useResponsiveBoardSize();
+  useSoundEffects();
+
+  // Animation speed from preferences
+  const animationSpeedMap = { slow: 500, normal: 300, fast: 100 } as const;
+  const animationDuration = animationSpeedMap[profile?.preferences?.animationSpeed || 'normal'];
+
   const [moveFrom, setMoveFrom] = useState<Square | null>(null);
   const [rightClickedSquares, setRightClickedSquares] = useState<Square[]>([]);
   const [optionSquares, setOptionSquares] = useState<Partial<Record<Square, { background: string }>>>({});
@@ -401,6 +409,11 @@ const ChessBoard: React.FC = () => {
               boardOrientation={boardOrientation}
               arePiecesDraggable={true}
               showBoardNotation={true}
+              animationDuration={animationDuration}
+              arePremovesAllowed={isFeatureEnabled('PREMOVES') && isOnlineGame && !!roomCode && !!assignedColor}
+              clearPremovesOnRightClick={true}
+              customPremoveDarkSquareStyle={{ backgroundColor: '#A42323' }}
+              customPremoveLightSquareStyle={{ backgroundColor: '#BD2828' }}
             />
             </div>
           </div>
