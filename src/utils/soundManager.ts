@@ -47,7 +47,7 @@ class SoundManager {
     osc.stop(ctx.currentTime + duration);
   }
 
-  private playNoise(duration: number, filterFreq: number) {
+  private playNoise(duration: number, filterFreq: number, filterType: BiquadFilterType = 'bandpass', gainMultiplier: number = 0.15) {
     const ctx = this.getContext();
     const bufferSize = ctx.sampleRate * duration;
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
@@ -61,12 +61,12 @@ class SoundManager {
     source.buffer = buffer;
 
     const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
+    filter.type = filterType;
     filter.frequency.setValueAtTime(filterFreq, ctx.currentTime);
     filter.Q.setValueAtTime(1, ctx.currentTime);
 
     const gain = ctx.createGain();
-    gain.gain.setValueAtTime(this.volume * 0.15, ctx.currentTime);
+    gain.gain.setValueAtTime(this.volume * gainMultiplier, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
 
     source.connect(filter);
@@ -81,16 +81,17 @@ class SoundManager {
     try {
       switch (sound) {
         case 'move':
-          // Soft wooden "click" - short noise burst + tone
-          this.playNoise(0.08, 3000);
-          this.playTone(800, 0.06, 'sine');
+          // Wooden thud - low-frequency noise burst + deep tone
+          this.playNoise(0.12, 300, 'lowpass', 0.3);
+          this.playTone(150, 0.1, 'sine');
+          this.playTone(80, 0.08, 'triangle');
           break;
 
         case 'capture':
-          // Aggressive thud - lower frequency, longer
-          this.playNoise(0.15, 1500);
-          this.playTone(300, 0.12, 'triangle');
-          this.playTone(150, 0.15, 'sine');
+          // Heavy slam - deep noise burst + low tones
+          this.playNoise(0.18, 250, 'lowpass', 0.4);
+          this.playTone(120, 0.15, 'triangle');
+          this.playTone(60, 0.12, 'sine');
           break;
 
         case 'check':
@@ -102,12 +103,13 @@ class SoundManager {
           break;
 
         case 'castle':
-          // Two-step slide sound
-          this.playNoise(0.06, 2500);
+          // Two-step slide - deep double thud
+          this.playNoise(0.1, 350, 'lowpass', 0.25);
+          this.playTone(130, 0.08, 'sine');
           setTimeout(() => {
-            this.playNoise(0.08, 3500);
-            this.playTone(600, 0.08, 'sine');
-          }, 80);
+            this.playNoise(0.12, 300, 'lowpass', 0.3);
+            this.playTone(150, 0.1, 'sine');
+          }, 100);
           break;
 
         case 'promote':

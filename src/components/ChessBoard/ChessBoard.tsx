@@ -61,7 +61,10 @@ const ChessBoard: React.FC = () => {
 
   // Get current theme and board orientation
   const currentTheme = boardThemes[profile?.preferences?.boardTheme || 'classic'];
-  const boardOrientation = profile?.preferences?.boardOrientation === 'black' ? 'black' : 'white';
+  // In online games, auto-orient board based on assigned color; otherwise use preference
+  const boardOrientation = (isOnlineGame && assignedColor)
+    ? (assignedColor === 'black' ? 'black' : 'white')
+    : (profile?.preferences?.boardOrientation === 'black' ? 'black' : 'white');
   
   // Clear selections when game ends
   useEffect(() => {
