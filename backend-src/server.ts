@@ -567,58 +567,6 @@ setInterval(() => {
   }
 }, 30000); // Check every 30 seconds
 
-// Enhanced graceful shutdown handling
-process.on('SIGINT', async () => {
-  console.log('Received SIGINT, shutting down server...');
-  await gracefulShutdown('SIGINT');
-});
-
-process.on('SIGTERM', async () => {
-  console.log('Received SIGTERM from Railway, shutting down gracefully...');
-  await gracefulShutdown('SIGTERM');
-});
-
-// Handle uncaught exceptions to prevent crashes
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-  console.log('Attempting graceful shutdown...');
-  gracefulShutdown('UNCAUGHT_EXCEPTION');
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  console.log('Continuing operation...');
-});
-
-async function gracefulShutdown(signal: string) {
-  console.log(`Graceful shutdown initiated by ${signal}`);
-  
-  try {
-    // Close HTTP server
-    httpServer.close(() => {
-      console.log('HTTP server closed');
-    });
-    
-    // Shutdown all engines
-    for (const [difficulty, engine] of Object.entries(engines)) {
-      if (engine) {
-        console.log(`Shutting down ${difficulty} engine...`);
-        try {
-          await engine.shutdown();
-        } catch (error) {
-          console.error(`Error shutting down ${difficulty} engine:`, error);
-        }
-      }
-    }
-    
-    console.log('Graceful shutdown completed');
-    process.exit(0);
-  } catch (error) {
-    console.error('Error during graceful shutdown:', error);
-    process.exit(1);
-  }
-}
-
 // Initialize Socket.io handler
 const gameSocketHandler = new GameSocketHandler(io);
 

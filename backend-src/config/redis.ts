@@ -327,4 +327,4 @@ export const closeRedis = async (): Promise<void> => {
   }
 };
 
-export default redisClient;
+export { redisClient as default };

@@ -20,7 +20,6 @@ const poolConfig: PoolConfig = {
   min: parseInt(process.env.DB_POOL_MIN || '2'),
   idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '60000'), // Increased idle timeout
   connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '5000'), // Increased connection timeout
-  acquireTimeoutMillis: parseInt(process.env.DB_ACQUIRE_TIMEOUT || '60000'), // Max time to wait for connection
   
   // Additional optimizations
   allowExitOnIdle: true, // Allow process to exit when no connections are active
