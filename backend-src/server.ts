@@ -575,130 +575,123 @@ io.on('connection', (socket) => {
   gameSocketHandler.handleConnection(socket);
 });
 
-// Start server
-async function startServer() {
+// Background initialization of services (DB, Redis, engines)
+async function initializeServices() {
+  // Test database connection (non-blocking)
   try {
-    // Test database connection (non-blocking)
-    try {
-      const dbConnected = await testConnection();
-      if (!dbConnected) {
-        console.error('⚠️  Warning: Database connection failed. Online multiplayer features will be limited.');
-      } else {
-        console.log('✅ Database connection successful');
-        
-        // Initialize game history tables if they don't exist
-        try {
-          const { GameHistoryModel } = await import('./models/GameHistory');
-          
-          // Try multiple times with delays for Railway startup timing
-          let tableInitialized = false;
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            try {
-              console.log(`🔄 Attempt ${attempt}/3: Initializing game history tables...`);
-              await GameHistoryModel.initializeTables();
-              console.log('✅ Game history tables initialized successfully');
-              tableInitialized = true;
-              break;
-            } catch (attemptError: any) {
-              console.error(`❌ Attempt ${attempt} failed:`, attemptError.message);
-              if (attempt < 3) {
-                console.log(`⏳ Waiting 5 seconds before retry...`);
-                await new Promise(resolve => setTimeout(resolve, 5000));
-              }
+    const dbConnected = await testConnection();
+    if (!dbConnected) {
+      console.error('⚠️  Warning: Database connection failed. Online multiplayer features will be limited.');
+    } else {
+      console.log('✅ Database connection successful');
+
+      // Initialize game history tables if they don't exist
+      try {
+        const { GameHistoryModel } = await import('./models/GameHistory');
+
+        // Try multiple times with delays for Railway startup timing
+        let tableInitialized = false;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            console.log(`🔄 Attempt ${attempt}/3: Initializing game history tables...`);
+            await GameHistoryModel.initializeTables();
+            console.log('✅ Game history tables initialized successfully');
+            tableInitialized = true;
+            break;
+          } catch (attemptError: any) {
+            console.error(`❌ Attempt ${attempt} failed:`, attemptError.message);
+            if (attempt < 3) {
+              console.log(`⏳ Waiting 5 seconds before retry...`);
+              await new Promise(resolve => setTimeout(resolve, 5000));
             }
           }
-          
-          if (!tableInitialized) {
-            console.error('⚠️  Failed to initialize game history tables after 3 attempts');
-            console.log('⚠️  Game history features will be disabled until tables are created manually');
-          }
-        } catch (tableError) {
-          console.error('⚠️  Warning: Could not initialize game history tables:', tableError);
-          console.log('⚠️  Game history features may not work properly.');
         }
-        
-        // Initialize analytics tables if they don't exist
-        try {
-          const { AnalyticsModel } = await import('./models/Analytics');
-          
-          // Try multiple times with delays for Railway startup timing
-          let analyticsInitialized = false;
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            try {
-              console.log(`🔄 Attempt ${attempt}/3: Initializing analytics tables...`);
-              await AnalyticsModel.initializeAnalyticsTables();
-              console.log('✅ Analytics tables initialized successfully');
-              analyticsInitialized = true;
-              break;
-            } catch (attemptError: any) {
-              console.error(`❌ Attempt ${attempt} failed:`, attemptError.message);
-              if (attempt < 3) {
-                console.log(`⏳ Waiting 5 seconds before retry...`);
-                await new Promise(resolve => setTimeout(resolve, 5000));
-              }
-            }
-          }
-          
-          if (!analyticsInitialized) {
-            console.error('⚠️  Failed to initialize analytics tables after 3 attempts');
-            console.log('⚠️  Analytics features will be disabled until tables are created manually');
-          }
-        } catch (analyticsError) {
-          console.error('⚠️  Warning: Could not initialize analytics tables:', analyticsError);
-          console.log('⚠️  Analytics features may not work properly.');
+
+        if (!tableInitialized) {
+          console.error('⚠️  Failed to initialize game history tables after 3 attempts');
+          console.log('⚠️  Game history features will be disabled until tables are created manually');
         }
+      } catch (tableError) {
+        console.error('⚠️  Warning: Could not initialize game history tables:', tableError);
+        console.log('⚠️  Game history features may not work properly.');
       }
-    } catch (dbError) {
-      console.error('⚠️  Database connection error:', dbError);
-      console.log('⚠️  Continuing without database. Basic chess features will work.');
+
+      // Initialize analytics tables if they don't exist
+      try {
+        const { AnalyticsModel } = await import('./models/Analytics');
+
+        // Try multiple times with delays for Railway startup timing
+        let analyticsInitialized = false;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            console.log(`🔄 Attempt ${attempt}/3: Initializing analytics tables...`);
+            await AnalyticsModel.initializeAnalyticsTables();
+            console.log('✅ Analytics tables initialized successfully');
+            analyticsInitialized = true;
+            break;
+          } catch (attemptError: any) {
+            console.error(`❌ Attempt ${attempt} failed:`, attemptError.message);
+            if (attempt < 3) {
+              console.log(`⏳ Waiting 5 seconds before retry...`);
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+          }
+        }
+
+        if (!analyticsInitialized) {
+          console.error('⚠️  Failed to initialize analytics tables after 3 attempts');
+          console.log('⚠️  Analytics features will be disabled until tables are created manually');
+        }
+      } catch (analyticsError) {
+        console.error('⚠️  Warning: Could not initialize analytics tables:', analyticsError);
+        console.log('⚠️  Analytics features may not work properly.');
+      }
     }
-    
-    // Initialize Redis (non-blocking)
-    try {
-      const redisConnected = await initializeRedis();
-      if (redisConnected) {
-        RedisManager.setAvailable(true);
-        console.log('✅ Redis initialization completed');
-      } else {
-        console.log('⚠️  Continuing without Redis. Session and game state will use memory storage.');
-      }
-    } catch (redisError) {
-      console.error('⚠️  Redis initialization error:', redisError);
+  } catch (dbError) {
+    console.error('⚠️  Database connection error:', dbError);
+    console.log('⚠️  Continuing without database. Basic chess features will work.');
+  }
+
+  // Initialize Redis (non-blocking)
+  try {
+    const redisConnected = await initializeRedis();
+    if (redisConnected) {
+      RedisManager.setAvailable(true);
+      console.log('✅ Redis initialization completed');
+    } else {
       console.log('⚠️  Continuing without Redis. Session and game state will use memory storage.');
     }
-    
-    // Initialize engines (non-blocking)
-    try {
-      await initializeEngines();
-      console.log('✅ Engine initialization completed');
-    } catch (engineError) {
-      console.error('⚠️  Engine initialization error:', engineError);
-      console.log('⚠️  Continuing without engines. Multiplayer will work without AI.');
-    }
-    
-    // Always start the HTTP server
-    httpServer.listen(PORT, () => {
-      console.log(`🚀 Chess Engine Backend Server with PostgreSQL running on port ${PORT}`);
-      console.log(`💻 Health check: http://localhost:${PORT}/health`);
-      console.log(`🧠 API endpoint: http://localhost:${PORT}/api/chess/move`);
-      console.log(`🔧 Test endpoint: http://localhost:${PORT}/api/chess/test`);
-      console.log(`🔌 Socket.io server ready for multiplayer connections`);
-      console.log(`🌍 CORS origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
-    });
-  } catch (error) {
-    console.error('Critical server startup error:', error);
-    
-    // Try to start server anyway for health checks
-    try {
-      httpServer.listen(PORT, () => {
-        console.log(`🚨 Emergency server started on port ${PORT} (limited functionality)`);
-        console.log(`💻 Health check available: http://localhost:${PORT}/health`);
-      });
-    } catch (emergencyError) {
-      console.error('Failed to start emergency server:', emergencyError);
-      process.exit(1);
-    }
+  } catch (redisError) {
+    console.error('⚠️  Redis initialization error:', redisError);
+    console.log('⚠️  Continuing without Redis. Session and game state will use memory storage.');
   }
+
+  // Initialize engines (non-blocking)
+  try {
+    await initializeEngines();
+    console.log('✅ Engine initialization completed');
+  } catch (engineError) {
+    console.error('⚠️  Engine initialization error:', engineError);
+    console.log('⚠️  Continuing without engines. Multiplayer will work without AI.');
+  }
+
+  console.log('✅ All service initialization completed');
+}
+
+// Start server — listen FIRST so healthcheck passes, then initialize services
+function startServer() {
+  httpServer.listen(PORT, () => {
+    console.log(`🚀 Chess Engine Backend Server running on port ${PORT}`);
+    console.log(`💻 Health check: http://localhost:${PORT}/health`);
+    console.log(`🧠 API endpoint: http://localhost:${PORT}/api/chess/move`);
+    console.log(`🔌 Socket.io server ready for multiplayer connections`);
+    console.log(`🌍 CORS origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
+
+    // Initialize DB, Redis, and engines in the background after server is listening
+    initializeServices().catch((error) => {
+      console.error('⚠️  Background service initialization error:', error);
+    });
+  });
 }
 
 startServer();
