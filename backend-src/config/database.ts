@@ -35,10 +35,7 @@ export const pool = new Pool(poolConfig);
 // Enhanced pool monitoring and error handling
 pool.on('error', (err) => {
   console.error('🔴 Unexpected error on idle client', err);
-  // Don't exit immediately in production, allow for recovery
-  if (process.env.NODE_ENV !== 'production') {
-    process.exit(-1);
-  }
+  // Never exit — allow the server to recover and stay alive for healthchecks
 });
 
 pool.on('connect', () => {

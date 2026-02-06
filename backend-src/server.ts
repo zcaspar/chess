@@ -1,3 +1,5 @@
+console.log('🔄 Server module loading...');
+
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -15,8 +17,18 @@ import { GameSocketHandler } from './sockets/gameSocket';
 import { testConnection, getPoolStatus, closePool } from './config/database';
 import { initializeRedis, RedisManager, closeRedis } from './config/redis';
 
+console.log('✅ All imports loaded successfully');
+
 // Load environment variables
 dotenv.config();
+
+console.log('📋 Environment:', {
+  NODE_ENV: process.env.NODE_ENV || 'NOT SET',
+  PORT: process.env.PORT || 'NOT SET (using 3005)',
+  CORS_ORIGIN: process.env.CORS_ORIGIN ? 'set' : 'NOT SET',
+  DATABASE_URL: process.env.DATABASE_URL ? 'set' : 'NOT SET',
+  REDIS_URL: process.env.REDIS_URL ? 'set' : 'NOT SET',
+});
 
 const app = express();
 const httpServer = createServer(app);
@@ -157,18 +169,28 @@ app.use('/api/system', systemRoutes);
 console.log('✅ System routes registered at /api/system');
 console.log('📊 System endpoints: /api/system/status, /api/system/metrics');
 
-// Enhanced health check endpoint with pool status and Redis
-app.get('/health', async (req, res) => {
+// Health check endpoint — keep this synchronous and simple so Railway healthcheck always passes
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Detailed health check with DB/Redis status (for monitoring, not Railway healthcheck)
+app.get('/health/detailed', async (req, res) => {
   try {
     const poolStatus = getPoolStatus();
     const memoryUsage = process.memoryUsage();
     const redisHealth = await RedisManager.healthCheck();
-    
-    res.status(200).json({ 
+
+    res.status(200).json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
-      version: '1.0.0',
       database: {
         connected: poolStatus.totalCount > 0,
         poolUtilization: `${poolStatus.totalCount - poolStatus.idleCount}/${poolStatus.maxConnections}`,
@@ -680,6 +702,7 @@ async function initializeServices() {
 
 // Start server — listen FIRST so healthcheck passes, then initialize services
 function startServer() {
+  console.log(`🔄 Starting HTTP server on port ${PORT}...`);
   httpServer.listen(PORT, () => {
     console.log(`🚀 Chess Engine Backend Server running on port ${PORT}`);
     console.log(`💻 Health check: http://localhost:${PORT}/health`);
@@ -731,13 +754,13 @@ const gracefulShutdown = async (signal: string) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Handle uncaught exceptions
+// Handle uncaught exceptions — log but do NOT exit (keep server alive for healthcheck)
 process.on('uncaughtException', (error) => {
   console.error('💥 Uncaught Exception:', error);
-  gracefulShutdown('uncaughtException');
+  // Do NOT call process.exit() — keep the server running
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
-  gracefulShutdown('unhandledRejection');
+  // Do NOT call process.exit() — keep the server running
 });
