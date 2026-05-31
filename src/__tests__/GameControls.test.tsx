@@ -1,110 +1,106 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { act } from 'react';
 import GameControls from '../components/GameControls/GameControls';
-import { GameProvider } from '../contexts/GameContext';
-import { AuthProvider } from '../contexts/AuthContext';
 import { Chess } from 'chess.js';
+import {
+  createMockGameContext as buildMockGameContext,
+  createMockGameState,
+} from '../test-utils/mockGameState';
+import type { GameContextType, GameState } from '../contexts/GameContext';
 
-// Mock dependencies
+// Mock dependencies. GameControls reads useGame(), useSocket() and useAuth();
+// none of their providers are mounted here, so each is mocked with safe defaults.
 jest.mock('../utils/chessAI');
+
 jest.mock('../hooks/useAuth', () => ({
   useAuth: () => ({
     profile: null,
     updateStats: jest.fn(),
+    updatePreferences: jest.fn(),
   }),
 }));
 
-// Mock firebase
-jest.mock('firebase/app', () => ({
-  initializeApp: jest.fn(),
+// GameControls calls useSocket(); without a provider it throws. Mock it with
+// non-online defaults so the local (offline) draw/control paths are exercised.
+jest.mock('../contexts/SocketContext', () => ({
+  useSocket: () => ({
+    socket: null,
+    isConnected: false,
+    roomCode: null,
+    assignedColor: null,
+    players: { white: null, black: null },
+    gameState: null,
+    createRoom: jest.fn(),
+    joinRoom: jest.fn(),
+    makeMove: jest.fn(),
+    resign: jest.fn(),
+    offerDraw: jest.fn(),
+    acceptDraw: jest.fn(),
+    declineDraw: jest.fn(),
+    leaveRoom: jest.fn(),
+  }),
 }));
 
-jest.mock('firebase/auth', () => ({
-  getAuth: jest.fn(() => ({})),
-  onAuthStateChanged: jest.fn(() => () => {}),
-  signInWithEmailAndPassword: jest.fn(),
-  createUserWithEmailAndPassword: jest.fn(),
-  signOut: jest.fn(),
-  signInWithPopup: jest.fn(),
-  GoogleAuthProvider: jest.fn(),
+// Factory only references jest.fn — concrete return value is set per-test.
+jest.mock('../contexts/GameContext', () => ({
+  useGame: jest.fn(),
 }));
 
-jest.mock('firebase/firestore', () => ({
-  getFirestore: jest.fn(() => ({})),
-  doc: jest.fn(),
-  setDoc: jest.fn(),
-  getDoc: jest.fn(),
-  updateDoc: jest.fn(),
-}));
+const { useGame } = require('../contexts/GameContext');
 
-const TestWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <AuthProvider>
-    <GameProvider>
-      {children}
-    </GameProvider>
-  </AuthProvider>
-);
+// gameState fields the tests override at the top level of their "overrides" object.
+const GAME_STATE_KEYS: Array<keyof GameState> = [
+  'game',
+  'history',
+  'currentMoveIndex',
+  'gameResult',
+  'gameId',
+  'statsUpdated',
+  'drawOffer',
+  'timeControl',
+  'whiteTime',
+  'blackTime',
+  'activeColor',
+  'startTime',
+  'players',
+  'colorAssignment',
+  'gameStats',
+  'gameMode',
+  'aiColor',
+  'aiDifficulty',
+];
 
-// Mock game context values
-const createMockGameContext = (overrides = {}) => ({
-  gameState: {
-    game: new Chess(),
-    history: [],
-    currentMoveIndex: -1,
-    gameResult: '',
-    gameId: 'test-game-id',
-    statsUpdated: false,
-    drawOffer: { offered: false, by: null },
-    timeControl: null,
-    whiteTime: 0,
-    blackTime: 0,
-    activeColor: null,
-    startTime: null,
-    players: { player1: 'Player 1', player2: 'Player 2' },
-    colorAssignment: { white: 'player1', black: 'player2' },
-    gameStats: {
-      player1: { wins: 0, draws: 0, losses: 0 },
-      player2: { wins: 0, draws: 0, losses: 0 },
-    },
-    gameMode: 'human-vs-human' as const,
-    aiColor: null,
-    aiDifficulty: 'medium' as const,
-    ...overrides,
-  },
-  makeMove: jest.fn(),
-  undoMove: jest.fn(),
-  redoMove: jest.fn(),
-  resetGame: jest.fn(),
-  clearAllGameData: jest.fn(),
-  resign: jest.fn(),
-  offerDraw: jest.fn(),
-  acceptDraw: jest.fn(),
-  declineDraw: jest.fn(),
-  setTimeControl: jest.fn(),
-  startClock: jest.fn(),
-  pauseClock: jest.fn(),
-  setPlayerName: jest.fn(),
-  swapColors: jest.fn(),
-  getPlayerByColor: jest.fn(),
-  setGameMode: jest.fn(),
-  setAIDifficulty: jest.fn(),
-  canUndo: false,
-  canRedo: false,
-});
+// Build a complete GameContext value. Tests pass a flat overrides object that may
+// contain either gameState fields (e.g. game, gameResult, drawOffer) or context
+// methods/flags (e.g. canUndo). Split them and feed the shared factory.
+const createMockGameContext = (overrides: Record<string, any> = {}): GameContextType => {
+  const gameStateOverrides: Partial<GameState> = {};
+  const contextOverrides: Record<string, any> = {};
+
+  Object.entries(overrides).forEach(([key, value]) => {
+    if ((GAME_STATE_KEYS as string[]).includes(key)) {
+      (gameStateOverrides as any)[key] = value;
+    } else {
+      contextOverrides[key] = value;
+    }
+  });
+
+  return buildMockGameContext({
+    gameState: createMockGameState(gameStateOverrides),
+    ...contextOverrides,
+  });
+};
 
 describe('GameControls', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: fresh game, white to move, nothing disabled beyond canUndo/canRedo.
+    useGame.mockReturnValue(createMockGameContext());
   });
 
   describe('Rendering', () => {
     it('should render game controls with all buttons', () => {
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       expect(screen.getByText('Game Controls')).toBeInTheDocument();
       expect(screen.getByText('New Game')).toBeInTheDocument();
@@ -115,11 +111,7 @@ describe('GameControls', () => {
     });
 
     it('should show proper styling classes', () => {
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const newGameButton = screen.getByText('New Game');
       expect(newGameButton).toHaveClass('bg-blue-500', 'text-white', 'rounded');
@@ -135,13 +127,9 @@ describe('GameControls', () => {
   describe('New Game Button', () => {
     it('should call resetGame when new game button is clicked', () => {
       const mockContext = createMockGameContext();
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const newGameButton = screen.getByText('New Game');
       fireEvent.click(newGameButton);
@@ -153,13 +141,9 @@ describe('GameControls', () => {
       const mockContext = createMockGameContext({
         gameResult: 'Checkmate! Player 1 wins!',
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const newGameButton = screen.getByText('New Game');
       expect(newGameButton).not.toBeDisabled();
@@ -169,13 +153,9 @@ describe('GameControls', () => {
   describe('Resign Button', () => {
     it('should call resign with current player when clicked', () => {
       const mockContext = createMockGameContext();
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const resignButton = screen.getByText('Resign');
       fireEvent.click(resignButton);
@@ -187,13 +167,9 @@ describe('GameControls', () => {
       const mockContext = createMockGameContext({
         gameResult: 'Draw by agreement!',
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const resignButton = screen.getByText('Resign');
       expect(resignButton).toBeDisabled();
@@ -207,13 +183,9 @@ describe('GameControls', () => {
       const mockContext = createMockGameContext({
         game: gameAfterMove,
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const resignButton = screen.getByText('Resign');
       fireEvent.click(resignButton);
@@ -224,12 +196,7 @@ describe('GameControls', () => {
 
   describe('Undo/Redo Buttons', () => {
     it('should call undoMove when undo button is clicked', () => {
-      // Use real useGame hook but mock the functions
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       // Since the button is disabled by default, this test checks behavior rather than actual click
       const undoButton = screen.getByText('← Undo');
@@ -237,12 +204,7 @@ describe('GameControls', () => {
     });
 
     it('should call redoMove when redo button is clicked', () => {
-      // Use real useGame hook but check disabled state
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const redoButton = screen.getByText('Redo →');
       expect(redoButton).toBeDisabled(); // Initial state should be disabled
@@ -252,13 +214,9 @@ describe('GameControls', () => {
       const mockContext = createMockGameContext({
         canUndo: false,
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const undoButton = screen.getByText('← Undo');
       expect(undoButton).toBeDisabled();
@@ -268,13 +226,9 @@ describe('GameControls', () => {
       const mockContext = createMockGameContext({
         canRedo: false,
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const redoButton = screen.getByText('Redo →');
       expect(redoButton).toBeDisabled();
@@ -286,17 +240,13 @@ describe('GameControls', () => {
         canRedo: true,
         gameResult: 'Stalemate!',
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const undoButton = screen.getByText('← Undo');
       const redoButton = screen.getByText('Redo →');
-      
+
       expect(undoButton).toBeDisabled();
       expect(redoButton).toBeDisabled();
     });
@@ -307,26 +257,18 @@ describe('GameControls', () => {
       const mockContext = createMockGameContext({
         drawOffer: { offered: false, by: null },
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       expect(screen.getByText('Offer Draw')).toBeInTheDocument();
     });
 
     it('should call offerDraw with current player when offer draw is clicked', () => {
       const mockContext = createMockGameContext();
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const offerDrawButton = screen.getByText('Offer Draw');
       fireEvent.click(offerDrawButton);
@@ -338,13 +280,9 @@ describe('GameControls', () => {
       const mockContext = createMockGameContext({
         drawOffer: { offered: true, by: 'b' }, // Black offered, white to respond
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       expect(screen.getByText('Black offers a draw')).toBeInTheDocument();
       expect(screen.getByText('Accept')).toBeInTheDocument();
@@ -355,13 +293,9 @@ describe('GameControls', () => {
       const mockContext = createMockGameContext({
         drawOffer: { offered: true, by: 'b' },
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const acceptButton = screen.getByText('Accept');
       fireEvent.click(acceptButton);
@@ -373,13 +307,9 @@ describe('GameControls', () => {
       const mockContext = createMockGameContext({
         drawOffer: { offered: true, by: 'b' },
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const declineButton = screen.getByText('Decline');
       fireEvent.click(declineButton);
@@ -391,13 +321,9 @@ describe('GameControls', () => {
       const mockContext = createMockGameContext({
         drawOffer: { offered: true, by: 'w' }, // White offered, white's turn
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       expect(screen.getByText('Draw offered - waiting for response')).toBeInTheDocument();
     });
@@ -410,13 +336,9 @@ describe('GameControls', () => {
         game: gameAfterMove,
         drawOffer: { offered: true, by: 'w' },
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       expect(screen.getByText('White offers a draw')).toBeInTheDocument();
       expect(screen.getByText('Accept')).toBeInTheDocument();
@@ -427,13 +349,9 @@ describe('GameControls', () => {
       const mockContext = createMockGameContext({
         gameResult: 'Checkmate! Player 1 wins!',
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       expect(screen.queryByText('Offer Draw')).not.toBeInTheDocument();
       expect(screen.queryByText('Accept')).not.toBeInTheDocument();
@@ -450,13 +368,9 @@ describe('GameControls', () => {
       const mockContext = createMockGameContext({
         game: checkmateGame,
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const resignButton = screen.getByText('Resign');
       const undoButton = screen.getByText('← Undo');
@@ -476,29 +390,21 @@ describe('GameControls', () => {
       const mockContext = createMockGameContext({
         game: stalemateGame,
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       // All interactive buttons should be disabled except new game
       const resignButton = screen.getByText('Resign');
       expect(resignButton).toBeDisabled();
-      
+
       const newGameButton = screen.getByText('New Game');
       expect(newGameButton).not.toBeDisabled();
     });
 
     it('should show correct disabled state based on canUndo/canRedo', () => {
-      // Test with initial game state where both should be disabled
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      // Default context: fresh game, both undo/redo disabled.
+      render(<GameControls />);
 
       const undoButton = screen.getByText('← Undo');
       const redoButton = screen.getByText('Redo →');
@@ -512,16 +418,12 @@ describe('GameControls', () => {
   describe('Button Interactions', () => {
     it('should not trigger multiple calls on rapid clicks', () => {
       const mockContext = createMockGameContext();
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const newGameButton = screen.getByText('New Game');
-      
+
       // Simulate rapid clicks
       fireEvent.click(newGameButton);
       fireEvent.click(newGameButton);
@@ -536,13 +438,9 @@ describe('GameControls', () => {
         canUndo: false,
         gameResult: 'Game Over',
       });
-      jest.spyOn(require('../contexts/GameContext'), 'useGame').mockReturnValue(mockContext);
+      useGame.mockReturnValue(mockContext);
 
-      render(
-        <TestWrapper>
-          <GameControls />
-        </TestWrapper>
-      );
+      render(<GameControls />);
 
       const undoButton = screen.getByText('← Undo');
       const resignButton = screen.getByText('Resign');

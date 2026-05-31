@@ -5,8 +5,13 @@ import { GameProvider } from '../../contexts/GameContext';
 import { AuthProvider } from '../../contexts/AuthContext';
 import { Chess } from 'chess.js';
 
-// Mock the contexts
+// Mock the contexts.
+// MoveHistory reads gameState.history, currentMoveIndex, gameResult and
+// gameState.game.isGameOver(); include a real Chess instance and an empty
+// gameResult so the "show all moves" logic runs through the real code paths.
 const mockGameState = {
+  game: new Chess(),
+  gameResult: '',
   chess: new Chess(),
   board: [],
   turn: 'w' as const,
@@ -16,7 +21,7 @@ const mockGameState = {
   isDraw: false,
   isGameOver: false,
   winner: null,
-  history: [],
+  history: [] as any[],
   currentMoveIndex: -1,
   capturedPieces: { w: [], b: [] },
   gameStartTime: Date.now(),
@@ -181,7 +186,7 @@ describe('MoveHistory Component', () => {
 
     // Check that scrollable container exists
     const scrollContainer = screen.getByRole('table').parentElement;
-    expect(scrollContainer).toHaveClass('max-h-96', 'overflow-y-auto');
+    expect(scrollContainer).toHaveClass('max-h-[600px]', 'overflow-y-auto');
   });
 
   it('should not show future moves message when at latest move', () => {

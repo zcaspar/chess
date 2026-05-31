@@ -3,6 +3,7 @@ import { Chess, Move, Square } from 'chess.js';
 import { ChessAI, DifficultyLevel } from '../utils/chessAI';
 import { useAuth } from '../hooks/useAuth';
 import { isFeatureEnabled } from '../config/gameFeatures';
+import { useChessVariants } from '../hooks/useChessVariants';
 
 interface TimeControl {
   initial: number; // Initial time in seconds
@@ -1489,230 +1490,20 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   }, []);
 
   // Nuclear Chess functions
-  const canUseNuke = useCallback((color: 'w' | 'b'): boolean => {
-    // Check if Ainara Mode and nuclear chess feature are enabled
-    const ainaraModeEnabled = isFeatureEnabled('AINARA_MODE') && (authContext.profile?.preferences?.ainaraMode ?? false);
-    if (!ainaraModeEnabled || !isFeatureEnabled('NUCLEAR_CHESS')) return false;
-    
-    // Only available in human vs human mode
-    if (gameState.gameMode !== 'human-vs-human') return false;
-    
-    // Only available in first 10 moves (20 half-moves)
-    const moveCount = gameState.game.history().length;
-    if (moveCount >= 20) return false;
-    
-    // Check if this color hasn't used their nuke yet
-    return color === 'w' ? gameState.nukeAvailable.white : gameState.nukeAvailable.black;
-  }, [gameState.gameMode, gameState.game, gameState.nukeAvailable, authContext.profile?.preferences?.ainaraMode]);
-
-  const activateNukeMode = useCallback((color: 'w' | 'b') => {
-    if (!canUseNuke(color)) return;
-    
-    setGameState(prev => ({
-      ...prev,
-      nukeModeActive: {
-        white: color === 'w',
-        black: color === 'b',
-      },
-    }));
-  }, [canUseNuke]);
-
-  const cancelNukeMode = useCallback(() => {
-    setGameState(prev => ({
-      ...prev,
-      nukeModeActive: {
-        white: false,
-        black: false,
-      },
-    }));
-  }, []);
-
-  const executeNuke = useCallback((targetSquare: Square): boolean => {
-    const activeNukeColor = gameState.nukeModeActive.white ? 'w' : 
-                           gameState.nukeModeActive.black ? 'b' : null;
-    
-    if (!activeNukeColor) return false;
-    
-    // Get the piece on the target square
-    const targetPiece = gameState.game.get(targetSquare);
-    if (!targetPiece) return false;
-    
-    // Can't nuke your own pieces
-    if (targetPiece.color === activeNukeColor) return false;
-    
-    // Can't nuke Kings or Queens
-    if (targetPiece.type === 'k' || targetPiece.type === 'q') return false;
-    
-    // Create a copy of the game and remove the piece
-    const gameCopy = new Chess(gameState.game.fen());
-    gameCopy.remove(targetSquare);
-    
-    // Advance the turn after the nuke (since this counts as a move)
-    // Chess.js doesn't automatically advance turns for direct manipulation
-    const currentFen = gameCopy.fen();
-    const fenParts = currentFen.split(' ');
-    fenParts[1] = activeNukeColor === 'w' ? 'b' : 'w'; // Switch turn
-    // Increment full move number if it was black's turn
-    if (activeNukeColor === 'b') {
-      fenParts[5] = (parseInt(fenParts[5]) + 1).toString();
-    }
-    // Reset half-move clock since this is a capturing move
-    fenParts[4] = '0';
-    const newFen = fenParts.join(' ');
-    const finalGame = new Chess(newFen);
-    
-    // Create a special nuke move entry (synthetic, not a real chess.js Move)
-    const nukeMove = {
-      san: `💣x${targetPiece.type.toUpperCase()}${targetSquare}`,
-      from: targetSquare,
-      to: targetSquare,
-      color: activeNukeColor,
-      piece: targetPiece.type,
-      captured: targetPiece.type,
-      flags: 'n', // Special flag for nuke
-    } as unknown as Move;
-    
-    setGameState(prev => ({
-      ...prev,
-      game: finalGame,
-      history: [...prev.history, nukeMove],
-      currentMoveIndex: prev.history.length,
-      nukeAvailable: {
-        white: activeNukeColor === 'w' ? false : prev.nukeAvailable.white,
-        black: activeNukeColor === 'b' ? false : prev.nukeAvailable.black,
-      },
-      nukeModeActive: {
-        white: false,
-        black: false,
-      },
-    }));
-    
-    return true;
-  }, [gameState.nukeModeActive, gameState.game]);
-
-  // Teleportation functions
-  const canUseTeleport = useCallback((color: 'w' | 'b'): boolean => {
-    // Check if Ainara Mode and teleportation feature are enabled
-    const ainaraModeEnabled = isFeatureEnabled('AINARA_MODE') && (authContext.profile?.preferences?.ainaraMode ?? false);
-    if (!ainaraModeEnabled || !isFeatureEnabled('TELEPORTATION')) return false;
-    
-    // Only available in human vs human mode
-    if (gameState.gameMode !== 'human-vs-human') return false;
-    
-    // Only available in first 10 moves (20 half-moves)
-    const moveCount = gameState.game.history().length;
-    if (moveCount >= 20) return false;
-    
-    // Check if this color hasn't used their teleport yet
-    return color === 'w' ? gameState.teleportAvailable.white : gameState.teleportAvailable.black;
-  }, [gameState.gameMode, gameState.game, gameState.teleportAvailable, authContext.profile?.preferences?.ainaraMode]);
-
-  const activateTeleportMode = useCallback((color: 'w' | 'b') => {
-    if (!canUseTeleport(color)) return;
-    
-    setGameState(prev => ({
-      ...prev,
-      teleportModeActive: {
-        white: color === 'w',
-        black: color === 'b',
-      },
-    }));
-  }, [canUseTeleport]);
-
-  const cancelTeleportMode = useCallback(() => {
-    setGameState(prev => ({
-      ...prev,
-      teleportModeActive: {
-        white: false,
-        black: false,
-      },
-    }));
-  }, []);
-
-  const executeTeleport = useCallback((pieceSquare: Square): boolean => {
-    const activeTeleportColor = gameState.teleportModeActive.white ? 'w' : 
-                               gameState.teleportModeActive.black ? 'b' : null;
-    
-    if (!activeTeleportColor) return false;
-    
-    // Get the piece on the source square
-    const piece = gameState.game.get(pieceSquare);
-    if (!piece) return false;
-    
-    // Can only teleport your own pieces
-    if (piece.color !== activeTeleportColor) return false;
-    
-    // Get all empty squares on the board
-    const allSquares: Square[] = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8',
-                                  'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8',
-                                  'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8',
-                                  'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8',
-                                  'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8',
-                                  'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8',
-                                  'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8',
-                                  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8'];
-    
-    const emptySquares = allSquares.filter(square => !gameState.game.get(square));
-    
-    if (emptySquares.length === 0) {
-      // No empty squares available
-      return false;
-    }
-    
-    // Randomly select an empty square
-    const randomIndex = Math.floor(Math.random() * emptySquares.length);
-    const targetSquare = emptySquares[randomIndex];
-    
-    // Create a copy of the game and make the teleport move
-    const gameCopy = new Chess(gameState.game.fen());
-    gameCopy.remove(pieceSquare);
-    gameCopy.put({ type: piece.type, color: piece.color }, targetSquare);
-    
-    // Advance the turn after the teleportation (since this counts as a move)
-    // Chess.js doesn't automatically advance turns for direct manipulation
-    const currentFen = gameCopy.fen();
-    const fenParts = currentFen.split(' ');
-    fenParts[1] = activeTeleportColor === 'w' ? 'b' : 'w'; // Switch turn
-    // Increment full move number if it was black's turn
-    if (activeTeleportColor === 'b') {
-      fenParts[5] = (parseInt(fenParts[5]) + 1).toString();
-    }
-    // Increment half-move clock since this is not a capturing/pawn move
-    fenParts[4] = (parseInt(fenParts[4]) + 1).toString();
-    const newFen = fenParts.join(' ');
-    const finalGame = new Chess(newFen);
-    
-    // Create a special teleport move entry
-    // Create a special teleport move entry (synthetic, not a real chess.js Move)
-    const teleportMove = {
-      san: `♦${piece.type.toUpperCase()}${pieceSquare}-${targetSquare}`,
-      from: pieceSquare,
-      to: targetSquare,
-      color: activeTeleportColor,
-      piece: piece.type,
-      flags: 't', // Special flag for teleport
-    } as unknown as Move;
-    
-    setGameState(prev => ({
-      ...prev,
-      game: finalGame,
-      history: [...prev.history, teleportMove],
-      currentMoveIndex: prev.history.length,
-      teleportAvailable: {
-        white: activeTeleportColor === 'w' ? false : prev.teleportAvailable.white,
-        black: activeTeleportColor === 'b' ? false : prev.teleportAvailable.black,
-      },
-      teleportModeActive: {
-        white: false,
-        black: false,
-      },
-    }));
-    
-    return true;
-  }, [gameState.teleportModeActive, gameState.game]);
+  // Ainara-mode chess variants (nuclear chess + teleportation) — see hooks/useChessVariants
+  const ainaraModeEnabled = isFeatureEnabled('AINARA_MODE') && (authContext.profile?.preferences?.ainaraMode ?? false);
+  const {
+    canUseNuke,
+    activateNukeMode,
+    cancelNukeMode,
+    executeNuke,
+    canUseTeleport,
+    activateTeleportMode,
+    cancelTeleportMode,
+    executeTeleport,
+  } = useChessVariants(gameState, setGameState, ainaraModeEnabled);
 
   const currentPlayer = gameState.game.turn();
-  const ainaraModeEnabled = isFeatureEnabled('AINARA_MODE') && (authContext.profile?.preferences?.ainaraMode ?? false);
   const canUseHint = ainaraModeEnabled && isFeatureEnabled('HINTS') && 
                     (currentPlayer === 'w' ? gameState.hintAvailable.white : gameState.hintAvailable.black) && 
                     !gameState.gameResult && 

@@ -124,6 +124,5 @@ export class SimpleChessAI {
   }
 }
 
-// Legacy export for compatibility (value + type alias)
-export const ChessAI = SimpleChessAI;
-export type ChessAI = SimpleChessAI;
+// Legacy export for compatibility — re-export the class (value + type) as ChessAI
+export { SimpleChessAI as ChessAI };

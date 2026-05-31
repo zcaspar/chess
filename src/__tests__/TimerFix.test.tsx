@@ -4,25 +4,61 @@ import '@testing-library/jest-dom';
 import { GameProvider } from '../contexts/GameContext';
 import ChessClock from '../components/ChessClock/ChessClock';
 
-// Mock chess.js completely
-jest.mock('chess.js', () => ({
-  Chess: jest.fn().mockImplementation(() => ({
-    turn: () => 'w',
-    moves: () => [{ from: 'e2', to: 'e4', piece: 'p' }],
-    move: () => ({ from: 'e2', to: 'e4', piece: 'p' }),
-    isGameOver: () => false,
-    isCheckmate: () => false,
-    isDraw: () => false,
-    isStalemate: () => false,
-    isThreefoldRepetition: () => false,
-    isInsufficientMaterial: () => false,
-    fen: () => 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-    board: () => Array(8).fill(Array(8).fill(null)),
-    history: () => [],
-    inCheck: () => false,
-    getCastlingRights: () => ({ k: false, q: false }),
-  }))
+// GameProvider (via useAuth) and ChessClock (via useSocket) call sibling
+// contexts that throw without their providers. Mock both with safe defaults so
+// the component renders in isolation without real auth/socket/network.
+jest.mock('../contexts/AuthContext', () => ({
+  useAuth: () => ({
+    user: null,
+    profile: null,
+    loading: false,
+    error: null,
+    updateStats: jest.fn(),
+  }),
 }));
+
+jest.mock('../contexts/SocketContext', () => ({
+  useSocket: () => ({
+    socket: null,
+    isConnected: false,
+    roomCode: null,
+    assignedColor: null,
+    players: { white: null, black: null },
+    gameState: null,
+    makeMove: jest.fn(),
+  }),
+}));
+
+// Prevent any accidental network calls from hitting the real backend.
+global.fetch = jest.fn(() =>
+  Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+) as unknown as typeof fetch;
+
+// Mock chess.js completely.
+// NOTE: must use a class (not jest.fn().mockImplementation returning an object
+// literal) — under this CRA/babel setup, `new Chess()` on the object-literal
+// form does not bind the methods, so gameState.game.fen() ends up undefined.
+jest.mock('chess.js', () => {
+  class MockChess {
+    turn() { return 'w'; }
+    moves() { return [{ from: 'e2', to: 'e4', piece: 'p' }]; }
+    move() { return { from: 'e2', to: 'e4', piece: 'p' }; }
+    isGameOver() { return false; }
+    isCheckmate() { return false; }
+    isDraw() { return false; }
+    isStalemate() { return false; }
+    isThreefoldRepetition() { return false; }
+    isInsufficientMaterial() { return false; }
+    fen() { return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'; }
+    pgn() { return ''; }
+    board() { return Array(8).fill(Array(8).fill(null)); }
+    history() { return []; }
+    inCheck() { return false; }
+    get() { return null; }
+    getCastlingRights() { return { k: false, q: false }; }
+  }
+  return { Chess: MockChess };
+});
 
 // Mock the ChessAI
 jest.mock('../utils/chessAI', () => ({
