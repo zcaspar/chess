@@ -9,6 +9,11 @@ import { TextEncoder, TextDecoder } from 'util';
 global.TextEncoder = TextEncoder as any;
 global.TextDecoder = TextDecoder as any;
 
+// jsdom does not implement scrollIntoView; components (e.g. MoveHistory) call it.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = jest.fn();
+}
+
 // Add ReadableStream polyfill
 global.ReadableStream = jest.fn().mockImplementation(() => ({
   cancel: jest.fn(),

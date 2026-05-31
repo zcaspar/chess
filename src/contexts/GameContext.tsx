@@ -24,7 +24,7 @@ interface GameStats {
   player2: { wins: number; draws: number; losses: number };
 }
 
-interface GameState {
+export interface GameState {
   game: Chess;
   history: Move[];
   currentMoveIndex: number;
@@ -81,7 +81,7 @@ interface GameState {
   } | null;
 }
 
-interface GameContextType {
+export interface GameContextType {
   gameState: GameState;
   makeMove: (from: Square, to: Square, promotion?: string) => boolean;
   undoMove: () => void;
