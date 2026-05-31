@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
 
@@ -11,7 +12,7 @@ router.post('/position', authenticateToken, async (req: AuthenticatedRequest, re
   try {
     const { fen, depth = 15 } = req.body;
     
-    console.log('🧠 Analysis request received:', { fen, depth, user: req.user?.uid });
+    logger.debug('🧠 Analysis request received:', { fen, depth, user: req.user?.uid });
     
     if (!fen) {
       return res.status(400).json({
@@ -22,7 +23,7 @@ router.post('/position', authenticateToken, async (req: AuthenticatedRequest, re
 
     // Check if LC0 server is available
     const LC0_SERVER_URL = process.env.LC0_SERVER_URL || 'https://web-production-4cc9.up.railway.app';
-    console.log('🔗 Calling LC0 server:', LC0_SERVER_URL);
+    logger.debug('🔗 Calling LC0 server:', LC0_SERVER_URL);
     
     try {
       // Call LC0 server for best move analysis
@@ -67,7 +68,7 @@ router.post('/position', authenticateToken, async (req: AuthenticatedRequest, re
       });
 
     } catch (engineError) {
-      console.warn('LC0 engine unavailable, providing fallback analysis:', engineError);
+      logger.warn('LC0 engine unavailable, providing fallback analysis:', engineError);
       
       // Fallback: Provide basic position information
       const fallbackAnalysis = {
@@ -90,7 +91,7 @@ router.post('/position', authenticateToken, async (req: AuthenticatedRequest, re
     }
 
   } catch (error) {
-    console.error('Error analyzing position:', error);
+    logger.error('Error analyzing position:', error);
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to analyze position'
@@ -107,7 +108,7 @@ router.post('/hint', async (req, res) => {
   try {
     const { fen } = req.body;
     
-    console.log('💡 Hint request received:', { fen });
+    logger.debug('💡 Hint request received:', { fen });
     
     if (!fen) {
       return res.status(400).json({
@@ -119,7 +120,7 @@ router.post('/hint', async (req, res) => {
 
     // Check if LC0 server is available
     const LC0_SERVER_URL = process.env.LC0_SERVER_URL || 'https://web-production-4cc9.up.railway.app';
-    console.log('🔗 Calling LC0 server for hint:', LC0_SERVER_URL);
+    logger.debug('🔗 Calling LC0 server for hint:', LC0_SERVER_URL);
     
     try {
       // Call LC0 server for best move
@@ -166,7 +167,7 @@ router.post('/hint', async (req, res) => {
       }
 
     } catch (engineError) {
-      console.warn('LC0 engine unavailable for hint:', engineError);
+      logger.warn('LC0 engine unavailable for hint:', engineError);
       
       res.status(503).json({
         success: false,
@@ -177,7 +178,7 @@ router.post('/hint', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Error getting hint:', error);
+    logger.error('Error getting hint:', error);
     res.status(500).json({
       success: false,
       error: 'Internal server error',

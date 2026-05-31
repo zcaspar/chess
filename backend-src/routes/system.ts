@@ -2,6 +2,7 @@ import express from 'express';
 import { getPoolStatus } from '../config/database';
 import { RedisManager } from '../config/redis';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
 
@@ -55,7 +56,7 @@ router.get('/status', async (req, res) => {
     
     res.json(systemStatus);
   } catch (error) {
-    console.error('Error getting system status:', error);
+    logger.error('Error getting system status:', error);
     res.status(500).json({
       status: 'error',
       message: 'Failed to get system status',
@@ -121,7 +122,7 @@ router.get('/metrics', authenticateToken, async (req: AuthenticatedRequest, res)
     
     res.json(metrics);
   } catch (error) {
-    console.error('Error getting system metrics:', error);
+    logger.error('Error getting system metrics:', error);
     res.status(500).json({
       error: 'Failed to get system metrics',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -169,7 +170,7 @@ router.post('/gc', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error triggering garbage collection:', error);
+    logger.error('Error triggering garbage collection:', error);
     res.status(500).json({
       error: 'Failed to trigger garbage collection',
       message: error instanceof Error ? error.message : 'Unknown error'

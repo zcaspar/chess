@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { logger } from './logger';
 
 const ROOM_STATE_FILE = path.join('/tmp', 'chess-rooms.json');
 
@@ -51,9 +52,9 @@ export class RoomPersistence {
       }
       
       fs.writeFileSync(ROOM_STATE_FILE, JSON.stringify(persistedRooms, null, 2));
-      console.log(`💾 Persisted ${persistedRooms.length} active rooms to disk`);
+      logger.debug(`💾 Persisted ${persistedRooms.length} active rooms to disk`);
     } catch (error) {
-      console.error('Failed to persist rooms:', error);
+      logger.error('Failed to persist rooms:', error);
     }
   }
   
@@ -63,15 +64,15 @@ export class RoomPersistence {
         const data = fs.readFileSync(ROOM_STATE_FILE, 'utf-8');
         const parsed = JSON.parse(data);
         if (!Array.isArray(parsed)) {
-          console.warn('Room persistence file has unexpected format, ignoring');
+          logger.warn('Room persistence file has unexpected format, ignoring');
           return [];
         }
         const rooms = parsed as PersistedRoom[];
-        console.log(`📂 Loaded ${rooms.length} persisted rooms from disk`);
+        logger.debug(`📂 Loaded ${rooms.length} persisted rooms from disk`);
         return rooms;
       }
     } catch (error) {
-      console.error('Failed to load persisted rooms:', error);
+      logger.error('Failed to load persisted rooms:', error);
     }
     return [];
   }
@@ -86,10 +87,10 @@ export class RoomPersistence {
       
       if (activeRooms.length < rooms.length) {
         fs.writeFileSync(ROOM_STATE_FILE, JSON.stringify(activeRooms, null, 2));
-        console.log(`🧹 Cleared ${rooms.length - activeRooms.length} old rooms`);
+        logger.debug(`🧹 Cleared ${rooms.length - activeRooms.length} old rooms`);
       }
     } catch (error) {
-      console.error('Failed to clear old rooms:', error);
+      logger.error('Failed to clear old rooms:', error);
     }
   }
 }

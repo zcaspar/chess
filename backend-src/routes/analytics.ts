@@ -1,6 +1,7 @@
 import express from 'express';
 import { AnalyticsModel } from '../models/Analytics';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
 
@@ -29,7 +30,7 @@ router.get('/dashboard', authenticateToken, async (req: AuthenticatedRequest, re
     try {
       summary = await AnalyticsModel.getDashboardSummary(playerId);
     } catch (error: any) {
-      console.warn('⚠️  Analytics views not ready, using fallback query:', error.message);
+      logger.warn('⚠️  Analytics views not ready, using fallback query:', error.message);
       
       // Fallback: Query game_history directly
       const { query } = await import('../config/database');
@@ -109,7 +110,7 @@ router.get('/dashboard', authenticateToken, async (req: AuthenticatedRequest, re
         AnalyticsModel.getOpeningStatistics(playerId, 5)
       ]);
     } catch (error) {
-      console.warn('⚠️  Some analytics queries failed, using basic data:', error);
+      logger.warn('⚠️  Some analytics queries failed, using basic data:', error);
       
       // Basic difficulty breakdown fallback
       try {
@@ -150,7 +151,7 @@ router.get('/dashboard', authenticateToken, async (req: AuthenticatedRequest, re
           gamesPlayed: parseInt(row.games_played)
         }));
       } catch (fallbackError) {
-        console.warn('⚠️  Fallback difficulty query failed:', fallbackError);
+        logger.warn('⚠️  Fallback difficulty query failed:', fallbackError);
       }
     }
 
@@ -163,7 +164,7 @@ router.get('/dashboard', authenticateToken, async (req: AuthenticatedRequest, re
     });
 
   } catch (error) {
-    console.error('Error fetching dashboard data:', error);
+    logger.error('Error fetching dashboard data:', error);
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to fetch dashboard data'
@@ -200,7 +201,7 @@ router.get('/trends', authenticateToken, async (req: AuthenticatedRequest, res) 
     });
 
   } catch (error) {
-    console.error('Error fetching trends data:', error);
+    logger.error('Error fetching trends data:', error);
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to fetch trends data'
@@ -249,7 +250,7 @@ router.get('/breakdowns', authenticateToken, async (req: AuthenticatedRequest, r
     });
 
   } catch (error) {
-    console.error('Error fetching breakdowns data:', error);
+    logger.error('Error fetching breakdowns data:', error);
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to fetch breakdowns data'
@@ -347,7 +348,7 @@ router.get('/insights', authenticateToken, async (req: AuthenticatedRequest, res
     });
 
   } catch (error) {
-    console.error('Error fetching insights:', error);
+    logger.error('Error fetching insights:', error);
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to fetch insights'
@@ -369,7 +370,7 @@ router.post('/initialize', authenticateToken, async (req: AuthenticatedRequest, 
     });
 
   } catch (error) {
-    console.error('Error initializing analytics tables:', error);
+    logger.error('Error initializing analytics tables:', error);
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to initialize analytics tables'

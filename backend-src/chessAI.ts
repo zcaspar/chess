@@ -1,6 +1,7 @@
 import { Chess, Move } from 'chess.js';
 import { Lc0Engine } from './lc0Engine';
 import { Lc0EngineBackend } from './lc0EngineBackend';
+import { logger } from './utils/logger';
 // Note: Advanced engines are handled by the backend in production
 
 type DifficultyLevel = 'beginner' | 'easy' | 'medium' | 'hard' | 'expert';
@@ -134,7 +135,7 @@ export class AdvancedChessAI {
     for (let i = 0; i < possibleMoves.length; i++) {
       // Check time limit
       if (Date.now() - startTime > timeLimit) {
-        console.log('AI time limit reached, returning best move found so far');
+        logger.debug('AI time limit reached, returning best move found so far');
         break;
       }
 
@@ -414,7 +415,7 @@ export class ChessAI {
     try {
       if (this.useBackend) {
         // Use real Lc0 backend engine
-        console.log('Initializing Lc0 backend engine...');
+        logger.debug('Initializing Lc0 backend engine...');
         switch (this.difficulty) {
           case 'beginner':
             this.lc0BackendEngine = await Lc0EngineBackend.createBeginner();
@@ -434,7 +435,7 @@ export class ChessAI {
           default:
             this.lc0BackendEngine = await Lc0EngineBackend.createMedium();
         }
-        console.log('Real Lc0 backend engine initialized successfully!');
+        logger.debug('Real Lc0 backend engine initialized successfully!');
       } else {
         // Use browser simulation engine
         switch (this.difficulty) {
@@ -452,10 +453,10 @@ export class ChessAI {
           default:
             this.lc0Engine = await Lc0Engine.createIntermediate(this.weightsPath);
         }
-        console.log('Lc0 simulation engine initialized successfully');
+        logger.debug('Lc0 simulation engine initialized successfully');
       }
     } catch (error) {
-      console.error('Failed to initialize Lc0 engine:', error);
+      logger.error('Failed to initialize Lc0 engine:', error);
       // Fallback to built-in engine
       this.engineType = 'built-in';
       this.initializeBuiltInEngine(1000);
@@ -517,7 +518,7 @@ export class ChessAI {
         if (this.lc0BackendEngine) {
           // Use real Lc0 backend engine
           const timeLimit = this.getLc0TimeLimit();
-          console.log(`Using Lc0 backend engine (${this.difficulty}) with ${timeLimit}ms time limit`);
+          logger.debug(`Using Lc0 backend engine (${this.difficulty}) with ${timeLimit}ms time limit`);
           return await this.lc0BackendEngine.getBestMove(game, timeLimit);
         } else if (this.lc0Engine) {
           // Use Lc0 simulation engine
@@ -533,11 +534,11 @@ export class ChessAI {
         throw new Error('No engine available');
       }
     } catch (error) {
-      console.error('Error getting best move:', error);
+      logger.error('Error getting best move:', error);
       
       // Fallback to built-in engine if Lc0 fails
       if (this.engineType === 'lc0') {
-        console.log('Falling back to built-in engine due to error');
+        logger.debug('Falling back to built-in engine due to error');
         this.engineType = 'built-in';
         this.initializeBuiltInEngine(1000);
         return this.engine ? await this.engine.getBestMove(game) : null;

@@ -3,6 +3,7 @@ import { Chess } from 'chess.js';
 import { query } from '../config/database';
 import { verifyToken } from '../middleware/auth';
 import { RoomPersistence } from '../utils/roomPersistence';
+import { logger } from '../utils/logger';
 
 interface GameRoom {
   id: string;
@@ -90,36 +91,36 @@ export class GameSocketHandler {
           try {
             room.game.loadPgn(roomData.pgn);
           } catch (e) {
-            console.warn(`Failed to load PGN for room ${roomData.roomCode}, using FEN only`);
+            logger.warn(`Failed to load PGN for room ${roomData.roomCode}, using FEN only`);
           }
         }
         
         this.rooms.set(roomData.roomCode, room);
-        console.log(`🔄 Restored room ${roomData.roomCode} from persistence (turn: ${roomData.turn}, moves: ${room.game.history().length})`);
+        logger.debug(`🔄 Restored room ${roomData.roomCode} from persistence (turn: ${roomData.turn}, moves: ${room.game.history().length})`);
       }
       
       if (persistedRooms.length > 0) {
-        console.log(`✅ Restored ${persistedRooms.length} active rooms from previous session`);
+        logger.debug(`✅ Restored ${persistedRooms.length} active rooms from previous session`);
       }
     } catch (error) {
-      console.error('Failed to restore persisted rooms:', error);
+      logger.error('Failed to restore persisted rooms:', error);
     }
   }
 
   handleConnection(socket: Socket) {
-    console.log('New socket connection:', socket.id);
+    logger.debug('New socket connection:', socket.id);
 
     // Authenticate socket connection
     socket.on('authenticate', async (token: string) => {
       try {
-        console.log(`Authenticating socket ${socket.id} with token: ${token?.substring(0, 20)}...`);
+        logger.debug(`Authenticating socket ${socket.id} with token: ${token?.substring(0, 20)}...`);
         const user = await verifyToken(token);
         socket.data.userId = user.uid;
         socket.data.username = user.email || 'Anonymous';
-        console.log(`Socket ${socket.id} authenticated successfully as ${user.email} (${user.uid})`);
+        logger.debug(`Socket ${socket.id} authenticated successfully as ${user.email} (${user.uid})`);
         socket.emit('authenticated', { success: true });
       } catch (error) {
-        console.error(`Socket ${socket.id} authentication failed:`, error);
+        logger.error(`Socket ${socket.id} authentication failed:`, error);
         
         // Check if this is a Firebase Admin configuration issue
         const errorMessage = (error as Error)?.message || '';
@@ -129,11 +130,11 @@ export class GameSocketHandler {
             errorMessage.includes('app/invalid-credential') ||
             errorMessage.includes('Firebase Admin SDK') ||
             errorMessage.includes('project'))) {
-          console.warn(`Firebase Admin not configured, using demo auth for socket ${socket.id}`);
+          logger.warn(`Firebase Admin not configured, using demo auth for socket ${socket.id}`);
           // Create a mock user for development/demo purposes
           socket.data.userId = 'demo-user-' + Date.now() + '-' + socket.id;
           socket.data.username = 'Demo User';
-          console.log(`Socket ${socket.id} authenticated with demo credentials`);
+          logger.debug(`Socket ${socket.id} authenticated with demo credentials`);
           socket.emit('authenticated', { success: true });
           return;
         }
@@ -147,7 +148,7 @@ export class GameSocketHandler {
     socket.on('createRoom', async (data: { timeControl?: { initial: number; increment: number }; displayName?: string }) => {
       try {
         const roomCode = this.generateRoomCode();
-        console.log(`🎮 Creating new room ${roomCode} for socket ${socket.id} (${data.displayName || socket.data.username})`);
+        logger.debug(`🎮 Creating new room ${roomCode} for socket ${socket.id} (${data.displayName || socket.data.username})`);
 
         const room: GameRoom = {
           id: roomCode,
@@ -179,7 +180,7 @@ export class GameSocketHandler {
           room.blackPlayer = creatorData;
         }
         
-        console.log(`Auto-assigned creator ${socket.id} to ${assignedColor.toUpperCase()} in room ${roomCode}`);
+        logger.debug(`Auto-assigned creator ${socket.id} to ${assignedColor.toUpperCase()} in room ${roomCode}`);
 
         this.rooms.set(roomCode, room);
         socket.join(roomCode);
@@ -206,12 +207,12 @@ export class GameSocketHandler {
             [socket.data.userId, room.gameId]
           );
         } catch (dbError) {
-          console.warn('Database unavailable, continuing without persistence:', dbError);
+          logger.warn('Database unavailable, continuing without persistence:', dbError);
           // Continue without database persistence
         }
 
         const shareLink = `${process.env.FRONTEND_URL}/game/${roomCode}`;
-        console.log(`✅ Room ${roomCode} created successfully. Share link: ${shareLink}`);
+        logger.debug(`✅ Room ${roomCode} created successfully. Share link: ${shareLink}`);
         
         // Emit both roomCreated and roomJoined events
         socket.emit('roomCreated', { 
@@ -238,7 +239,7 @@ export class GameSocketHandler {
           blackTime: room.blackTime,
         });
       } catch (error) {
-        console.error('Error creating room:', error);
+        logger.error('Error creating room:', error);
         socket.emit('error', { message: 'Failed to create room' });
       }
     });
@@ -249,9 +250,9 @@ export class GameSocketHandler {
         // Support both old format (string) and new format (object)
         const roomCode = typeof data === 'string' ? data : data.roomCode;
         const displayName = typeof data === 'object' ? data.displayName : undefined;
-        console.log(`🔗 Socket ${socket.id} (${displayName || socket.data.username}) attempting to join room ${roomCode}`);
-        console.log(`Socket auth data: userId=${socket.data.userId}, username=${socket.data.username}`);
-        console.log(`Current active rooms: [${Array.from(this.rooms.keys()).join(', ')}]`);
+        logger.debug(`🔗 Socket ${socket.id} (${displayName || socket.data.username}) attempting to join room ${roomCode}`);
+        logger.debug(`Socket auth data: userId=${socket.data.userId}, username=${socket.data.username}`);
+        logger.debug(`Current active rooms: [${Array.from(this.rooms.keys()).join(', ')}]`);
         const room = this.rooms.get(roomCode);
         
         if (!room) {
@@ -285,7 +286,7 @@ export class GameSocketHandler {
 
             this.rooms.set(roomCode, newRoom);
           } catch (dbError) {
-            console.warn('Database unavailable, checking for persisted room:', dbError);
+            logger.warn('Database unavailable, checking for persisted room:', dbError);
             
             // Don't auto-create rooms - force proper create/join flow
             socket.emit('error', { 
@@ -310,10 +311,10 @@ export class GameSocketHandler {
 
         let assignedColor: 'white' | 'black' | 'spectator' = 'spectator';
 
-        console.log(`Player joining room ${roomCode}:`);
-        console.log(`Current white player: ${roomToJoin.whitePlayer?.socketId || 'none'} (userId: ${roomToJoin.whitePlayer?.id || 'none'})`);
-        console.log(`Current black player: ${roomToJoin.blackPlayer?.socketId || 'none'} (userId: ${roomToJoin.blackPlayer?.id || 'none'})`);
-        console.log(`New player socket: ${socket.id} (userId: ${socket.data.userId})`);
+        logger.debug(`Player joining room ${roomCode}:`);
+        logger.debug(`Current white player: ${roomToJoin.whitePlayer?.socketId || 'none'} (userId: ${roomToJoin.whitePlayer?.id || 'none'})`);
+        logger.debug(`Current black player: ${roomToJoin.blackPlayer?.socketId || 'none'} (userId: ${roomToJoin.blackPlayer?.id || 'none'})`);
+        logger.debug(`New player socket: ${socket.id} (userId: ${socket.data.userId})`);
 
         // Check if this user was previously assigned to a color (handle reconnection)
         const wasWhitePlayer = roomToJoin.whitePlayer?.id === socket.data.userId;
@@ -323,26 +324,26 @@ export class GameSocketHandler {
           // User is reconnecting as white player
           roomToJoin.whitePlayer.socketId = socket.id;
           assignedColor = 'white';
-          console.log(`Reassigned ${socket.id} to WHITE (reconnection of user ${socket.data.userId})`);
+          logger.debug(`Reassigned ${socket.id} to WHITE (reconnection of user ${socket.data.userId})`);
         } else if (wasBlackPlayer && roomToJoin.blackPlayer) {
           // User is reconnecting as black player  
           roomToJoin.blackPlayer.socketId = socket.id;
           assignedColor = 'black';
-          console.log(`Reassigned ${socket.id} to BLACK (reconnection of user ${socket.data.userId})`);
+          logger.debug(`Reassigned ${socket.id} to BLACK (reconnection of user ${socket.data.userId})`);
         } else if (!roomToJoin.whitePlayer) {
           // New assignment to white
           roomToJoin.whitePlayer = playerData;
           assignedColor = 'white';
-          console.log(`Assigned ${socket.id} to WHITE (new user ${socket.data.userId})`);
+          logger.debug(`Assigned ${socket.id} to WHITE (new user ${socket.data.userId})`);
         } else if (!roomToJoin.blackPlayer) {
           // New assignment to black
           roomToJoin.blackPlayer = playerData;
           assignedColor = 'black';
-          console.log(`Assigned ${socket.id} to BLACK (new user ${socket.data.userId})`);
+          logger.debug(`Assigned ${socket.id} to BLACK (new user ${socket.data.userId})`);
         } else {
           // Room is full, user becomes spectator
           roomToJoin.spectators.add(socket.id);
-          console.log(`${socket.id} assigned as SPECTATOR (room full)`);
+          logger.debug(`${socket.id} assigned as SPECTATOR (room full)`);
         }
 
         // Update database with player assignment (if available)
@@ -354,7 +355,7 @@ export class GameSocketHandler {
               [socket.data.userId, roomToJoin.gameId]
             );
           } catch (dbError) {
-            console.warn('Database unavailable for player assignment:', dbError);
+            logger.warn('Database unavailable for player assignment:', dbError);
             // Continue without database persistence
           }
         }
@@ -402,7 +403,7 @@ export class GameSocketHandler {
           });
         }
       } catch (error) {
-        console.error('Error joining room:', error);
+        logger.error('Error joining room:', error);
         socket.emit('error', { message: 'Failed to join room' });
       }
     });
@@ -431,22 +432,22 @@ export class GameSocketHandler {
         const isWhitePlayer = room.whitePlayer?.socketId === socket.id;
         const isBlackPlayer = room.blackPlayer?.socketId === socket.id;
         
-        console.log(`Move attempt from socket ${socket.id}:`);
-        console.log(`White player: ${room.whitePlayer?.socketId}, Black player: ${room.blackPlayer?.socketId}`);
-        console.log(`Is white player: ${isWhitePlayer}, Is black player: ${isBlackPlayer}`);
-        console.log(`Current turn: ${room.game.turn()}`);
+        logger.debug(`Move attempt from socket ${socket.id}:`);
+        logger.debug(`White player: ${room.whitePlayer?.socketId}, Black player: ${room.blackPlayer?.socketId}`);
+        logger.debug(`Is white player: ${isWhitePlayer}, Is black player: ${isBlackPlayer}`);
+        logger.debug(`Current turn: ${room.game.turn()}`);
         
         if (!isWhitePlayer && !isBlackPlayer) {
-          console.log('Player not found in game');
+          logger.debug('Player not found in game');
           socket.emit('error', { message: 'You are not a player in this game' });
           return;
         }
 
         const playerColor = isWhitePlayer ? 'w' : 'b';
-        console.log(`Player color: ${playerColor}, Game turn: ${room.game.turn()}`);
+        logger.debug(`Player color: ${playerColor}, Game turn: ${room.game.turn()}`);
         
         if (room.game.turn() !== playerColor) {
-          console.log('Not player\'s turn');
+          logger.debug('Not player\'s turn');
           socket.emit('error', { message: 'Not your turn' });
           return;
         }
@@ -520,7 +521,7 @@ export class GameSocketHandler {
               [room.game.fen(), room.game.pgn(), room.gameId]
             );
           } catch (dbError) {
-            console.warn('Database unavailable for move persistence:', dbError);
+            logger.warn('Database unavailable for move persistence:', dbError);
             // Continue without database persistence
           }
         }
@@ -562,7 +563,7 @@ export class GameSocketHandler {
           await this.endGame(roomCode, result, reason);
         }
       } catch (error) {
-        console.error('Error making move:', error);
+        logger.error('Error making move:', error);
         socket.emit('error', { message: 'Failed to make move' });
       }
     });
@@ -585,7 +586,7 @@ export class GameSocketHandler {
           await this.endGame(roomCode, winner, 'resignation');
         }
       } catch (error) {
-        console.error('Error handling resignation:', error);
+        logger.error('Error handling resignation:', error);
       }
     });
 
@@ -644,7 +645,7 @@ export class GameSocketHandler {
 
     // Handle leaving room
     socket.on('leaveRoom', (roomCode: string) => {
-      console.log(`Socket ${socket.id} requesting to leave room ${roomCode}`);
+      logger.debug(`Socket ${socket.id} requesting to leave room ${roomCode}`);
       
       const currentRoomCode = this.playerRooms.get(socket.id);
       if (currentRoomCode === roomCode) {
@@ -654,7 +655,7 @@ export class GameSocketHandler {
 
     // Handle disconnection
     socket.on('disconnect', () => {
-      console.log('Socket disconnected:', socket.id);
+      logger.debug('Socket disconnected:', socket.id);
       
       const roomCode = this.playerRooms.get(socket.id);
       if (roomCode) {
@@ -664,11 +665,11 @@ export class GameSocketHandler {
           
           // Check if disconnecting player was white or black
           if (room.whitePlayer?.socketId === socket.id) {
-            console.log(`Removing white player ${socket.id} from room ${roomCode}`);
+            logger.debug(`Removing white player ${socket.id} from room ${roomCode}`);
             room.whitePlayer = null;
             disconnectedColor = 'white';
           } else if (room.blackPlayer?.socketId === socket.id) {
-            console.log(`Removing black player ${socket.id} from room ${roomCode}`);
+            logger.debug(`Removing black player ${socket.id} from room ${roomCode}`);
             room.blackPlayer = null;
             disconnectedColor = 'black';
           } else if (room.spectators.has(socket.id)) {
@@ -682,8 +683,8 @@ export class GameSocketHandler {
             color: disconnectedColor,
           });
 
-          console.log(`Player ${socket.id} (${disconnectedColor}) disconnected from room ${roomCode}`);
-          console.log(`Room state after disconnect - White: ${room.whitePlayer?.socketId || 'none'}, Black: ${room.blackPlayer?.socketId || 'none'}`);
+          logger.debug(`Player ${socket.id} (${disconnectedColor}) disconnected from room ${roomCode}`);
+          logger.debug(`Room state after disconnect - White: ${room.whitePlayer?.socketId || 'none'}, Black: ${room.blackPlayer?.socketId || 'none'}`);
         }
         
         this.playerRooms.delete(socket.id);
@@ -699,11 +700,11 @@ export class GameSocketHandler {
     
     // Remove player from their assigned slot
     if (room.whitePlayer?.socketId === socket.id) {
-      console.log(`White player ${socket.id} leaving room ${roomCode}`);
+      logger.debug(`White player ${socket.id} leaving room ${roomCode}`);
       room.whitePlayer = null;
       leftColor = 'white';
     } else if (room.blackPlayer?.socketId === socket.id) {
-      console.log(`Black player ${socket.id} leaving room ${roomCode}`);
+      logger.debug(`Black player ${socket.id} leaving room ${roomCode}`);
       room.blackPlayer = null;
       leftColor = 'black';
     } else if (room.spectators.has(socket.id)) {
@@ -724,7 +725,7 @@ export class GameSocketHandler {
     // Save updated room state
     RoomPersistence.saveRooms(this.rooms);
     
-    console.log(`Player ${socket.id} (${leftColor}) left room ${roomCode}`);
+    logger.debug(`Player ${socket.id} (${leftColor}) left room ${roomCode}`);
   }
 
   private broadcastTimerUpdates() {
@@ -841,7 +842,7 @@ export class GameSocketHandler {
       this.rooms.delete(roomCode);
     }, 300000); // 5 minutes
     } catch (error) {
-      console.error(`Error ending game in room ${roomCode}:`, error);
+      logger.error(`Error ending game in room ${roomCode}:`, error);
       // Still notify players even if DB update failed
       this.io.to(roomCode).emit('gameEnded', { result, reason });
     }

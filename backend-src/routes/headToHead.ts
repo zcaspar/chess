@@ -1,6 +1,7 @@
 import express from 'express';
 import { HeadToHeadModel } from '../models/HeadToHead';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
 
@@ -45,7 +46,7 @@ router.get('/:opponentId', authenticateToken, async (req: AuthenticatedRequest, 
     });
     
   } catch (error) {
-    console.error('Error fetching head-to-head stats:', error);
+    logger.error('Error fetching head-to-head stats:', error);
     res.status(500).json({
       error: 'Failed to fetch head-to-head stats',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -69,7 +70,7 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
     });
     
   } catch (error) {
-    console.error('Error fetching player head-to-head records:', error);
+    logger.error('Error fetching player head-to-head records:', error);
     res.status(500).json({
       error: 'Failed to fetch head-to-head records',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -105,7 +106,7 @@ router.post('/update', authenticateToken, async (req: AuthenticatedRequest, res)
     });
     
   } catch (error) {
-    console.error('Error updating head-to-head record:', error);
+    logger.error('Error updating head-to-head record:', error);
     res.status(500).json({
       error: 'Failed to update head-to-head record',
       message: error instanceof Error ? error.message : 'Unknown error'

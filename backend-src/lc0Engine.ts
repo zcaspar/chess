@@ -1,4 +1,5 @@
 import { Chess, Move } from 'chess.js';
+import { logger } from './utils/logger';
 
 interface Lc0EngineConfig {
   weightsPath: string;
@@ -28,7 +29,7 @@ export class Lc0Engine {
     // Simulate initialization delay
     await new Promise(resolve => setTimeout(resolve, 1000));
     this.isInitialized = true;
-    console.log('Lc0Engine (simulation) initialized with config:', this.config);
+    logger.debug('Lc0Engine (simulation) initialized with config:', this.config);
   }
 
   async getBestMove(game: Chess, timeLimit?: number): Promise<Move | null> {
@@ -49,7 +50,7 @@ export class Lc0Engine {
     // Simulate Lc0-like move selection (stronger than random)
     const move = this.selectBestMove(game, legalMoves);
     
-    console.log(`Lc0Engine (simulation) selected move: ${move?.san} after ${thinkingTime}ms thinking`);
+    logger.debug(`Lc0Engine (simulation) selected move: ${move?.san} after ${thinkingTime}ms thinking`);
     return move;
   }
 
@@ -147,7 +148,7 @@ export class Lc0Engine {
   }
 
   async setOption(name: string, value: string | number): Promise<void> {
-    console.log(`Setting option ${name} = ${value}`);
+    logger.debug(`Setting option ${name} = ${value}`);
   }
 
   async isEngineReady(): Promise<boolean> {
@@ -156,7 +157,7 @@ export class Lc0Engine {
 
   async shutdown(): Promise<void> {
     this.isInitialized = false;
-    console.log('Lc0Engine (simulation) shut down');
+    logger.debug('Lc0Engine (simulation) shut down');
   }
 
   // Static factory methods

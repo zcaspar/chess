@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import { logger } from '../utils/logger';
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
@@ -12,7 +13,7 @@ if (!admin.apps.length) {
       admin.initializeApp({
         projectId: 'demo-project', // Use demo project for emulator
       });
-      console.log('Firebase Admin SDK initialized for emulator');
+      logger.debug('Firebase Admin SDK initialized for emulator');
     } else {
       // Production configuration
       // Try to use the same project ID from the frontend
@@ -23,10 +24,10 @@ if (!admin.apps.length) {
         // Firebase Admin will automatically use Application Default Credentials
         // or service account key from environment variables if available
       });
-      console.log('Firebase Admin SDK initialized for production with project:', projectId);
+      logger.debug('Firebase Admin SDK initialized for production with project:', projectId);
     }
   } catch (error) {
-    console.error('Firebase Admin SDK initialization error:', error);
+    logger.error('Firebase Admin SDK initialization error:', error);
   }
 }
 
