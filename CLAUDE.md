@@ -408,11 +408,33 @@ Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remot
 **Verification**: Check browser console for latest debugging logs to confirm you're seeing the current version.
 
 ---
-**Last Updated**: 2026-02-05
-**Status**: ✅ PRODUCTION-READY - Security, performance & correctness hardening complete
-**Recent**: 15 fixes across security, timer correctness, performance, and error handling
+**Last Updated**: 2026-05-31
+**Status**: ✅ PRODUCTION-READY - Full-stack refactor & test-suite repair complete
+**Recent**: Restored frontend type-checking (+fixed latent bugs), green test suite (17 suites / 207 tests, was 14 failing), centralized FE+BE logging, extracted chess variants from GameContext, deduped CORS, removed ~2MB cruft
 **Live URL**: https://chess-pu71.vercel.app
 **Backend URL**: https://chess-production-c94f.up.railway.app
+
+## 🧹 Where We Left Off (2026-05-31) — Refactor & hardening
+
+Branch `claude/trusting-galileo-aIshG`. Frontend `npm run build` + `npx tsc --noEmit` +
+full Jest suite (207 tests) all green; backend `npm run build` (tsc) green.
+
+**What changed** (see CHANGELOG.md "Codebase hardening & refactor" for detail):
+- Fixed broken root `tsconfig.json` (had excluded all React source from type-checking) →
+  surfaced & fixed real bugs (online player names, `clearAllGameData` incomplete state,
+  `loadPgn` misuse); removed dead `src/engines/`.
+- Repaired the entire test suite (14 failing suites → 17 passing) with a shared mock
+  factory `src/test-utils/mockGameState.ts`, `scrollIntoView` polyfill, and a proper
+  `jest` key in package.json (the old `jest.config.js` was dead and is removed).
+- Centralized logging: `backend-src/utils/logger.ts` + `src/utils/logger.ts` (gated by
+  `LOG_LEVEL` / `NODE_ENV`); replaced ~590 `console.*` calls.
+- Extracted nuclear/teleport into `src/hooks/useChessVariants.ts`; shared `ALL_SQUARES`
+  via `src/utils/chessSquares.ts`; deduped CORS into `backend-src/config/cors.ts`.
+- Removed committed logs / `test-results.json` / duplicate `package.*.json`.
+
+**Not done / follow-ups**: backend not yet redeployed to Railway; `OnlineGameModal`
+time inputs still lack `<label htmlFor>` association (a11y nit); deeper `gameSocket.ts`
+handler decomposition deferred (no integration tests to verify against safely).
 
 ## 🚀 Where We Left Off (2026-02-05)
 

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Codebase hardening & refactor** - Correctness, type safety, and maintainability pass (2026-05-31)
+  - **Restored frontend type safety**: the root `tsconfig.json` was a misplaced backend config that *excluded* all React source (components, contexts, hooks, `App.tsx`) from type-checking, so the app shipped with no real type enforcement. Replaced it with a proper CRA config; re-enabling type-checking surfaced and fixed real latent bugs:
+    - Online player names: socket handlers compared non-existent `colorAssignment.player1/.player2` props to `'w'`, so both names resolved to the black player. Now read `colorAssignment.white`.
+    - `clearAllGameData` produced an incomplete `GameState` (missing the hint/nuke/teleport fields), crashing downstream reads — completed it.
+    - `GameReplay` tested the `void` return of chess.js v1 `loadPgn()` for truthiness — rewritten to use its throw-on-invalid behavior.
+    - Removed dead `src/engines/` (imported a non-existent `node-fetch` dependency).
+  - **Repaired the test suite**: 14 of 17 suites were failing (99 failing tests). Now **17/17 suites, 207 tests green**. Added a shared typed `GameState`/`GameContext` mock factory (`src/test-utils/mockGameState.ts`), a `scrollIntoView` jsdom polyfill, and a working Jest ESM config (the old `jest.config.js` was dead — CRA reads `package.json`'s `jest` key); fixed provider/mocking gaps and stale assertions across every suite.
+  - **Centralized logging**: introduced leveled loggers for backend (`backend-src/utils/logger.ts`) and frontend (`src/utils/logger.ts`), replacing ~590 ad-hoc `console.*` calls; production logs are quiet by default and controllable via `LOG_LEVEL`.
+  - **Backend cleanup**: deduplicated the copy-pasted Socket.IO/Express CORS validator into `backend-src/config/cors.ts`; replaced verbose per-route logging with a route table.
+  - **Slimmed `GameContext`** (1,746 → 1,553 lines) by extracting nuclear-chess + teleportation into `src/hooks/useChessVariants.ts` (public API unchanged); shared the 64-square `ALL_SQUARES` constant via `src/utils/chessSquares.ts`.
+  - **Removed ~2 MB of cruft**: committed `.log` files, `test-results.json`, duplicate `package.*.json`, and the dead `jest.config.js`; added them to `.gitignore`.
+
 ### Added
 - **Chess Variants System** - Nuclear chess, teleportation, and feature toggle management (2025-08-23)
   - **Feature**: Comprehensive special moves system with easy management via feature toggles
