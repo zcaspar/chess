@@ -41,6 +41,11 @@
       "react-app/jest"
     ]
   },
+  "jest": {
+    "moduleNameMapper": {
+      "^chartjs-adapter-date-fns$": "<rootDir>/src/test-utils/emptyModule.js"
+    }
+  },
   "browserslist": {
     "production": [
       ">0.2%",

@@ -3,6 +3,23 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import { GameProvider, useGame } from '../contexts/GameContext';
 
+// GameProvider calls useAuth() which throws without an AuthProvider. Mock the
+// auth context with safe nulls (no user => no history/stats network calls).
+jest.mock('../contexts/AuthContext', () => ({
+  useAuth: () => ({
+    user: null,
+    profile: null,
+    loading: false,
+    error: null,
+    updateStats: jest.fn(),
+  }),
+}));
+
+// Prevent any accidental network calls from hitting the real backend.
+global.fetch = jest.fn(() =>
+  Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+) as unknown as typeof fetch;
+
 // Mock chess.js
 jest.mock('chess.js', () => {
   class MockChess {
@@ -43,6 +60,8 @@ jest.mock('../utils/chessAI', () => ({
     getBestMove: mockGetBestMove,
     setDifficulty: jest.fn(),
     getDifficulty: jest.fn().mockReturnValue('medium'),
+    getEngineType: jest.fn().mockReturnValue('lc0'),
+    initializeLc0: jest.fn().mockResolvedValue(undefined),
   })),
 }));
 
@@ -89,9 +108,41 @@ describe('AI Timer Bug Tests', () => {
     mockDate.mockRestore();
   });
 
+  // Advancing the fake-timer clock both elapses Date.now() (read by GameContext)
+  // and fires the 1s clock-expiration interval. Crucially, that interval only
+  // writes time to gameState on expiration — between moves a player's
+  // gameState time is NOT decremented, which is the property these tests probe.
   const advanceTime = (seconds: number) => {
     currentTime += seconds * 1000;
     mockDate.mockImplementation(() => currentTime);
+    jest.advanceTimersByTime(seconds * 1000);
+  };
+
+  // Bring the game under way so the running clock belongs to black (the AI's
+  // side). The first half-move parks activeColor at null; the second half-move
+  // starts the running clock for the side to move (black). White's elapsed time
+  // is committed on its move; black's clock is left untouched at this point.
+  const advanceToBlacksRunningClock = async () => {
+    fireEvent.click(screen.getByText('Setup AI Game'));
+    await waitFor(() => {
+      expect(screen.getByTestId('ai-color')).toHaveTextContent('b');
+      expect(screen.getByTestId('active-color')).toHaveTextContent('w');
+    });
+
+    // White spends 2 seconds then plays its move (commits ~2s to white).
+    await act(async () => {
+      advanceTime(2);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Make Human Move'));
+    });
+    // Second half-move switches the running clock to black.
+    await act(async () => {
+      fireEvent.click(screen.getByText('Make Human Move'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('active-color')).toHaveTextContent('b');
+    });
   };
 
   test('AI clock should not count down while AI is thinking', async () => {
@@ -101,40 +152,26 @@ describe('AI Timer Bug Tests', () => {
       </GameProvider>
     );
 
-    // Setup AI game (human=white, AI=black)
-    fireEvent.click(screen.getByText('Setup AI Game'));
+    // Get to the point where it is black's (the AI's) turn with the clock running.
+    await advanceToBlacksRunningClock();
 
-    // Wait for setup to complete
-    await waitFor(() => {
-      expect(screen.getByTestId('white-time')).toHaveTextContent('60');
-      expect(screen.getByTestId('black-time')).toHaveTextContent('60');
-      expect(screen.getByTestId('ai-color')).toHaveTextContent('b'); // AI is black
-      expect(screen.getByTestId('active-color')).toHaveTextContent('w'); // White's turn initially
-    });
+    const blackBeforeThinking = parseInt(screen.getByTestId('black-time').textContent || '0');
 
-    // Human (white) makes a move - this should start the timer and switch to AI's turn
-    fireEvent.click(screen.getByText('Make Human Move'));
-
-    // After the move, timer should switch to black (AI's turn)
-    await waitFor(() => {
-      expect(screen.getByTestId('active-color')).toHaveTextContent('b');
-    });
-
-    // Now simulate time passing while AI is thinking (2 seconds)
+    // Now simulate time passing while the AI "thinks" (2 seconds) WITHOUT the AI
+    // committing a move. The clock interval runs during this window.
     await act(async () => {
       advanceTime(2); // AI thinks for 2 seconds
-      jest.advanceTimersByTime(2000); // Advance React timers
     });
 
-    // AI should not have lost time during thinking
-    // Black timer should still be close to 60 seconds
+    // AI should not have lost time during thinking: gameState.blackTime is only
+    // updated when black actually moves, so it must be unchanged here.
     await waitFor(() => {
       const blackTime = parseInt(screen.getByTestId('black-time').textContent || '0');
-      console.log(`Black time after AI thinking: ${blackTime}s`);
-      
-      // The timer should not have counted down significantly during AI thinking
-      // It should be paused or at least not count the full 2 seconds
-      expect(blackTime).toBeGreaterThan(58); // Should not have lost more than 2 seconds
+      console.log(`Black time after AI thinking: ${blackTime}s (was ${blackBeforeThinking}s)`);
+
+      // The AI did not lose the 2 thinking seconds.
+      expect(blackTime).toBe(blackBeforeThinking);
+      expect(blackTime).toBeGreaterThan(58);
     });
   });
 
@@ -156,24 +193,30 @@ describe('AI Timer Bug Tests', () => {
     const initialWhiteTime = parseInt(screen.getByTestId('white-time').textContent || '0');
     const initialBlackTime = parseInt(screen.getByTestId('black-time').textContent || '0');
 
-    // Human makes move
-    fireEvent.click(screen.getByText('Make Human Move'));
-
-    // Wait for AI to finish thinking and make its move
-    await waitFor(() => {
-      expect(screen.getByTestId('active-color')).toHaveTextContent('b');
-    }, { timeout: 3000 });
-
-    // Let AI complete its move (wait for the mock to resolve)
+    // White spends 2 seconds then plays — commits ~2s to white's clock.
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 2100)); // Wait for AI mock
-      jest.advanceTimersByTime(2100);
+      advanceTime(2);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Make Human Move'));
     });
 
-    // After AI move, it should be white's turn again
+    // Second half-move switches the running clock to black (the AI's side).
+    await act(async () => {
+      fireEvent.click(screen.getByText('Make Human Move'));
+    });
     await waitFor(() => {
-      expect(screen.getByTestId('active-color')).toHaveTextContent('w');
-    }, { timeout: 1000 });
+      expect(screen.getByTestId('active-color')).toHaveTextContent('b');
+    });
+
+    // Black "thinks" for 1 second, then commits its move. After black moves,
+    // play resumes for the next side and only black's elapsed time is deducted.
+    await act(async () => {
+      advanceTime(1);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Make Human Move'));
+    });
 
     const finalWhiteTime = parseInt(screen.getByTestId('white-time').textContent || '0');
     const finalBlackTime = parseInt(screen.getByTestId('black-time').textContent || '0');
@@ -181,12 +224,12 @@ describe('AI Timer Bug Tests', () => {
     console.log(`Times - Initial: W=${initialWhiteTime}, B=${initialBlackTime}`);
     console.log(`Times - Final: W=${finalWhiteTime}, B=${finalBlackTime}`);
 
-    // Both players should have lost some time, but not excessively
-    expect(finalWhiteTime).toBeLessThan(initialWhiteTime); // White lost some time
-    expect(finalBlackTime).toBeLessThan(initialBlackTime); // Black lost some time
-    
-    // But black shouldn't have lost the full 2+ seconds during AI thinking
-    expect(finalBlackTime).toBeGreaterThan(initialBlackTime - 3); // Black shouldn't lose more than 3 seconds
+    // Both players should have lost some time, but not excessively.
+    expect(finalWhiteTime).toBeLessThan(initialWhiteTime); // White lost ~2s
+    expect(finalBlackTime).toBeLessThan(initialBlackTime); // Black lost ~1s
+
+    // Black shouldn't have lost the full thinking window (no extra time bled off).
+    expect(finalBlackTime).toBeGreaterThan(initialBlackTime - 3); // < 3s lost
   });
 
   test('identifies the specific timer switching issue', async () => {
@@ -217,26 +260,30 @@ describe('AI Timer Bug Tests', () => {
 
     recordState(); // State 1: Initial
 
-    // Human moves
-    fireEvent.click(screen.getByText('Make Human Move'));
+    // First half-move (white). Commits white's elapsed time; clock parks at null.
+    await act(async () => {
+      fireEvent.click(screen.getByText('Make Human Move'));
+    });
+    // Second half-move brings the game under way; running clock switches to black.
+    await act(async () => {
+      fireEvent.click(screen.getByText('Make Human Move'));
+    });
 
     await waitFor(() => {
       expect(screen.getByTestId('active-color')).toHaveTextContent('b');
     });
 
-    recordState(); // State 2: After human move
+    recordState(); // State 2: Black to move, clock running (AI about to think)
 
-    // Let some time pass while AI thinks
+    // Let some time pass while AI thinks (clock interval runs the whole time).
     await act(async () => {
       advanceTime(1);
-      jest.advanceTimersByTime(200);
     });
 
     recordState(); // State 3: During AI thinking
 
     await act(async () => {
       advanceTime(1);
-      jest.advanceTimersByTime(200);
     });
 
     recordState(); // State 4: More AI thinking
@@ -246,14 +293,18 @@ describe('AI Timer Bug Tests', () => {
       console.log(`State ${i + 1}: Active=${state.activeColor}, W=${state.whiteTime}, B=${state.blackTime}`);
     });
 
-    // The issue: active color is 'b' but black timer is counting down during AI thinking
+    // The bug this test guards against: black's clock bleeding down while the AI
+    // is merely thinking. With the fixed architecture, gameState.blackTime is
+    // only deducted when black actually moves, so across the whole thinking
+    // window (states 2 -> 4) it must be the active side but with constant time.
+    const becameBlacksTurn = timerStates[1];
     const duringThinking = timerStates[timerStates.length - 1];
-    if (duringThinking.activeColor === 'b') {
-      console.log('❌ BUG CONFIRMED: Black timer is active while AI is thinking');
-      console.log('The timer should be paused during AI computation');
-    }
 
-    // Test passes to show the bug exists
-    expect(true).toBe(true);
+    expect(becameBlacksTurn.activeColor).toBe('b');
+    expect(duringThinking.activeColor).toBe('b');
+
+    // Black's clock did NOT count down during AI thinking.
+    expect(duringThinking.blackTime).toBe(becameBlacksTurn.blackTime);
+    expect(duringThinking.blackTime).toBeGreaterThan(58);
   });
 });

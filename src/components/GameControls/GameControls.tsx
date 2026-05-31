@@ -3,6 +3,7 @@ import { useGame } from '../../contexts/GameContext';
 import { useSocket } from '../../contexts/SocketContext';
 import { useAuth } from '../../hooks/useAuth';
 import { isFeatureEnabled } from '../../config/gameFeatures';
+import { logger } from '../../utils/logger';
 
 const GameControls: React.FC = () => {
   const {
@@ -54,7 +55,7 @@ const GameControls: React.FC = () => {
     : currentPlayer;
 
   // Debug logging for draw offer system - v2
-  console.log('🎯 [GameControls] RENDER v2:', {
+  logger.debug('🎯 [GameControls] RENDER v2:', {
     roomCode: roomCode || 'none',
     assignedColor: assignedColor || 'none',
     myColor: myColor || 'none',
@@ -66,15 +67,15 @@ const GameControls: React.FC = () => {
 
   // Handlers for draw offers - use socket for online games
   const handleOfferDraw = () => {
-    console.log('🔔 [GameControls] OFFER DRAW CLICKED!', { roomCode, myColor, assignedColor });
+    logger.debug('🔔 [GameControls] OFFER DRAW CLICKED!', { roomCode, myColor, assignedColor });
     if (roomCode) {
-      console.log('🔔 [GameControls] Calling socketOfferDraw for ONLINE game');
+      logger.debug('🔔 [GameControls] Calling socketOfferDraw for ONLINE game');
       socketOfferDraw();
     } else if (myColor) {
-      console.log('🔔 [GameControls] Calling local offerDraw for OFFLINE game');
+      logger.debug('🔔 [GameControls] Calling local offerDraw for OFFLINE game');
       offerDraw(myColor);
     } else {
-      console.log('🔔 [GameControls] Cannot offer draw - no room or color');
+      logger.debug('🔔 [GameControls] Cannot offer draw - no room or color');
     }
   };
 
@@ -114,7 +115,7 @@ const GameControls: React.FC = () => {
         setHintError('Hint unavailable. The engine may be offline.');
       }
     } catch (error) {
-      console.error('Error requesting hint:', error);
+      logger.error('Error requesting hint:', error);
       setHintError('Failed to get hint. Please try again.');
     } finally {
       setIsRequestingHint(false);

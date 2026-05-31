@@ -8,7 +8,7 @@ import { SocketProvider } from '../../contexts/SocketContext';
 // Mock the contexts and hooks
 const mockGameContext = {
   gameState: {
-    gameMode: 'human-vs-human' as const,
+    gameMode: 'human-vs-human' as 'human-vs-human' | 'human-vs-ai' | 'ai-vs-ai',
     aiColor: 'b' as const,
     aiDifficulty: 'medium' as const,
     chess: null,
@@ -30,7 +30,7 @@ const mockGameContext = {
     connectionStatus: 'connected' as const,
     difficulty: 'medium' as const,
     isThinking: false,
-    roomCode: null,
+    roomCode: null as string | null,
     playerColor: null,
     isPlayerTurn: true,
     moveNumber: 1,
@@ -54,7 +54,7 @@ const mockGameContext = {
 
 const mockSocketContext = {
   isConnected: true,
-  roomCode: null,
+  roomCode: null as string | null,
   leaveRoom: jest.fn(),
   createRoom: jest.fn(),
   joinRoom: jest.fn(),
@@ -122,19 +122,21 @@ describe('GameModeSelector Component', () => {
 
   it('should switch to AI mode and show AI settings', async () => {
     renderGameModeSelector();
-    
-    // Click on Human vs Computer
-    fireEvent.click(screen.getByLabelText('Human vs Computer'));
-    
+
+    // Click on Human vs Computer. The radio is wrapped in a label whose
+    // accessible name also includes the description text, so match by role
+    // with a substring name.
+    fireEvent.click(screen.getByRole('radio', { name: /Human vs Computer/ }));
+
     // Should call setGameMode
     await waitFor(() => {
       expect(mockGameContext.setGameMode).toHaveBeenCalledWith('human-vs-ai', 'b');
     });
-    
+
     // Update the state to reflect AI mode
     mockGameContext.gameState.gameMode = 'human-vs-ai';
     renderGameModeSelector({ gameMode: 'human-vs-ai' });
-    
+
     // Should show AI settings
     expect(screen.getByText('Computer plays:')).toBeInTheDocument();
     expect(screen.getByText('Difficulty Level:')).toBeInTheDocument();
@@ -153,10 +155,10 @@ describe('GameModeSelector Component', () => {
 
   it('should handle difficulty level selection', async () => {
     renderGameModeSelector({ gameMode: 'human-vs-ai' });
-    
-    // Click on Expert difficulty
-    fireEvent.click(screen.getByLabelText('Expert'));
-    
+
+    // Click on Expert difficulty (label includes ELO + description text).
+    fireEvent.click(screen.getByRole('radio', { name: /Expert/ }));
+
     await waitFor(() => {
       expect(mockGameContext.setAIDifficulty).toHaveBeenCalledWith('expert');
     });
@@ -179,19 +181,23 @@ describe('GameModeSelector Component', () => {
     expect(screen.getByText('Strong play, few mistakes')).toBeInTheDocument();
     
     expect(screen.getByText('Expert')).toBeInTheDocument();
-    expect(screen.getByText('Very strong, minimal mistakes')).toBeInTheDocument();
+    expect(screen.getByText('Superhuman strength, world-class play')).toBeInTheDocument();
   });
 
-  it('should leave room when switching away from online play', async () => {
+  it('should leave room when leaving online play', async () => {
+    // When in an online room the mode radios are disabled; the room is left via
+    // the dedicated "Leave Room" button (guarded by a confirm dialog).
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
     mockSocketContext.roomCode = 'ABC123';
     renderGameModeSelector();
-    
-    // Switch to AI mode
-    fireEvent.click(screen.getByLabelText('Human vs Computer'));
-    
+
+    fireEvent.click(screen.getByText('Leave Room'));
+
     await waitFor(() => {
       expect(mockSocketContext.leaveRoom).toHaveBeenCalled();
     });
+
+    confirmSpy.mockRestore();
   });
 
   it('should open online game modal when clicking play online', () => {
@@ -234,17 +240,18 @@ describe('GameModeSelector Component', () => {
       aiColor: 'b'
     });
     
-    // Check game mode
-    expect(screen.getByLabelText('Human vs Computer')).toBeChecked();
-    expect(screen.getByLabelText('Human vs Human')).not.toBeChecked();
-    
+    // Check game mode (labels wrap the radios and include description text,
+    // so match by role with a substring name).
+    expect(screen.getByRole('radio', { name: /Human vs Computer/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Human vs Human/ })).not.toBeChecked();
+
     // Check AI color
     expect(screen.getByLabelText('Black')).toBeChecked();
     expect(screen.getByLabelText('White')).not.toBeChecked();
-    
+
     // Check difficulty
-    expect(screen.getByLabelText('Hard')).toBeChecked();
-    expect(screen.getByLabelText('Medium')).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: /Hard/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Medium/ })).not.toBeChecked();
   });
 
   it('should not show AI settings when in human vs human mode', () => {
@@ -256,13 +263,13 @@ describe('GameModeSelector Component', () => {
 
   it('should handle switching between modes correctly', async () => {
     const { rerender } = renderGameModeSelector();
-    
+
     // Start in human vs human
-    expect(screen.getByLabelText('Human vs Human')).toBeChecked();
-    
+    expect(screen.getByRole('radio', { name: /Human vs Human/ })).toBeChecked();
+
     // Switch to AI mode
-    fireEvent.click(screen.getByLabelText('Human vs Computer'));
-    
+    fireEvent.click(screen.getByRole('radio', { name: /Human vs Computer/ }));
+
     // Update state and rerender
     mockGameContext.gameState.gameMode = 'human-vs-ai';
     rerender(
@@ -274,13 +281,13 @@ describe('GameModeSelector Component', () => {
         </SocketProvider>
       </AuthProvider>
     );
-    
+
     // Should show AI settings
     expect(screen.getByText('Computer plays:')).toBeInTheDocument();
-    
+
     // Switch back to human vs human
-    fireEvent.click(screen.getByLabelText('Human vs Human'));
-    
+    fireEvent.click(screen.getByRole('radio', { name: /Human vs Human/ }));
+
     await waitFor(() => {
       expect(mockGameContext.setGameMode).toHaveBeenCalledWith('human-vs-human');
     });

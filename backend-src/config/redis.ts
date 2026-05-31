@@ -1,5 +1,6 @@
 import { createClient, RedisClientType } from 'redis';
 import dotenv from 'dotenv';
+import { logger } from '../utils/logger';
 
 dotenv.config();
 
@@ -23,29 +24,29 @@ export let redisClient: RedisClientType;
 // Initialize Redis connection
 export const initializeRedis = async (): Promise<boolean> => {
   try {
-    console.log('🔄 Initializing Redis connection...');
+    logger.debug('🔄 Initializing Redis connection...');
     
     redisClient = createClient(redisConfig);
     
     // Handle Redis errors
     redisClient.on('error', (err) => {
-      console.error('🔴 Redis client error:', err);
+      logger.error('🔴 Redis client error:', err);
     });
     
     redisClient.on('connect', () => {
-      console.log('🟡 Redis client connecting...');
+      logger.debug('🟡 Redis client connecting...');
     });
     
     redisClient.on('ready', () => {
-      console.log('🟢 Redis client ready');
+      logger.debug('🟢 Redis client ready');
     });
     
     redisClient.on('end', () => {
-      console.log('🔴 Redis client disconnected');
+      logger.debug('🔴 Redis client disconnected');
     });
     
     redisClient.on('reconnecting', () => {
-      console.log('🟡 Redis client reconnecting...');
+      logger.debug('🟡 Redis client reconnecting...');
     });
     
     // Connect to Redis
@@ -53,12 +54,12 @@ export const initializeRedis = async (): Promise<boolean> => {
     
     // Test the connection
     await redisClient.ping();
-    console.log('✅ Redis connection successful');
+    logger.debug('✅ Redis connection successful');
     
     return true;
   } catch (error: any) {
-    console.error('❌ Redis connection failed:', error.message);
-    console.error('Redis will be disabled. Session and game state will use memory storage.');
+    logger.error('❌ Redis connection failed:', error.message);
+    logger.error('Redis will be disabled. Session and game state will use memory storage.');
     return false;
   }
 };
@@ -87,7 +88,7 @@ export class RedisManager {
       );
       return true;
     } catch (error) {
-      console.error('Redis setSession error:', error);
+      logger.error('Redis setSession error:', error);
       return false;
     }
   }
@@ -99,7 +100,7 @@ export class RedisManager {
       const data = await redisClient.get(`session:${sessionId}`);
       return data ? JSON.parse(data) : null;
     } catch (error) {
-      console.error('Redis getSession error:', error);
+      logger.error('Redis getSession error:', error);
       return null;
     }
   }
@@ -111,7 +112,7 @@ export class RedisManager {
       await redisClient.del(`session:${sessionId}`);
       return true;
     } catch (error) {
-      console.error('Redis deleteSession error:', error);
+      logger.error('Redis deleteSession error:', error);
       return false;
     }
   }
@@ -128,7 +129,7 @@ export class RedisManager {
       );
       return true;
     } catch (error) {
-      console.error('Redis setGameState error:', error);
+      logger.error('Redis setGameState error:', error);
       return false;
     }
   }
@@ -140,7 +141,7 @@ export class RedisManager {
       const data = await redisClient.get(`game:${gameId}`);
       return data ? JSON.parse(data) : null;
     } catch (error) {
-      console.error('Redis getGameState error:', error);
+      logger.error('Redis getGameState error:', error);
       return null;
     }
   }
@@ -152,7 +153,7 @@ export class RedisManager {
       await redisClient.del(`game:${gameId}`);
       return true;
     } catch (error) {
-      console.error('Redis deleteGameState error:', error);
+      logger.error('Redis deleteGameState error:', error);
       return false;
     }
   }
@@ -168,7 +169,7 @@ export class RedisManager {
       ]);
       return true;
     } catch (error) {
-      console.error('Redis setPlayerOnline error:', error);
+      logger.error('Redis setPlayerOnline error:', error);
       return false;
     }
   }
@@ -179,7 +180,7 @@ export class RedisManager {
     try {
       return await redisClient.get(`player:${playerId}`);
     } catch (error) {
-      console.error('Redis getPlayerSocket error:', error);
+      logger.error('Redis getPlayerSocket error:', error);
       return null;
     }
   }
@@ -190,7 +191,7 @@ export class RedisManager {
     try {
       return await redisClient.get(`socket:${socketId}`);
     } catch (error) {
-      console.error('Redis getSocketPlayer error:', error);
+      logger.error('Redis getSocketPlayer error:', error);
       return null;
     }
   }
@@ -205,7 +206,7 @@ export class RedisManager {
       ]);
       return true;
     } catch (error) {
-      console.error('Redis removePlayerOnline error:', error);
+      logger.error('Redis removePlayerOnline error:', error);
       return false;
     }
   }
@@ -221,7 +222,7 @@ export class RedisManager {
       }
       return count;
     } catch (error) {
-      console.error('Redis incrementCounter error:', error);
+      logger.error('Redis incrementCounter error:', error);
       return 0;
     }
   }
@@ -233,7 +234,7 @@ export class RedisManager {
       const value = await redisClient.get(`counter:${key}`);
       return value ? parseInt(value) : 0;
     } catch (error) {
-      console.error('Redis getCounter error:', error);
+      logger.error('Redis getCounter error:', error);
       return 0;
     }
   }
@@ -250,7 +251,7 @@ export class RedisManager {
       );
       return true;
     } catch (error) {
-      console.error('Redis setCache error:', error);
+      logger.error('Redis setCache error:', error);
       return false;
     }
   }
@@ -262,7 +263,7 @@ export class RedisManager {
       const data = await redisClient.get(`cache:${key}`);
       return data ? JSON.parse(data) : null;
     } catch (error) {
-      console.error('Redis getCache error:', error);
+      logger.error('Redis getCache error:', error);
       return null;
     }
   }
@@ -295,7 +296,7 @@ export class RedisManager {
       const info = await redisClient.info();
       return this.parseRedisInfo(info);
     } catch (error) {
-      console.error('Redis getInfo error:', error);
+      logger.error('Redis getInfo error:', error);
       return null;
     }
   }
@@ -320,10 +321,10 @@ export const closeRedis = async (): Promise<void> => {
   try {
     if (redisClient?.isReady) {
       await redisClient.quit();
-      console.log('Redis connection closed');
+      logger.debug('Redis connection closed');
     }
   } catch (error) {
-    console.error('Error closing Redis connection:', error);
+    logger.error('Error closing Redis connection:', error);
   }
 };
 

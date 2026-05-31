@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { logger } from '../../utils/logger';
 
 interface UserProfileProps {
   isOpen: boolean;
@@ -22,7 +23,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
       await signOut();
       onClose();
     } catch (error) {
-      console.error('Error signing out:', error);
+      logger.error('Error signing out:', error);
     }
   };
 
@@ -31,7 +32,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
       await updateProfile(editForm);
       setIsEditing(false);
     } catch (error) {
-      console.error('Error updating profile:', error);
+      logger.error('Error updating profile:', error);
     }
   };
 
@@ -39,7 +40,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
     try {
       await updatePreferences({ [key]: value });
     } catch (error) {
-      console.error('Error updating preferences:', error);
+      logger.error('Error updating preferences:', error);
     }
   };
 

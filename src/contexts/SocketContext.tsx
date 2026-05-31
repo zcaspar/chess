@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../hooks/useAuth';
+import { logger } from '../utils/logger';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -90,7 +91,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         socketInstance.connect();
         
         socketInstance.on('connect', () => {
-          console.log('Socket connected');
+          logger.debug('Socket connected');
           setIsConnected(true);
           
           // Authenticate with Firebase token
@@ -99,21 +100,21 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
         socketInstance.on('authenticated', (data) => {
           if (data.success) {
-            console.log('Socket authenticated successfully');
+            logger.debug('Socket authenticated successfully');
           } else {
-            console.error('Socket authentication failed:', data.error);
+            logger.error('Socket authentication failed:', data.error);
             socketInstance.disconnect();
           }
         });
 
         socketInstance.on('disconnect', () => {
-          console.log('Socket disconnected');
+          logger.debug('Socket disconnected');
           setIsConnected(false);
         });
 
         // Room events
         socketInstance.on('roomCreated', (data) => {
-          console.log('Room created:', data);
+          logger.debug('Room created:', data);
           setRoomCode(data.roomCode);
           // Copy share link to clipboard
           if (navigator.clipboard) {
@@ -122,7 +123,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         });
 
         socketInstance.on('roomJoined', (data) => {
-          console.log('Room joined:', data);
+          logger.debug('Room joined:', data);
           setRoomCode(data.roomCode);
           setAssignedColor(data.assignedColor);
           setPlayers(data.players);
@@ -143,7 +144,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         });
 
         socketInstance.on('playerJoined', (data) => {
-          console.log('Player joined:', data);
+          logger.debug('Player joined:', data);
           setPlayers(prev => ({
             ...prev,
             [data.color]: data.player,
@@ -151,7 +152,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         });
 
         socketInstance.on('gameStarted', (data) => {
-          console.log('Game started:', data);
+          logger.debug('Game started:', data);
           setPlayers({
             white: data.white,
             black: data.black,
@@ -161,12 +162,12 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         });
 
         socketInstance.on('playerDisconnected', (data) => {
-          console.log('Player disconnected:', data);
+          logger.debug('Player disconnected:', data);
           // TODO: Show reconnection timer
         });
 
         socketInstance.on('error', (data) => {
-          console.error('Socket error:', data);
+          logger.error('Socket error:', data);
           
           // Reset room state on room not found error
           if (data.code === 'ROOM_NOT_FOUND') {
@@ -186,35 +187,36 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
         // Handle room creation response
         socketInstance.on('roomCreated', (data) => {
-          console.log('Room created successfully:', data);
+          logger.debug('Room created successfully:', data);
         });
 
         socketInstance.on('roomError', (data) => {
-          console.error('Room creation failed:', data);
+          logger.error('Room creation failed:', data);
         });
 
         // Additional error handlers for debugging
         socketInstance.on('connect_error', (error) => {
-          console.error('Socket connection error:', error.message);
-          console.error('Error type:', error.type);
-          console.error('Error details:', error);
+          const errType = (error as Error & { type?: string }).type;
+          logger.error('Socket connection error:', error.message);
+          logger.error('Error type:', errType);
+          logger.error('Error details:', error);
         });
 
         socketInstance.on('connect_timeout', () => {
-          console.error('Socket connection timeout');
+          logger.error('Socket connection timeout');
         });
 
         socketInstance.on('upgrade', () => {
-          console.log('Socket upgraded to WebSocket');
+          logger.debug('Socket upgraded to WebSocket');
         });
 
         socketInstance.on('upgradeError', (error) => {
-          console.warn('Socket upgrade failed, staying on polling:', error);
+          logger.warn('Socket upgrade failed, staying on polling:', error);
         });
 
         // Game events
         socketInstance.on('moveMade', (data) => {
-          console.log('Move made:', data);
+          logger.debug('Move made:', data);
           
           // Update game state with timer information
           setGameState(prev => prev ? {
@@ -231,7 +233,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         });
 
         socketInstance.on('gameEnded', (data) => {
-          console.log('Game ended:', data);
+          logger.debug('Game ended:', data);
           
           // Update game state to mark as over
           setGameState(prev => prev ? {
@@ -244,31 +246,31 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         });
 
         socketInstance.on('drawOffered', (data: { by: 'w' | 'b' }) => {
-          console.log('Draw offered by:', data?.by);
+          logger.debug('Draw offered by:', data?.by);
           // Broadcast to GameContext or other components via custom event
           window.dispatchEvent(new CustomEvent('socketDrawOffered', { detail: data }));
         });
 
         socketInstance.on('drawOfferSent', (data: { by: 'w' | 'b' }) => {
-          console.log('Draw offer sent confirmation:', data?.by);
+          logger.debug('Draw offer sent confirmation:', data?.by);
           // Broadcast to GameContext - confirms your draw offer was sent
           window.dispatchEvent(new CustomEvent('socketDrawOfferSent', { detail: data }));
         });
 
         socketInstance.on('drawDeclined', () => {
-          console.log('Draw declined');
+          logger.debug('Draw declined');
           // Broadcast to GameContext - draw offer was declined
           window.dispatchEvent(new CustomEvent('socketDrawDeclined'));
         });
 
         socketInstance.on('gameRestored', (data) => {
-          console.log('Game restored:', data);
+          logger.debug('Game restored:', data);
           // Broadcast to GameContext or other components via custom event
           window.dispatchEvent(new CustomEvent('socketGameRestored', { detail: data }));
         });
 
         socketInstance.on('timerUpdate', (data) => {
-          console.log('Timer update:', data);
+          logger.debug('Timer update:', data);
           
           // Update game state with timer information
           setGameState(prev => prev ? {
@@ -282,7 +284,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           window.dispatchEvent(new CustomEvent('socketTimerUpdate', { detail: data }));
         });
       } catch (error) {
-        console.error('Failed to connect socket:', error);
+        logger.error('Failed to connect socket:', error);
       }
     };
 
@@ -323,12 +325,12 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   };
 
   const offerDraw = () => {
-    console.log('[SocketContext] offerDraw called', { socket: !!socket, isConnected, roomCode });
+    logger.debug('[SocketContext] offerDraw called', { socket: !!socket, isConnected, roomCode });
     if (socket && isConnected && roomCode) {
-      console.log('[SocketContext] Emitting offerDraw event');
+      logger.debug('[SocketContext] Emitting offerDraw event');
       socket.emit('offerDraw');
     } else {
-      console.log('[SocketContext] Cannot emit offerDraw - missing socket, connection, or roomCode');
+      logger.debug('[SocketContext] Cannot emit offerDraw - missing socket, connection, or roomCode');
     }
   };
 
@@ -353,7 +355,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       setAssignedColor(null);
       setPlayers({ white: null, black: null });
       
-      console.log('Left room:', roomCode);
+      logger.debug('Left room:', roomCode);
     }
   };
 

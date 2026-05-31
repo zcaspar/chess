@@ -5,6 +5,8 @@ export interface FirebaseUser {
   displayName: string | null;
   photoURL: string | null;
   emailVerified: boolean;
+  isAnonymous: boolean;
+  getIdToken: (forceRefresh?: boolean) => Promise<string>;
 }
 
 export interface UserProfile {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSocket } from '../../contexts/SocketContext';
 import { useAuth } from '../../hooks/useAuth';
+import { logger } from '../../utils/logger';
 
 interface OnlineGameModalProps {
   isOpen: boolean;
@@ -30,7 +31,7 @@ export const OnlineGameModal: React.FC<OnlineGameModalProps> = ({ isOpen, onClos
 
     const handleSocketError = (event: CustomEvent) => {
       const errorData = event.detail;
-      console.log('Socket error received in modal:', errorData);
+      logger.debug('Socket error received in modal:', errorData);
       
       // Display error message
       if (errorData.message) {
@@ -61,7 +62,7 @@ export const OnlineGameModal: React.FC<OnlineGameModalProps> = ({ isOpen, onClos
     setIsCreating(true);
     setError('');
     
-    console.log('Creating room with user:', user.email);
+    logger.debug('Creating room with user:', user.email);
     
     const timeControlSeconds = {
       initial: timeControl.minutes * 60,

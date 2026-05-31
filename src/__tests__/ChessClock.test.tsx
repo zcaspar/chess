@@ -2,72 +2,65 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ChessClock from '../components/ChessClock/ChessClock';
+import { createMockGameContext, createMockGameState } from '../test-utils/mockGameState';
 
 // Mock the useGame hook
 const mockSetTimeControl = jest.fn();
 const mockPauseClock = jest.fn();
 const mockGetPlayerByColor = jest.fn();
 
-// Create a default mock that can be overridden
-let mockGameState = {
-  whiteTime: 300, // 5 minutes
-  blackTime: 300, // 5 minutes
-  activeColor: 'w' as 'w' | 'b' | null,
-  timeControl: {
-    initial: 300,
-    increment: 0,
-  },
-};
-
-// Mock the entire GameContext module
+// Mock the entire GameContext module (factory only references jest.fn — see beforeEach)
 jest.mock('../contexts/GameContext', () => ({
-  useGame: jest.fn(() => ({
-    gameState: mockGameState,
-    setTimeControl: mockSetTimeControl,
-    pauseClock: mockPauseClock,
-    getPlayerByColor: mockGetPlayerByColor,
-  })),
+  useGame: jest.fn(),
+}));
+
+// ChessClock also calls useSocket(); without a provider it throws. Mock it with
+// safe non-online defaults so the local-game render path is exercised.
+jest.mock('../contexts/SocketContext', () => ({
+  useSocket: jest.fn(),
 }));
 
 const { useGame } = require('../contexts/GameContext');
+const { useSocket } = require('../contexts/SocketContext');
+
+// Helper: build a complete GameContext value with the test's spy fns, overriding
+// only the gameState fields a given test cares about.
+const mockGame = (gameStateOverrides: Record<string, any>) =>
+  useGame.mockReturnValue(
+    createMockGameContext({
+      gameState: createMockGameState(gameStateOverrides),
+      setTimeControl: mockSetTimeControl,
+      pauseClock: mockPauseClock,
+      getPlayerByColor: mockGetPlayerByColor,
+    }),
+  );
 
 describe('ChessClock Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGetPlayerByColor.mockImplementation((color: 'w' | 'b') => 
+    mockGetPlayerByColor.mockImplementation((color: 'w' | 'b') =>
       color === 'w' ? 'White' : 'Black'
     );
-    
-    // Reset to default mock state
-    useGame.mockReturnValue({
-      gameState: {
-        whiteTime: 300,
-        blackTime: 300,
-        activeColor: 'w' as 'w' | 'b' | null,
-        timeControl: {
-          initial: 300,
-          increment: 0,
-        },
-      },
-      setTimeControl: mockSetTimeControl,
-      pauseClock: mockPauseClock,
-      getPlayerByColor: mockGetPlayerByColor,
+    // Non-online socket defaults so the local-game render path is used.
+    useSocket.mockReturnValue({ roomCode: null, gameState: null });
+
+    // Reset to default mock state: 5+0, white to move
+    mockGame({
+      whiteTime: 300,
+      blackTime: 300,
+      activeColor: 'w',
+      timeControl: { initial: 300, increment: 0 },
     });
   });
 
   describe('Time Control Selection', () => {
     it('renders time control selector when no time control is set', () => {
       // Override the mock for this test
-      useGame.mockReturnValue({
-        gameState: {
-          whiteTime: 0,
-          blackTime: 0,
-          activeColor: null,
-          timeControl: null,
-        },
-        setTimeControl: mockSetTimeControl,
-        pauseClock: mockPauseClock,
-        getPlayerByColor: mockGetPlayerByColor,
+      mockGame({
+        whiteTime: 0,
+        blackTime: 0,
+        activeColor: null,
+        timeControl: null,
       });
 
       render(<ChessClock />);
@@ -80,16 +73,11 @@ describe('ChessClock Component', () => {
     });
 
     it('sets time control when preset button is clicked', () => {
-      useGame.mockReturnValue({
-        gameState: {
-          whiteTime: 0,
-          blackTime: 0,
-          activeColor: null,
-          timeControl: null,
-        },
-        setTimeControl: mockSetTimeControl,
-        pauseClock: mockPauseClock,
-        getPlayerByColor: mockGetPlayerByColor,
+      mockGame({
+        whiteTime: 0,
+        blackTime: 0,
+        activeColor: null,
+        timeControl: null,
       });
 
       render(<ChessClock />);
@@ -99,16 +87,11 @@ describe('ChessClock Component', () => {
     });
 
     it('handles custom time input correctly', () => {
-      useGame.mockReturnValue({
-        gameState: {
-          whiteTime: 0,
-          blackTime: 0,
-          activeColor: null,
-          timeControl: null,
-        },
-        setTimeControl: mockSetTimeControl,
-        pauseClock: mockPauseClock,
-        getPlayerByColor: mockGetPlayerByColor,
+      mockGame({
+        whiteTime: 0,
+        blackTime: 0,
+        activeColor: null,
+        timeControl: null,
       });
 
       render(<ChessClock />);
@@ -123,16 +106,11 @@ describe('ChessClock Component', () => {
     });
 
     it('validates custom time input bounds', () => {
-      useGame.mockReturnValue({
-        gameState: {
-          whiteTime: 0,
-          blackTime: 0,
-          activeColor: null,
-          timeControl: null,
-        },
-        setTimeControl: mockSetTimeControl,
-        pauseClock: mockPauseClock,
-        getPlayerByColor: mockGetPlayerByColor,
+      mockGame({
+        whiteTime: 0,
+        blackTime: 0,
+        activeColor: null,
+        timeControl: null,
       });
 
       render(<ChessClock />);
@@ -150,16 +128,11 @@ describe('ChessClock Component', () => {
     });
 
     it('only allows numeric input in custom time field', () => {
-      useGame.mockReturnValue({
-        gameState: {
-          whiteTime: 0,
-          blackTime: 0,
-          activeColor: null,
-          timeControl: null,
-        },
-        setTimeControl: mockSetTimeControl,
-        pauseClock: mockPauseClock,
-        getPlayerByColor: mockGetPlayerByColor,
+      mockGame({
+        whiteTime: 0,
+        blackTime: 0,
+        activeColor: null,
+        timeControl: null,
       });
 
       render(<ChessClock />);
@@ -238,19 +211,11 @@ describe('ChessClock Component', () => {
       ];
 
       testCases.forEach(({ time, expected }) => {
-        useGame.mockReturnValue({
-          gameState: {
-            whiteTime: time,
-            blackTime: time,
-            activeColor: 'w' as 'w' | 'b' | null,
-            timeControl: {
-              initial: 300,
-              increment: 0,
-            },
-          },
-          setTimeControl: mockSetTimeControl,
-          pauseClock: mockPauseClock,
-          getPlayerByColor: mockGetPlayerByColor,
+        mockGame({
+          whiteTime: time,
+          blackTime: time,
+          activeColor: 'w',
+          timeControl: { initial: 300, increment: 0 },
         });
 
         const { container, unmount } = render(<ChessClock />);
@@ -266,19 +231,11 @@ describe('ChessClock Component', () => {
 
   describe('Time Warnings', () => {
     it('shows yellow warning for low time (< 60 seconds)', () => {
-      useGame.mockReturnValue({
-        gameState: {
-          whiteTime: 30, // 30 seconds - low time
-          blackTime: 300,
-          activeColor: 'w' as 'w' | 'b' | null,
-          timeControl: {
-            initial: 300,
-            increment: 0,
-          },
-        },
-        setTimeControl: mockSetTimeControl,
-        pauseClock: mockPauseClock,
-        getPlayerByColor: mockGetPlayerByColor,
+      mockGame({
+        whiteTime: 30, // 30 seconds - low time
+        blackTime: 300,
+        activeColor: 'w',
+        timeControl: { initial: 300, increment: 0 },
       });
 
       render(<ChessClock />);
@@ -288,19 +245,11 @@ describe('ChessClock Component', () => {
     });
 
     it('shows red critical warning for very low time (< 10 seconds)', () => {
-      useGame.mockReturnValue({
-        gameState: {
-          whiteTime: 5, // 5 seconds - critical time
-          blackTime: 300,
-          activeColor: 'w' as 'w' | 'b' | null,
-          timeControl: {
-            initial: 300,
-            increment: 0,
-          },
-        },
-        setTimeControl: mockSetTimeControl,
-        pauseClock: mockPauseClock,
-        getPlayerByColor: mockGetPlayerByColor,
+      mockGame({
+        whiteTime: 5, // 5 seconds - critical time
+        blackTime: 300,
+        activeColor: 'w',
+        timeControl: { initial: 300, increment: 0 },
       });
 
       render(<ChessClock />);
@@ -317,19 +266,11 @@ describe('ChessClock Component', () => {
     });
 
     it('hides pause button when no active color', () => {
-      useGame.mockReturnValue({
-        gameState: {
-          whiteTime: 300,
-          blackTime: 300,
-          activeColor: null, // No active color
-          timeControl: {
-            initial: 300,
-            increment: 0,
-          },
-        },
-        setTimeControl: mockSetTimeControl,
-        pauseClock: mockPauseClock,
-        getPlayerByColor: mockGetPlayerByColor,
+      mockGame({
+        whiteTime: 300,
+        blackTime: 300,
+        activeColor: null, // No active color
+        timeControl: { initial: 300, increment: 0 },
       });
 
       render(<ChessClock />);
@@ -340,19 +281,11 @@ describe('ChessClock Component', () => {
 
   describe('Increment Display', () => {
     it('shows increment information when increment > 0', () => {
-      useGame.mockReturnValue({
-        gameState: {
-          whiteTime: 300,
-          blackTime: 300,
-          activeColor: 'w' as 'w' | 'b' | null,
-          timeControl: {
-            initial: 300,
-            increment: 3, // 3 second increment
-          },
-        },
-        setTimeControl: mockSetTimeControl,
-        pauseClock: mockPauseClock,
-        getPlayerByColor: mockGetPlayerByColor,
+      mockGame({
+        whiteTime: 300,
+        blackTime: 300,
+        activeColor: 'w',
+        timeControl: { initial: 300, increment: 3 }, // 3 second increment
       });
 
       render(<ChessClock />);
@@ -370,16 +303,11 @@ describe('ChessClock Component', () => {
 
   describe('Input Validation Edge Cases', () => {
     it('corrects invalid values on blur', () => {
-      useGame.mockReturnValue({
-        gameState: {
-          whiteTime: 0,
-          blackTime: 0,
-          activeColor: null,
-          timeControl: null,
-        },
-        setTimeControl: mockSetTimeControl,
-        pauseClock: mockPauseClock,
-        getPlayerByColor: mockGetPlayerByColor,
+      mockGame({
+        whiteTime: 0,
+        blackTime: 0,
+        activeColor: null,
+        timeControl: null,
       });
 
       render(<ChessClock />);

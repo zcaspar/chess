@@ -1,5 +1,6 @@
 import { pool, query } from '../config/database';
 import { safeJsonParse, prepareForJsonb } from '../utils/jsonHandler';
+import { logger } from '../utils/logger';
 
 export interface GameHistoryEntry {
   id: number;
@@ -83,21 +84,21 @@ export class GameHistoryModel {
       const result = await query(insertQuery, values);
       return this.mapRowToGameHistory(result.rows[0]);
     } catch (error: any) {
-      console.error('Error saving game history:', error);
+      logger.error('Error saving game history:', error);
       
       // Check if it's a table doesn't exist error
       if (error.code === '42P01') {
-        console.log('🔄 Table does not exist, attempting to create it...');
+        logger.debug('🔄 Table does not exist, attempting to create it...');
         
         try {
           // Try to create the table and retry the insert
           await this.initializeTables();
-          console.log('✅ Tables created, retrying insert...');
+          logger.debug('✅ Tables created, retrying insert...');
           
           const retryResult = await query(insertQuery, values);
           return this.mapRowToGameHistory(retryResult.rows[0]);
         } catch (retryError: any) {
-          console.error('❌ Failed to create table and retry insert:', retryError);
+          logger.error('❌ Failed to create table and retry insert:', retryError);
           throw new Error(`Failed to initialize database tables: ${retryError.message}`);
         }
       }
@@ -122,26 +123,26 @@ export class GameHistoryModel {
     `;
 
     try {
-      console.log('📖 Executing getPlayerHistory query for user:', playerId);
-      console.log('Query params:', { playerId, limit, offset });
+      logger.debug('📖 Executing getPlayerHistory query for user:', playerId);
+      logger.debug('Query params:', { playerId, limit, offset });
       
       const result = await query(selectQuery, [playerId, limit, offset]);
-      console.log('Query result rows:', result.rows.length);
+      logger.debug('Query result rows:', result.rows.length);
       
       // Log the first row structure if any
       if (result.rows.length > 0) {
-        console.log('First row structure:', Object.keys(result.rows[0]));
-        console.log('time_control field type:', typeof result.rows[0].time_control);
-        console.log('time_control value:', result.rows[0].time_control);
+        logger.debug('First row structure:', Object.keys(result.rows[0]));
+        logger.debug('time_control field type:', typeof result.rows[0].time_control);
+        logger.debug('time_control value:', result.rows[0].time_control);
       }
       
       return result.rows.map(row => this.mapRowToGameHistory(row));
     } catch (error: any) {
-      console.error('Error fetching player history:', error);
+      logger.error('Error fetching player history:', error);
       
       // Check if it's a table doesn't exist error
       if (error.code === '42P01') {
-        console.error('Game history table does not exist. Returning empty array.');
+        logger.error('Game history table does not exist. Returning empty array.');
         return []; // Return empty array instead of throwing
       }
       
@@ -165,7 +166,7 @@ export class GameHistoryModel {
       }
       return this.mapRowToGameHistory(result.rows[0]);
     } catch (error) {
-      console.error('Error fetching game by ID:', error);
+      logger.error('Error fetching game by ID:', error);
       throw new Error('Failed to fetch game');
     }
   }
@@ -204,7 +205,7 @@ export class GameHistoryModel {
         winRate: stats.total_games > 0 ? (parseInt(stats.wins) / parseInt(stats.total_games)) * 100 : 0
       };
     } catch (error) {
-      console.error('Error fetching player stats:', error);
+      logger.error('Error fetching player stats:', error);
       throw new Error('Failed to fetch player statistics');
     }
   }
@@ -222,7 +223,7 @@ export class GameHistoryModel {
       const result = await query(deleteQuery, [gameHistoryId, playerId]);
       return (result.rowCount || 0) > 0;
     } catch (error) {
-      console.error('Error deleting game:', error);
+      logger.error('Error deleting game:', error);
       throw new Error('Failed to delete game');
     }
   }
@@ -241,7 +242,7 @@ export class GameHistoryModel {
       const result = await query(selectQuery, [limit]);
       return result.rows.map(row => this.mapRowToGameHistory(row));
     } catch (error) {
-      console.error('Error fetching recent games:', error);
+      logger.error('Error fetching recent games:', error);
       throw new Error('Failed to fetch recent games');
     }
   }
@@ -251,14 +252,14 @@ export class GameHistoryModel {
    */
   static async initializeTables(): Promise<void> {
     try {
-      console.log('🔄 Starting database table initialization...');
+      logger.debug('🔄 Starting database table initialization...');
       
       // Test database connection first
       try {
         await query('SELECT 1');
-        console.log('✅ Database connection confirmed');
+        logger.debug('✅ Database connection confirmed');
       } catch (connectionError: any) {
-        console.error('❌ Database connection failed during initialization:', connectionError);
+        logger.error('❌ Database connection failed during initialization:', connectionError);
         throw new Error(`Database connection failed: ${connectionError.message}`);
       }
       
@@ -271,18 +272,18 @@ export class GameHistoryModel {
         const path = require('path');
         const schemaPath = path.join(__dirname, '../db/schema.sql');
         schema = fs.readFileSync(schemaPath, 'utf8');
-        console.log('📁 Schema loaded from file');
+        logger.debug('📁 Schema loaded from file');
         
         // Try to load head-to-head schema
         try {
           const h2hSchemaPath = path.join(__dirname, '../db/head-to-head-schema.sql');
           h2hSchema = fs.readFileSync(h2hSchemaPath, 'utf8');
-          console.log('📁 Head-to-head schema loaded from file');
+          logger.debug('📁 Head-to-head schema loaded from file');
         } catch (h2hFileError) {
-          console.log('📝 Head-to-head schema file not found, will be included in inline schema');
+          logger.debug('📝 Head-to-head schema file not found, will be included in inline schema');
         }
       } catch (fileError) {
-        console.log('📝 Using inline schema (file not found)');
+        logger.debug('📝 Using inline schema (file not found)');
         // Simplified inline schema as fallback - minimal setup for production
         schema = `
           CREATE TABLE IF NOT EXISTS game_history (
@@ -333,19 +334,19 @@ export class GameHistoryModel {
       // Split by semicolon and execute each statement
       const statements = fullSchema.split(';').filter((stmt: string) => stmt.trim().length > 0);
       
-      console.log(`🔄 Executing ${statements.length} SQL statements...`);
+      logger.debug(`🔄 Executing ${statements.length} SQL statements...`);
       
       for (let i = 0; i < statements.length; i++) {
         const statement = statements[i].trim();
         if (statement) {
           try {
-            console.log(`🔄 Executing statement ${i + 1}/${statements.length}: ${statement.substring(0, 50)}...`);
+            logger.debug(`🔄 Executing statement ${i + 1}/${statements.length}: ${statement.substring(0, 50)}...`);
             await query(statement);
-            console.log(`✅ Statement ${i + 1} executed successfully`);
+            logger.debug(`✅ Statement ${i + 1} executed successfully`);
           } catch (statementError: any) {
-            console.error(`❌ Error executing statement ${i + 1}:`, statementError);
-            console.error('Statement was:', statement);
-            console.error('Error details:', {
+            logger.error(`❌ Error executing statement ${i + 1}:`, statementError);
+            logger.error('Statement was:', statement);
+            logger.error('Error details:', {
               code: statementError.code,
               message: statementError.message,
               detail: statementError.detail,
@@ -359,17 +360,17 @@ export class GameHistoryModel {
       // Test that the table was created successfully
       try {
         const result = await query('SELECT COUNT(*) FROM game_history WHERE 1=0');
-        console.log('✅ Table validation successful');
+        logger.debug('✅ Table validation successful');
       } catch (validationError: any) {
-        console.error('❌ Table validation failed:', validationError);
+        logger.error('❌ Table validation failed:', validationError);
         throw new Error(`Table creation validation failed: ${validationError.message}`);
       }
       
-      console.log('✅ Database tables initialized successfully');
+      logger.debug('✅ Database tables initialized successfully');
     } catch (error: any) {
-      console.error('❌ Error initializing database tables:', error);
-      console.error('Full error object:', JSON.stringify(error, null, 2));
-      console.error('Error details:', {
+      logger.error('❌ Error initializing database tables:', error);
+      logger.error('Full error object:', JSON.stringify(error, null, 2));
+      logger.error('Error details:', {
         code: error.code,
         message: error.message,
         detail: error.detail,
@@ -419,10 +420,10 @@ export class GameHistoryModel {
         updatedAt: row.updated_at
       };
     } catch (error) {
-      console.error('Error mapping game history row:', error);
-      console.error('Row data:', row);
-      console.error('Row time_control:', row.time_control);
-      console.error('Type of time_control:', typeof row.time_control);
+      logger.error('Error mapping game history row:', error);
+      logger.error('Row data:', row);
+      logger.error('Row time_control:', row.time_control);
+      logger.error('Type of time_control:', typeof row.time_control);
       throw error;
     }
   }

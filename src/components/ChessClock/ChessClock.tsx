@@ -192,6 +192,12 @@ const ChessClock: React.FC = () => {
     );
   }
 
+  // All null/selector cases are handled above; this guard narrows the type for
+  // the remaining render and is effectively unreachable.
+  if (!effectiveTimeControl) {
+    return null;
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-md p-4">
       <div className="flex justify-between items-center mb-3">

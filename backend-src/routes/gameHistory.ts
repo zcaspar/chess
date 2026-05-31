@@ -2,6 +2,7 @@ import express from 'express';
 import { GameHistoryModel, SaveGameRequest } from '../models/GameHistory';
 import { HeadToHeadModel } from '../models/HeadToHead';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
 
@@ -99,7 +100,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
         );
       } catch (h2hError) {
         // Don't fail the request if head-to-head update fails
-        console.error('Failed to update head-to-head record:', h2hError);
+        logger.error('Failed to update head-to-head record:', h2hError);
       }
     }
     
@@ -110,7 +111,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
     });
 
   } catch (error: any) {
-    console.error('Error saving game to history:', error);
+    logger.error('Error saving game to history:', error);
     
     // Check if it's a table doesn't exist error
     if (error.code === '42P01') {
@@ -123,7 +124,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
     }
     
     // Log the full error for debugging
-    console.error('Full error details:', {
+    logger.error('Full error details:', {
       code: error.code,
       message: error.message,
       detail: error.detail,
@@ -142,9 +143,9 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
     
     // Special handling for JSONB errors
     if (error.message && error.message.includes('JSON')) {
-      console.error('JSONB error detected. Request body:', req.body);
-      console.error('timeControl value:', req.body.timeControl);
-      console.error('timeControl type:', typeof req.body.timeControl);
+      logger.error('JSONB error detected. Request body:', req.body);
+      logger.error('timeControl value:', req.body.timeControl);
+      logger.error('timeControl type:', typeof req.body.timeControl);
     }
     
     res.status(500).json({
@@ -162,7 +163,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
  */
 router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
-    console.log('📖 Fetching game history for user:', req.user?.uid);
+    logger.debug('📖 Fetching game history for user:', req.user?.uid);
     
     // First check if database is available
     const { testConnection } = await import('../config/database');
@@ -193,14 +194,14 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       games = await GameHistoryModel.getPlayerHistory(req.user!.uid, limit, offset);
     } catch (modelError: any) {
-      console.error('🔴 GameHistoryModel.getPlayerHistory error:', modelError);
-      console.error('Error type:', modelError.name);
-      console.error('Error message:', modelError.message);
-      console.error('Stack trace:', modelError.stack);
+      logger.error('🔴 GameHistoryModel.getPlayerHistory error:', modelError);
+      logger.error('Error type:', modelError.name);
+      logger.error('Error message:', modelError.message);
+      logger.error('Stack trace:', modelError.stack);
       
       // Special handling for JSON parsing errors
       if (modelError.message && modelError.message.includes('Unexpected token')) {
-        console.error('🌳 JSONB parsing error detected');
+        logger.error('🌳 JSONB parsing error detected');
         return res.status(500).json({
           error: 'Database data format error',
           message: 'There was an issue parsing game data from the database. This is being investigated.',
@@ -222,9 +223,9 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
     });
 
   } catch (error: any) {
-    console.error('Error fetching game history:', error);
-    console.error('Error stack:', error.stack);
-    console.error('Error details:', {
+    logger.error('Error fetching game history:', error);
+    logger.error('Error stack:', error.stack);
+    logger.error('Error details:', {
       code: error.code,
       message: error.message,
       detail: error.detail,
@@ -275,7 +276,7 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res) => 
     });
 
   } catch (error) {
-    console.error('Error fetching game:', error);
+    logger.error('Error fetching game:', error);
     res.status(500).json({
       error: 'Failed to fetch game',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -297,7 +298,7 @@ router.get('/stats/summary', authenticateToken, async (req: AuthenticatedRequest
     });
 
   } catch (error) {
-    console.error('Error fetching player stats:', error);
+    logger.error('Error fetching player stats:', error);
     res.status(500).json({
       error: 'Failed to fetch player statistics',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -329,7 +330,7 @@ router.delete('/:id', authenticateToken, async (req: AuthenticatedRequest, res) 
     });
 
   } catch (error) {
-    console.error('Error deleting game:', error);
+    logger.error('Error deleting game:', error);
     res.status(500).json({
       error: 'Failed to delete game',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -363,7 +364,7 @@ router.get('/admin/recent', authenticateToken, async (req: AuthenticatedRequest,
     });
 
   } catch (error) {
-    console.error('Error fetching recent games:', error);
+    logger.error('Error fetching recent games:', error);
     res.status(500).json({
       error: 'Failed to fetch recent games',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -390,7 +391,7 @@ router.post('/init-tables', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error initializing tables:', error);
+    logger.error('Error initializing tables:', error);
     res.status(500).json({
       error: 'Failed to initialize tables',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -405,14 +406,14 @@ router.post('/init-tables', async (req, res) => {
 router.get('/debug/test-query', authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user!.uid;
-    console.log('🔍 Debug: Testing game history query for user:', userId);
+    logger.debug('🔍 Debug: Testing game history query for user:', userId);
     
     // First check if database is available
     const { pool } = await import('../config/database');
     
     // Run a simple test query
     const testResult = await pool.query('SELECT 1 as test');
-    console.log('Test query successful:', testResult.rows[0]);
+    logger.debug('Test query successful:', testResult.rows[0]);
     
     // Check if table exists
     const tableCheck = await pool.query(`
@@ -422,7 +423,7 @@ router.get('/debug/test-query', authenticateToken, async (req: AuthenticatedRequ
         AND table_name = 'game_history'
       );
     `);
-    console.log('Table exists:', tableCheck.rows[0].exists);
+    logger.debug('Table exists:', tableCheck.rows[0].exists);
     
     // Try to fetch game history
     const gameQuery = `
@@ -432,15 +433,15 @@ router.get('/debug/test-query', authenticateToken, async (req: AuthenticatedRequ
       LIMIT 10
     `;
     
-    console.log('Running game query with userId:', userId);
+    logger.debug('Running game query with userId:', userId);
     const gameResult = await pool.query(gameQuery, [userId]);
-    console.log('Game query result count:', gameResult.rows.length);
+    logger.debug('Game query result count:', gameResult.rows.length);
     
     if (gameResult.rows.length > 0) {
       const firstRow = gameResult.rows[0];
-      console.log('First row keys:', Object.keys(firstRow));
-      console.log('time_control type:', typeof firstRow.time_control);
-      console.log('time_control value:', firstRow.time_control);
+      logger.debug('First row keys:', Object.keys(firstRow));
+      logger.debug('time_control type:', typeof firstRow.time_control);
+      logger.debug('time_control value:', firstRow.time_control);
     }
     
     res.json({
@@ -457,7 +458,7 @@ router.get('/debug/test-query', authenticateToken, async (req: AuthenticatedRequ
     });
     
   } catch (error: any) {
-    console.error('Debug query error:', error);
+    logger.error('Debug query error:', error);
     res.status(500).json({
       error: 'Debug query failed',
       message: error.message,

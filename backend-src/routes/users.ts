@@ -1,6 +1,7 @@
 import express from 'express';
 import { AuthenticatedRequest, verifyFirebaseToken } from '../middleware/auth';
 import { UserModel } from '../models/User';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
 
@@ -23,7 +24,7 @@ router.get('/profile', verifyFirebaseToken, async (req: AuthenticatedRequest, re
 
     res.json(profile);
   } catch (error) {
-    console.error('Error fetching user profile:', error);
+    logger.error('Error fetching user profile:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -61,7 +62,7 @@ router.post('/profile', verifyFirebaseToken, async (req: AuthenticatedRequest, r
 
     res.status(201).json(profile);
   } catch (error) {
-    console.error('Error creating user profile:', error);
+    logger.error('Error creating user profile:', error);
     
     if (error instanceof Error) {
       if (error.message === 'Username already taken' || error.message === 'Email already in use') {
@@ -93,7 +94,7 @@ router.patch('/profile', verifyFirebaseToken, async (req: AuthenticatedRequest, 
     const updatedProfile = await UserModel.update(req.user.uid, updates);
     res.json(updatedProfile);
   } catch (error) {
-    console.error('Error updating user profile:', error);
+    logger.error('Error updating user profile:', error);
     
     if (error instanceof Error) {
       if (error.message === 'User not found') {
@@ -153,7 +154,7 @@ router.post('/upgrade-guest', verifyFirebaseToken, async (req: AuthenticatedRequ
     const updatedProfile = await UserModel.findByFirebaseUid(req.user.uid);
     res.json(updatedProfile);
   } catch (error) {
-    console.error('Error upgrading guest account:', error);
+    logger.error('Error upgrading guest account:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -164,7 +165,7 @@ router.get('/stats', (req, res) => {
     const stats = UserModel.getStats();
     res.json(stats);
   } catch (error) {
-    console.error('Error fetching user stats:', error);
+    logger.error('Error fetching user stats:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -185,7 +186,7 @@ router.delete('/profile', verifyFirebaseToken, async (req: AuthenticatedRequest,
 
     res.json({ message: 'Account deleted successfully' });
   } catch (error) {
-    console.error('Error deleting user account:', error);
+    logger.error('Error deleting user account:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -203,7 +204,7 @@ router.post('/analyze-position', async (req, res) => {
   try {
     const { fen } = req.body;
     
-    console.log('🧠 Analysis request received:', { fen });
+    logger.debug('🧠 Analysis request received:', { fen });
     
     if (!fen) {
       return res.status(400).json({
@@ -214,7 +215,7 @@ router.post('/analyze-position', async (req, res) => {
 
     // Call LC0 server for best move analysis
     const LC0_SERVER_URL = process.env.LC0_SERVER_URL || 'https://web-production-4cc9.up.railway.app';
-    console.log('🔗 Calling LC0 server:', LC0_SERVER_URL);
+    logger.debug('🔗 Calling LC0 server:', LC0_SERVER_URL);
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -256,7 +257,7 @@ router.post('/analyze-position', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error analyzing position:', error);
+    logger.error('Error analyzing position:', error);
     res.status(500).json({
       error: 'Internal server error',
       message: error instanceof Error ? error.message : 'Failed to analyze position'

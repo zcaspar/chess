@@ -1,51 +1,50 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { AuthProvider } from '../contexts/AuthContext';
+import { SocketProvider } from '../contexts/SocketContext';
 import { GameProvider } from '../contexts/GameContext';
 import ChessClock from '../components/ChessClock/ChessClock';
 
-// Mock chess.js completely
-jest.mock('chess.js', () => ({
-  Chess: jest.fn().mockImplementation(() => ({
-    turn: () => 'w',
-    moves: () => [{ from: 'e2', to: 'e4', piece: 'p' }],
-    move: () => ({ from: 'e2', to: 'e4', piece: 'p' }),
-    isGameOver: () => false,
-    isCheckmate: () => false,
-    isDraw: () => false,
-    isStalemate: () => false,
-    isThreefoldRepetition: () => false,
-    isInsufficientMaterial: () => false,
-    fen: () => 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-    board: () => Array(8).fill(Array(8).fill(null)),
-    history: () => [],
-    inCheck: () => false,
-    getCastlingRights: () => ({ k: false, q: false }),
-  }))
-}));
+// Use the real chess.js (a hand-rolled mock drifts out of sync and breaks
+// GameProvider, which reads gameState.game.fen()). This suite only exercises
+// the clock UI, so the genuine engine is both safe and accurate.
 
-// Mock the ChessAI to make moves instantly
-jest.mock('../utils/chessAI', () => ({
-  ChessAI: jest.fn().mockImplementation(() => ({
-    getBestMove: jest.fn().mockResolvedValue({ from: 'd2', to: 'd4', piece: 'p' }),
-    setDifficulty: jest.fn(),
-    getDifficulty: jest.fn().mockReturnValue('medium'),
-  })),
-}));
+// Stub the LC0 backend so no network request is attempted. The clock tests stay
+// in human-vs-human mode, so the AI move path is never invoked, but mocking the
+// backend keeps the suite fully offline and deterministic.
+jest.mock('../utils/backendAI', () => {
+  const actual = jest.requireActual('../utils/backendAI');
+  return {
+    ...actual,
+    BackendAI: jest.fn().mockImplementation(() => ({
+      getBestMove: jest.fn().mockResolvedValue(null),
+      getEngineStatus: jest.fn().mockResolvedValue({ engines: {} }),
+    })),
+  };
+});
 
 // Mock react-chessboard to avoid rendering issues
 jest.mock('react-chessboard', () => ({
   Chessboard: () => <div data-testid="chessboard">Mocked Chessboard</div>
 }));
 
-// Helper component that wraps only the timer component
+// Helper component that wraps only the timer component.
+// ChessClock calls useSocket() and GameProvider calls useAuth(), so all three
+// providers are required or those hooks throw. firebase/auth is mocked in
+// setupTests.ts (onAuthStateChanged fires with a null user), so AuthProvider
+// resolves with no user and SocketProvider never opens a real connection.
 const TimerTestComponent: React.FC = () => {
   return (
-    <GameProvider>
-      <div>
-        <ChessClock />
-      </div>
-    </GameProvider>
+    <AuthProvider>
+      <SocketProvider>
+        <GameProvider>
+          <div>
+            <ChessClock />
+          </div>
+        </GameProvider>
+      </SocketProvider>
+    </AuthProvider>
   );
 };
 

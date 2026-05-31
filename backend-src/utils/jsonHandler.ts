@@ -1,3 +1,4 @@
+import { logger } from './logger';
 /**
  * Safe JSON parsing utilities for handling JSONB fields
  */
@@ -22,8 +23,8 @@ export function safeJsonParse<T = any>(value: any): T | undefined {
     try {
       return JSON.parse(value) as T;
     } catch (error) {
-      console.error('Failed to parse JSON string:', error);
-      console.error('Value was:', value);
+      logger.error('Failed to parse JSON string:', error);
+      logger.error('Value was:', value);
       return undefined;
     }
   }
@@ -52,7 +53,7 @@ export function prepareForJsonb(value: any): any {
     try {
       return JSON.parse(value);
     } catch (error) {
-      console.error('Failed to parse JSON string for JSONB:', error);
+      logger.error('Failed to parse JSON string for JSONB:', error);
       return null;
     }
   }

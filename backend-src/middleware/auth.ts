@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { auth } from '../config/firebase-admin';
+import { logger } from '../utils/logger';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -46,7 +47,7 @@ export const verifyFirebaseToken = async (
       };
       next();
     } catch (error) {
-      console.error('Token verification error:', error);
+      logger.error('Token verification error:', error);
       
       // Check if this is a Firebase Admin configuration issue
       const errorMessage = (error as Error)?.message || '';
@@ -54,7 +55,7 @@ export const verifyFirebaseToken = async (
           errorMessage.includes('auth/invalid-project-id') ||
           errorMessage.includes('no-app') ||
           errorMessage.includes('app/invalid-credential'))) {
-        console.warn('Firebase Admin not properly configured, using mock auth for development');
+        logger.warn('Firebase Admin not properly configured, using mock auth for development');
         // Create a mock user for development/demo purposes
         req.user = {
           uid: 'demo-user-' + Date.now(),
@@ -69,7 +70,7 @@ export const verifyFirebaseToken = async (
       return;
     }
   } catch (error) {
-    console.error('Auth middleware error:', error);
+    logger.error('Auth middleware error:', error);
     res.status(500).json({ error: 'Internal server error' });
     return;
   }
@@ -96,13 +97,13 @@ export const optionalAuth = async (
         };
       } catch (error) {
         // Token is invalid, but continue without authentication
-        console.warn('Invalid token in optional auth:', error);
+        logger.warn('Invalid token in optional auth:', error);
       }
     }
     
     next();
   } catch (error) {
-    console.error('Optional auth middleware error:', error);
+    logger.error('Optional auth middleware error:', error);
     next(); // Continue without authentication
   }
 };

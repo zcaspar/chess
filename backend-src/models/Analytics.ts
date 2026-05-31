@@ -1,5 +1,6 @@
 import { pool, query } from '../config/database';
 import { safeJsonParse, prepareForJsonb } from '../utils/jsonHandler';
+import { logger } from '../utils/logger';
 
 // Type definitions for analytics data
 export interface GameStatistics {
@@ -183,7 +184,7 @@ export class AnalyticsModel {
         humanGames: parseInt(row.human_games)
       };
     } catch (error) {
-      console.error('Error fetching dashboard summary:', error);
+      logger.error('Error fetching dashboard summary:', error);
       throw error;
     }
   }
@@ -211,7 +212,7 @@ export class AnalyticsModel {
         dailyWinRate: parseFloat(row.daily_win_rate) || 0
       }));
     } catch (error) {
-      console.error('Error fetching recent performance:', error);
+      logger.error('Error fetching recent performance:', error);
       throw error;
     }
   }
@@ -257,7 +258,7 @@ export class AnalyticsModel {
         gamesPlayed: parseInt(row.games_played)
       }));
     } catch (error) {
-      console.error('Error fetching difficulty breakdown:', error);
+      logger.error('Error fetching difficulty breakdown:', error);
       throw error;
     }
   }
@@ -304,7 +305,7 @@ export class AnalyticsModel {
         gamesPlayed: parseInt(row.games_played)
       }));
     } catch (error) {
-      console.error('Error fetching time control breakdown:', error);
+      logger.error('Error fetching time control breakdown:', error);
       throw error;
     }
   }
@@ -342,7 +343,7 @@ export class AnalyticsModel {
         updatedAt: row.updated_at
       }));
     } catch (error) {
-      console.error('Error fetching opening statistics:', error);
+      logger.error('Error fetching opening statistics:', error);
       throw error;
     }
   }
@@ -458,9 +459,9 @@ export class AnalyticsModel {
       
       // Execute the schema
       await query(schemaSQL);
-      console.log('✅ Analytics tables initialized successfully');
+      logger.debug('✅ Analytics tables initialized successfully');
     } catch (error) {
-      console.error('❌ Error initializing analytics tables:', error);
+      logger.error('❌ Error initializing analytics tables:', error);
       throw error;
     }
   }
@@ -506,7 +507,7 @@ export class AnalyticsModel {
       ]);
       
     } catch (error) {
-      console.error('Error updating game statistics:', error);
+      logger.error('Error updating game statistics:', error);
       throw error;
     }
   }
@@ -531,7 +532,7 @@ export class AnalyticsModel {
       
       return openingMoves.slice(0, 10); // First 10 half-moves (5 full moves)
     } catch (error) {
-      console.error('Error extracting opening moves:', error);
+      logger.error('Error extracting opening moves:', error);
       return [];
     }
   }

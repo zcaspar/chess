@@ -1,4 +1,5 @@
 import { Chess, Move } from 'chess.js';
+import { logger } from './utils/logger';
 
 interface BackendResponse {
   move: {
@@ -39,12 +40,12 @@ export class Lc0EngineBackend {
       }
       
       const healthData = await response.json() as { status?: string };
-      console.log('Backend health check:', healthData);
+      logger.debug('Backend health check:', healthData);
       
       this.isInitialized = true;
-      console.log(`Lc0EngineBackend initialized with ${this.config.difficulty} difficulty`);
+      logger.debug(`Lc0EngineBackend initialized with ${this.config.difficulty} difficulty`);
     } catch (error) {
-      console.error('Failed to initialize Lc0EngineBackend:', error);
+      logger.error('Failed to initialize Lc0EngineBackend:', error);
       throw error;
     }
   }
@@ -62,7 +63,7 @@ export class Lc0EngineBackend {
         timeLimit: timeLimit || this.config.timeLimit
       };
 
-      console.log(`Requesting move from backend: ${this.config.difficulty} difficulty`);
+      logger.debug(`Requesting move from backend: ${this.config.difficulty} difficulty`);
       const startTime = Date.now();
 
       const response = await fetch(`${this.config.backendUrl}/api/chess/move`, {
@@ -82,11 +83,11 @@ export class Lc0EngineBackend {
       const totalTime = Date.now() - startTime;
 
       if (!data.move) {
-        console.log('No move available from backend');
+        logger.debug('No move available from backend');
         return null;
       }
 
-      console.log(`Backend returned move: ${data.move.san} in ${data.thinkingTime}ms (total: ${totalTime}ms)`);
+      logger.debug(`Backend returned move: ${data.move.san} in ${data.thinkingTime}ms (total: ${totalTime}ms)`);
 
       // Convert backend response to chess.js Move object
       const legalMoves = game.moves({ verbose: true });
@@ -97,20 +98,20 @@ export class Lc0EngineBackend {
       );
 
       if (!move) {
-        console.log(`❌ Backend returned invalid move: ${data.move.from}-${data.move.to}`);
-        console.log(`   Legal moves: ${legalMoves.map(m => `${m.from}-${m.to} (${m.san})`).join(', ')}`);
+        logger.debug(`❌ Backend returned invalid move: ${data.move.from}-${data.move.to}`);
+        logger.debug(`   Legal moves: ${legalMoves.map(m => `${m.from}-${m.to} (${m.san})`).join(', ')}`);
         return null;
       }
 
       return move;
     } catch (error) {
-      console.error('Error getting move from backend:', error);
+      logger.error('Error getting move from backend:', error);
       throw error;
     }
   }
 
   async setOption(name: string, value: string | number): Promise<void> {
-    console.log(`Setting option ${name} = ${value} (backend engine)`);
+    logger.debug(`Setting option ${name} = ${value} (backend engine)`);
   }
 
   async isEngineReady(): Promise<boolean> {
@@ -123,14 +124,14 @@ export class Lc0EngineBackend {
       const data = await response.json() as any;
       return data.engines[this.config.difficulty] === true;
     } catch (error) {
-      console.error('Error checking engine status:', error);
+      logger.error('Error checking engine status:', error);
       return false;
     }
   }
 
   async shutdown(): Promise<void> {
     this.isInitialized = false;
-    console.log('Lc0EngineBackend shut down');
+    logger.debug('Lc0EngineBackend shut down');
   }
 
   getDifficulty(): string {
@@ -201,10 +202,10 @@ export class Lc0EngineBackend {
       if (!response.ok) return false;
       
       const data = await response.json() as any;
-      console.log('Backend test result:', data);
+      logger.debug('Backend test result:', data);
       return data.success === true;
     } catch (error) {
-      console.error('Backend connection test failed:', error);
+      logger.error('Backend connection test failed:', error);
       return false;
     }
   }

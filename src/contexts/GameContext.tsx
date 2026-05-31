@@ -3,6 +3,8 @@ import { Chess, Move, Square } from 'chess.js';
 import { ChessAI, DifficultyLevel } from '../utils/chessAI';
 import { useAuth } from '../hooks/useAuth';
 import { isFeatureEnabled } from '../config/gameFeatures';
+import { useChessVariants } from '../hooks/useChessVariants';
+import { logger } from '../utils/logger';
 
 interface TimeControl {
   initial: number; // Initial time in seconds
@@ -24,7 +26,7 @@ interface GameStats {
   player2: { wins: number; draws: number; losses: number };
 }
 
-interface GameState {
+export interface GameState {
   game: Chess;
   history: Move[];
   currentMoveIndex: number;
@@ -74,9 +76,14 @@ interface GameState {
     white: boolean;
     black: boolean;
   };
+  // Online game metadata (populated for online human-vs-human games)
+  onlineGameRoom?: {
+    opponentId?: string;
+    opponentName?: string;
+  } | null;
 }
 
-interface GameContextType {
+export interface GameContextType {
   gameState: GameState;
   makeMove: (from: Square, to: Square, promotion?: string) => boolean;
   undoMove: () => void;
@@ -201,7 +208,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   const completedGamesRef = useRef<Set<string>>(new Set());
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const aiRef = useRef<ChessAI>(new ChessAI('medium', 1000));
+  const aiRef = useRef<ChessAI>(new ChessAI('medium'));
   const isAiThinking = useRef<boolean>(false);
   const gameEndedRef = useRef<boolean>(false); // Track game end state to prevent race conditions
   const aiMoveGameId = useRef<string>(''); // Track which game the AI is thinking for
@@ -210,17 +217,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   const updateGameStats = useCallback((result: string, currentStats: GameStats, colorAssignment: ColorAssignment, players: PlayerInfo, winningColor?: 'w' | 'b', statsAlreadyUpdated: boolean = false, gameId?: string): GameStats => {
     // Don't update stats if already updated for this game (prevents double counting)
     if (statsAlreadyUpdated) {
-      console.log('🚫 Stats update blocked - already updated for this game');
+      logger.debug('🚫 Stats update blocked - already updated for this game');
       return currentStats;
     }
     
     // Additional check using gameId and completedGames set
     if (gameId && completedGamesRef.current.has(gameId)) {
-      console.log('🚫 Stats update blocked - game already completed:', gameId);
+      logger.debug('🚫 Stats update blocked - game already completed:', gameId);
       return currentStats;
     }
     
-    console.log('📊 Updating stats for result:', result, 'winningColor:', winningColor, 'gameId:', gameId);
+    logger.debug('📊 Updating stats for result:', result, 'winningColor:', winningColor, 'gameId:', gameId);
     
     // Mark this game as completed
     if (gameId) {
@@ -259,10 +266,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   // Function to save game to history
   const saveGameToHistory = useCallback(async (result: string, winningColor?: 'w' | 'b', finalFen?: string, pgn?: string) => {
-    console.log('🎮 Attempting to save game to history:', { result, winningColor, hasUser: !!authContext?.user });
+    logger.debug('🎮 Attempting to save game to history:', { result, winningColor, hasUser: !!authContext?.user });
     
     if (!authContext?.user || !authContext?.profile) {
-      console.log('❌ Cannot save game - no authenticated user');
+      logger.debug('❌ Cannot save game - no authenticated user');
       return; // No authenticated user
     }
 
@@ -302,8 +309,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const expectedMoveCount = Math.max(gameHistoryMoves.length, stateHistoryMoves.length);
       
       if (!gamePgn) {
-        console.log('🔧 Generating PGN for game save...');
-        console.log('📊 Move count analysis:', {
+        logger.debug('🔧 Generating PGN for game save...');
+        logger.debug('📊 Move count analysis:', {
           gameHistoryLength: gameHistoryMoves.length,
           stateHistoryLength: stateHistoryMoves.length,
           expectedMoveCount,
@@ -312,7 +319,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         
         // Always reconstruct PGN from move history to ensure completeness
         // The current game object may not have full history if created from FEN
-        console.log('🔄 Reconstructing PGN from complete move history...');
+        logger.debug('🔄 Reconstructing PGN from complete move history...');
         
         try {
           const pgnGame = new Chess();
@@ -321,7 +328,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           // Always use gameState.history which should have the complete game history
           const movesToUse = gameState.history;
           
-          console.log('🔄 Reconstructing from gameState.history:', {
+          logger.debug('🔄 Reconstructing from gameState.history:', {
             totalMoves: movesToUse.length,
             firstMove: movesToUse[0]?.san || 'none',
             lastMove: movesToUse[movesToUse.length - 1]?.san || 'none'
@@ -338,10 +345,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
               if (result) {
                 successfulMoves++;
               } else {
-                console.log(`❌ Failed to apply move ${index + 1}:`, move);
+                logger.debug(`❌ Failed to apply move ${index + 1}:`, move);
               }
             } catch (e) {
-              console.log(`❌ Error applying move ${index + 1}:`, move, e);
+              logger.debug(`❌ Error applying move ${index + 1}:`, move, e);
             }
           });
           
@@ -359,7 +366,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           // Create clean PGN with minimal headers
           gamePgn = moveLines.length > 0 ? moveLines.join(' ').trim() : rawPgn;
           
-          console.log('✅ PGN reconstruction complete:', {
+          logger.debug('✅ PGN reconstruction complete:', {
             originalMoveCount: movesToUse.length,
             successfulMoves,
             pgnLength: gamePgn.length,
@@ -368,19 +375,19 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           
           // Fallback: if reconstruction failed, try using game.pgn()
           if (!gamePgn || successfulMoves < movesToUse.length) {
-            console.log('⚠️ Some moves failed to reconstruct, trying game.pgn() as fallback...');
+            logger.debug('⚠️ Some moves failed to reconstruct, trying game.pgn() as fallback...');
             const fallbackPgn = gameState.game.pgn();
             if (fallbackPgn && fallbackPgn.length > (gamePgn?.length || 0)) {
               gamePgn = fallbackPgn;
-              console.log('📝 Using game.pgn() fallback');
+              logger.debug('📝 Using game.pgn() fallback');
             }
           }
           
         } catch (error) {
-          console.error('❌ PGN reconstruction failed:', error);
+          logger.error('❌ PGN reconstruction failed:', error);
           // Last resort: use game.pgn()
           gamePgn = gameState.game.pgn();
-          console.log('📝 Using game.pgn() as last resort');
+          logger.debug('📝 Using game.pgn() as last resort');
         }
       }
       
@@ -388,7 +395,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const finalMoveCount = gamePgn ? (gamePgn.match(/\d+\./g) || []).length : 0;
       const isValid = gamePgn && gamePgn.length > 10; // Reduced from 20 to be less strict
       
-      console.log('🎯 Final PGN validation:', {
+      logger.debug('🎯 Final PGN validation:', {
         isValid,
         length: gamePgn?.length || 0,
         estimatedMoveCount: finalMoveCount,
@@ -398,8 +405,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       });
       
       if (!isValid) {
-        console.error('⚠️ WARNING: PGN appears invalid or incomplete!');
-        console.error('⚠️ This game may not replay correctly in the future');
+        logger.error('⚠️ WARNING: PGN appears invalid or incomplete!');
+        logger.error('⚠️ This game may not replay correctly in the future');
       }
       
       // Determine opponent info
@@ -452,7 +459,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       });
       
       if (response.ok) {
-        console.log('✅ Game saved to history successfully');
+        logger.debug('✅ Game saved to history successfully');
       } else {
         const errorText = await response.text();
         
@@ -460,13 +467,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         try {
           const errorData = JSON.parse(errorText);
           if (response.status === 503) {
-            console.warn('⚠️ Game history feature temporarily unavailable:', errorData.message);
+            logger.warn('⚠️ Game history feature temporarily unavailable:', errorData.message);
             // Don't log this as an error since it's expected when database is not configured
             return;
           }
-          console.error('❌ Failed to save game to history:', errorData);
+          logger.error('❌ Failed to save game to history:', errorData);
         } catch (parseError) {
-          console.error('❌ Failed to save game to history:', {
+          logger.error('❌ Failed to save game to history:', {
             status: response.status,
             statusText: response.statusText,
             error: errorText
@@ -474,7 +481,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         }
       }
     } catch (error) {
-      console.error('❌ Error saving game to history:', error);
+      logger.error('❌ Error saving game to history:', error);
     }
   }, [authContext, gameState]);
 
@@ -518,7 +525,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
       await updateStats(statUpdate);
     } catch (error) {
-      console.error('❌ Error updating user stats:', error);
+      logger.error('❌ Error updating user stats:', error);
     }
   }, [authContext, gameState.gameMode, gameState.aiColor]);
 
@@ -546,7 +553,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
             const loserName = prev.players[loserPlayerKey];
             const winnerName = prev.players[winnerPlayerKey];
             const result = `${winnerName} wins on time! ${loserName} ran out of time.`;
-            console.log('⏰ TIME EXPIRED:', { losingColor, loserName, result });
+            logger.debug('⏰ TIME EXPIRED:', { losingColor, loserName, result });
             const updatedStats = updateGameStats(result, prev.gameStats, prev.colorAssignment, prev.players, winningColor, prev.statsUpdated, prev.gameId);
 
             if (intervalRef.current) {
@@ -599,7 +606,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       !gameState.gameResult &&
       !isAiThinking.current;
 
-    console.log('🤖 AI effect triggered:', {
+    logger.debug('🤖 AI effect triggered:', {
       gameMode: gameState.gameMode,
       aiColor: gameState.aiColor,
       currentTurn: currentTurn,
@@ -613,13 +620,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       isAiThinking.current = true;
       const currentGameId = gameState.gameId;
       aiMoveGameId.current = currentGameId;
-      console.log('🤖 AI starting to think for gameId:', currentGameId);
+      logger.debug('🤖 AI starting to think for gameId:', currentGameId);
 
       const makeAIMove = async () => {
         try {
           // Double-check game hasn't ended and we're still on the same game
           if (gameState.gameResult || gameEndedRef.current || aiMoveGameId.current !== currentGameId) {
-            console.log('🤖 AI cancelled - game ended or game changed');
+            logger.debug('🤖 AI cancelled - game ended or game changed');
             isAiThinking.current = false;
             return;
           }
@@ -636,7 +643,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           }
           
           const aiMove = await aiRef.current.getBestMove(gameState.game);
-          console.log('🤖 AI found move:', aiMove, 'for gameId:', gameState.gameId);
+          logger.debug('🤖 AI found move:', aiMove, 'for gameId:', gameState.gameId);
           
           // Check again after AI thinking - game might have ended or changed during thinking
           if (aiMove && !gameState.gameResult && !gameEndedRef.current && aiMoveGameId.current === currentGameId) {
@@ -645,8 +652,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
             const testMove = testGame.move({ from: aiMove.from as Square, to: aiMove.to as Square, promotion: aiMove.promotion });
             
             if (testMove) {
-              console.log('🤖 Applying valid AI move:', aiMove.san || `${aiMove.from}-${aiMove.to}`);
-              console.log('🤖 Board before AI move:', gameState.game.fen());
+              logger.debug('🤖 Applying valid AI move:', aiMove.san || `${aiMove.from}-${aiMove.to}`);
+              logger.debug('🤖 Board before AI move:', gameState.game.fen());
               // Use the makeMove function which properly updates the game state
               // Add delay for AI vs AI games to make them watchable
               if (gameState.gameMode === 'ai-vs-ai') {
@@ -655,18 +662,18 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
               
               const moveResult = makeMove(aiMove.from as Square, aiMove.to as Square, aiMove.promotion);
               if (!moveResult) {
-                console.log('🤖 AI move rejected - game has ended');
+                logger.debug('🤖 AI move rejected - game has ended');
               } else {
-                console.log('🤖 AI move applied successfully, board should update');
+                logger.debug('🤖 AI move applied successfully, board should update');
               }
             } else {
-              console.log(`🤖 AI move ${aiMove.from}-${aiMove.to} is no longer valid on current board`);
+              logger.debug(`🤖 AI move ${aiMove.from}-${aiMove.to} is no longer valid on current board`);
             }
           } else {
-            console.log('🤖 AI move cancelled - game ended or no move found');
+            logger.debug('🤖 AI move cancelled - game ended or no move found');
           }
         } catch (error) {
-          console.error('AI move error:', error);
+          logger.error('AI move error:', error);
         } finally {
           isAiThinking.current = false;
         }
@@ -722,11 +729,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   }, []);
 
   const makeMove = useCallback((from: Square, to: Square, promotion: string = 'q'): boolean => {
-    console.log('🎯 makeMove called:', from, to, 'gameId:', gameState.gameId);
+    logger.debug('🎯 makeMove called:', from, to, 'gameId:', gameState.gameId);
     
     // Prevent moves if game has already ended (check both state and ref)
     if (gameState.gameResult || gameEndedRef.current) {
-      console.log('❌ Move blocked - game has ended:', gameState.gameResult || 'via ref');
+      logger.debug('❌ Move blocked - game has ended:', gameState.gameResult || 'via ref');
       return false;
     }
     
@@ -735,7 +742,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const move = gameCopy.move({ from, to, promotion });
       
       if (!move) {
-        console.log('❌ Move validation failed:', from, to);
+        logger.debug('❌ Move validation failed:', from, to);
         return false;
       }
 
@@ -783,7 +790,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         const updatedStats = result ? updateGameStats(result, prev.gameStats, prev.colorAssignment, prev.players, winningColor, prev.statsUpdated, prev.gameId) : prev.gameStats;
         
         if (result) {
-          console.log('🏁 Game ended in makeMove:', result, 'gameId:', prev.gameId);
+          logger.debug('🏁 Game ended in makeMove:', result, 'gameId:', prev.gameId);
           // Mark game as ended in ref
           gameEndedRef.current = true;
           
@@ -809,7 +816,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
                              prev.currentHint.to === to;
                              
         if (prev.currentHint) {
-          console.log('🎯 Move made with hint active:', {
+          logger.debug('🎯 Move made with hint active:', {
             hintMove: `${prev.currentHint.from}-${prev.currentHint.to}`,
             actualMove: `${from}-${to}`,
             matches: clearHintMove,
@@ -986,6 +993,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       gameMode: 'human-vs-human',
       aiColor: null,
       aiDifficulty: 'medium',
+      // Reset hint system
+      hintAvailable: { white: true, black: true },
+      currentHint: null,
+      // Reset nuclear system
+      nukeAvailable: { white: true, black: true },
+      nukeModeActive: { white: false, black: false },
+      // Reset teleportation system
+      teleportAvailable: { white: true, black: true },
+      teleportModeActive: { white: false, black: false },
     });
   }, []);
 
@@ -1083,7 +1099,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   }, [gameState.colorAssignment, gameState.players]);
 
   const setGameMode = useCallback(async (mode: 'human-vs-human' | 'human-vs-ai' | 'ai-vs-ai', aiColor: 'w' | 'b' = 'b') => {
-    console.log('🎮 Setting game mode:', mode, 'AI color:', mode === 'human-vs-ai' ? aiColor : 'N/A');
+    logger.debug('🎮 Setting game mode:', mode, 'AI color:', mode === 'human-vs-ai' ? aiColor : 'N/A');
     setGameState(prev => {
       const newState = {
         ...prev,
@@ -1122,12 +1138,12 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     // Initialize LC0 engine when switching to AI mode
     if (mode === 'human-vs-ai' || mode === 'ai-vs-ai') {
       try {
-        console.log('Initializing LC0 engine...');
+        logger.debug('Initializing LC0 engine...');
         await aiRef.current.initializeLc0();
-        console.log('LC0 engine initialized successfully!');
+        logger.debug('LC0 engine initialized successfully!');
       } catch (error) {
-        console.error('Failed to initialize LC0 engine:', error);
-        console.log('Falling back to built-in engine');
+        logger.error('Failed to initialize LC0 engine:', error);
+        logger.debug('Falling back to built-in engine');
       }
     }
     
@@ -1147,11 +1163,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     // Reinitialize LC0 engine if we're using it
     if (aiRef.current.getEngineType() === 'lc0' && gameState.gameMode === 'human-vs-ai') {
       try {
-        console.log(`Reinitializing LC0 engine with ${difficulty} difficulty...`);
+        logger.debug(`Reinitializing LC0 engine with ${difficulty} difficulty...`);
         await aiRef.current.initializeLc0();
-        console.log('LC0 engine reinitialized successfully!');
+        logger.debug('LC0 engine reinitialized successfully!');
       } catch (error) {
-        console.error('Failed to reinitialize LC0 engine:', error);
+        logger.error('Failed to reinitialize LC0 engine:', error);
       }
     }
   }, [gameState.gameMode]);
@@ -1161,7 +1177,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   useEffect(() => {
     const handleSocketMoveMade = (event: CustomEvent) => {
       const data = event.detail;
-      console.log('🌐 Socket move made received - updating timers only:', data);
+      logger.debug('🌐 Socket move made received - updating timers only:', data);
       
       // Only update timer information here
       // The actual move is handled by useOnlineGame hook calling makeMove
@@ -1177,7 +1193,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
     const handleSocketGameEnded = (event: CustomEvent) => {
       const data = event.detail;
-      console.log('🌐 Socket game ended received:', data);
+      logger.debug('🌐 Socket game ended received:', data);
       
       // Parse the result to determine winning color
       let winningColor: 'w' | 'b' | undefined;
@@ -1214,7 +1230,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     const handleSocketDrawOffered = (event: Event) => {
       const customEvent = event as CustomEvent<{ by: 'w' | 'b' }>;
       const data = customEvent.detail;
-      console.log('🌐 Socket draw offered received from:', data?.by);
+      logger.debug('🌐 Socket draw offered received from:', data?.by);
 
       // Update draw offer state
       setGameState(prev => ({
@@ -1229,7 +1245,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     const handleSocketDrawOfferSent = (event: Event) => {
       const customEvent = event as CustomEvent<{ by: 'w' | 'b' }>;
       const data = customEvent.detail;
-      console.log('🌐 Socket draw offer sent confirmation:', data?.by);
+      logger.debug('🌐 Socket draw offer sent confirmation:', data?.by);
 
       // Update local state to show we offered a draw
       setGameState(prev => ({
@@ -1242,7 +1258,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     };
 
     const handleSocketDrawDeclined = () => {
-      console.log('🌐 Socket draw declined received');
+      logger.debug('🌐 Socket draw declined received');
 
       // Clear draw offer state
       setGameState(prev => ({
@@ -1256,7 +1272,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
     const handleSocketTimerUpdate = (event: CustomEvent) => {
       const data = event.detail;
-      console.log('🌐 Socket timer update received:', data);
+      logger.debug('🌐 Socket timer update received:', data);
       
       // Update game state with timer information
       setGameState(prev => ({
@@ -1271,17 +1287,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
     const handleSocketGameRestored = (event: CustomEvent) => {
       const data = event.detail;
-      console.log('🌐 Socket game restored received:', data);
+      logger.debug('🌐 Socket game restored received:', data);
       
       // Game was restored from previous session, display message
-      console.log(data.message);
+      logger.debug(data.message);
     };
 
     const handleSocketRoomJoined = (event: CustomEvent) => {
       const data = event.detail;
-      console.log('🌐 Socket room joined received:', data);
-      console.log('🎮 Game state from server:', data.gameState);
-      console.log('👥 Players from server:', data.players);
+      logger.debug('🌐 Socket room joined received:', data);
+      logger.debug('🎮 Game state from server:', data.gameState);
+      logger.debug('👥 Players from server:', data.players);
 
       // Initialize the game with the server's state
       const serverGame = new Chess(data.gameState.fen);
@@ -1289,14 +1305,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       // If there's a history from the server, rebuild it
       let gameHistory: Move[] = [];
       if (data.gameState.history && data.gameState.history.length > 0) {
-        console.log('🔄 Rebuilding game history from server moves:', data.gameState.history.length);
+        logger.debug('🔄 Rebuilding game history from server moves:', data.gameState.history.length);
         gameHistory = data.gameState.history;
       }
 
       // Get player display names from server data
       const whitePlayerName = data.players?.white?.displayName || data.players?.white?.username || 'Player 1';
       const blackPlayerName = data.players?.black?.displayName || data.players?.black?.username || 'Player 2';
-      console.log(`📛 Setting player names: White=${whitePlayerName}, Black=${blackPlayerName}`);
+      logger.debug(`📛 Setting player names: White=${whitePlayerName}, Black=${blackPlayerName}`);
 
       setGameState(prev => ({
         ...prev,
@@ -1310,29 +1326,29 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         gameMode: 'human-vs-human', // Online games are always human vs human
         // Set player names based on color assignment
         players: {
-          player1: prev.colorAssignment.player1 === 'w' ? whitePlayerName : blackPlayerName,
-          player2: prev.colorAssignment.player2 === 'w' ? whitePlayerName : blackPlayerName,
+          player1: prev.colorAssignment.white === 'player1' ? whitePlayerName : blackPlayerName,
+          player2: prev.colorAssignment.white === 'player2' ? whitePlayerName : blackPlayerName,
         },
       }));
 
-      console.log('✅ Game state synchronized with server');
+      logger.debug('✅ Game state synchronized with server');
     };
 
     const handleSocketGameStarted = (event: CustomEvent) => {
       const data = event.detail;
-      console.log('🎮 Socket game started received:', data);
+      logger.debug('🎮 Socket game started received:', data);
 
       // Get player display names from server data
       const whitePlayerName = data.white?.displayName || data.white?.username || 'Player 1';
       const blackPlayerName = data.black?.displayName || data.black?.username || 'Player 2';
-      console.log(`📛 Game started - White: ${whitePlayerName}, Black: ${blackPlayerName}`);
+      logger.debug(`📛 Game started - White: ${whitePlayerName}, Black: ${blackPlayerName}`);
 
       // Update player names based on color assignment
       setGameState(prev => ({
         ...prev,
         players: {
-          player1: prev.colorAssignment.player1 === 'w' ? whitePlayerName : blackPlayerName,
-          player2: prev.colorAssignment.player2 === 'w' ? whitePlayerName : blackPlayerName,
+          player1: prev.colorAssignment.white === 'player1' ? whitePlayerName : blackPlayerName,
+          player2: prev.colorAssignment.white === 'player2' ? whitePlayerName : blackPlayerName,
         },
       }));
     };
@@ -1409,8 +1425,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
     try {
       const url = `${process.env.REACT_APP_BACKEND_URL}/api/analysis/hint`;
-      console.log('💡 Requesting hint from:', url);
-      console.log('💡 Request payload:', { fen: gameState.game.fen() });
+      logger.debug('💡 Requesting hint from:', url);
+      logger.debug('💡 Request payload:', { fen: gameState.game.fen() });
       
       const response = await fetch(url, {
         method: 'POST',
@@ -1422,11 +1438,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         }),
       });
 
-      console.log('💡 Response status:', response.status, response.statusText);
+      logger.debug('💡 Response status:', response.status, response.statusText);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Failed to get hint from server:', {
+        logger.error('Failed to get hint from server:', {
           status: response.status,
           statusText: response.statusText,
           body: errorText
@@ -1435,10 +1451,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       }
 
       const data = await response.json();
-      console.log('💡 Response data:', data);
+      logger.debug('💡 Response data:', data);
       
       if (data.success && data.bestMove) {
-        console.log('💡 Setting hint:', data.bestMove);
+        logger.debug('💡 Setting hint:', data.bestMove);
         const currentPlayer = gameState.game.turn();
         setGameState(prev => ({
           ...prev,
@@ -1454,13 +1470,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         }));
         return true;
       } else {
-        console.warn('💡 Invalid response format or no best move:', data);
+        logger.warn('💡 Invalid response format or no best move:', data);
         return false;
       }
     } catch (error) {
-      console.error('Error requesting hint:', error);
+      logger.error('Error requesting hint:', error);
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        console.error('💡 This is likely a CORS or network connectivity issue');
+        logger.error('💡 This is likely a CORS or network connectivity issue');
       }
     }
     
@@ -1475,229 +1491,20 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   }, []);
 
   // Nuclear Chess functions
-  const canUseNuke = useCallback((color: 'w' | 'b'): boolean => {
-    // Check if Ainara Mode and nuclear chess feature are enabled
-    const ainaraModeEnabled = isFeatureEnabled('AINARA_MODE') && (authContext.profile?.preferences?.ainaraMode ?? false);
-    if (!ainaraModeEnabled || !isFeatureEnabled('NUCLEAR_CHESS')) return false;
-    
-    // Only available in human vs human mode
-    if (gameState.gameMode !== 'human-vs-human') return false;
-    
-    // Only available in first 10 moves (20 half-moves)
-    const moveCount = gameState.game.history().length;
-    if (moveCount >= 20) return false;
-    
-    // Check if this color hasn't used their nuke yet
-    return color === 'w' ? gameState.nukeAvailable.white : gameState.nukeAvailable.black;
-  }, [gameState.gameMode, gameState.game, gameState.nukeAvailable, authContext.profile?.preferences?.ainaraMode]);
-
-  const activateNukeMode = useCallback((color: 'w' | 'b') => {
-    if (!canUseNuke(color)) return;
-    
-    setGameState(prev => ({
-      ...prev,
-      nukeModeActive: {
-        white: color === 'w',
-        black: color === 'b',
-      },
-    }));
-  }, [canUseNuke]);
-
-  const cancelNukeMode = useCallback(() => {
-    setGameState(prev => ({
-      ...prev,
-      nukeModeActive: {
-        white: false,
-        black: false,
-      },
-    }));
-  }, []);
-
-  const executeNuke = useCallback((targetSquare: Square): boolean => {
-    const activeNukeColor = gameState.nukeModeActive.white ? 'w' : 
-                           gameState.nukeModeActive.black ? 'b' : null;
-    
-    if (!activeNukeColor) return false;
-    
-    // Get the piece on the target square
-    const targetPiece = gameState.game.get(targetSquare);
-    if (!targetPiece) return false;
-    
-    // Can't nuke your own pieces
-    if (targetPiece.color === activeNukeColor) return false;
-    
-    // Can't nuke Kings or Queens
-    if (targetPiece.type === 'k' || targetPiece.type === 'q') return false;
-    
-    // Create a copy of the game and remove the piece
-    const gameCopy = new Chess(gameState.game.fen());
-    gameCopy.remove(targetSquare);
-    
-    // Advance the turn after the nuke (since this counts as a move)
-    // Chess.js doesn't automatically advance turns for direct manipulation
-    const currentFen = gameCopy.fen();
-    const fenParts = currentFen.split(' ');
-    fenParts[1] = activeNukeColor === 'w' ? 'b' : 'w'; // Switch turn
-    // Increment full move number if it was black's turn
-    if (activeNukeColor === 'b') {
-      fenParts[5] = (parseInt(fenParts[5]) + 1).toString();
-    }
-    // Reset half-move clock since this is a capturing move
-    fenParts[4] = '0';
-    const newFen = fenParts.join(' ');
-    const finalGame = new Chess(newFen);
-    
-    // Create a special nuke move entry
-    const nukeMove: Move = {
-      san: `💣x${targetPiece.type.toUpperCase()}${targetSquare}`,
-      from: targetSquare,
-      to: targetSquare,
-      color: activeNukeColor,
-      piece: targetPiece.type,
-      captured: targetPiece.type,
-      flags: 'n' as any, // Special flag for nuke
-    };
-    
-    setGameState(prev => ({
-      ...prev,
-      game: finalGame,
-      history: [...prev.history, nukeMove],
-      currentMoveIndex: prev.history.length,
-      nukeAvailable: {
-        white: activeNukeColor === 'w' ? false : prev.nukeAvailable.white,
-        black: activeNukeColor === 'b' ? false : prev.nukeAvailable.black,
-      },
-      nukeModeActive: {
-        white: false,
-        black: false,
-      },
-    }));
-    
-    return true;
-  }, [gameState.nukeModeActive, gameState.game]);
-
-  // Teleportation functions
-  const canUseTeleport = useCallback((color: 'w' | 'b'): boolean => {
-    // Check if Ainara Mode and teleportation feature are enabled
-    const ainaraModeEnabled = isFeatureEnabled('AINARA_MODE') && (authContext.profile?.preferences?.ainaraMode ?? false);
-    if (!ainaraModeEnabled || !isFeatureEnabled('TELEPORTATION')) return false;
-    
-    // Only available in human vs human mode
-    if (gameState.gameMode !== 'human-vs-human') return false;
-    
-    // Only available in first 10 moves (20 half-moves)
-    const moveCount = gameState.game.history().length;
-    if (moveCount >= 20) return false;
-    
-    // Check if this color hasn't used their teleport yet
-    return color === 'w' ? gameState.teleportAvailable.white : gameState.teleportAvailable.black;
-  }, [gameState.gameMode, gameState.game, gameState.teleportAvailable, authContext.profile?.preferences?.ainaraMode]);
-
-  const activateTeleportMode = useCallback((color: 'w' | 'b') => {
-    if (!canUseTeleport(color)) return;
-    
-    setGameState(prev => ({
-      ...prev,
-      teleportModeActive: {
-        white: color === 'w',
-        black: color === 'b',
-      },
-    }));
-  }, [canUseTeleport]);
-
-  const cancelTeleportMode = useCallback(() => {
-    setGameState(prev => ({
-      ...prev,
-      teleportModeActive: {
-        white: false,
-        black: false,
-      },
-    }));
-  }, []);
-
-  const executeTeleport = useCallback((pieceSquare: Square): boolean => {
-    const activeTeleportColor = gameState.teleportModeActive.white ? 'w' : 
-                               gameState.teleportModeActive.black ? 'b' : null;
-    
-    if (!activeTeleportColor) return false;
-    
-    // Get the piece on the source square
-    const piece = gameState.game.get(pieceSquare);
-    if (!piece) return false;
-    
-    // Can only teleport your own pieces
-    if (piece.color !== activeTeleportColor) return false;
-    
-    // Get all empty squares on the board
-    const allSquares: Square[] = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8',
-                                  'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8',
-                                  'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8',
-                                  'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8',
-                                  'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8',
-                                  'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8',
-                                  'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8',
-                                  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8'];
-    
-    const emptySquares = allSquares.filter(square => !gameState.game.get(square));
-    
-    if (emptySquares.length === 0) {
-      // No empty squares available
-      return false;
-    }
-    
-    // Randomly select an empty square
-    const randomIndex = Math.floor(Math.random() * emptySquares.length);
-    const targetSquare = emptySquares[randomIndex];
-    
-    // Create a copy of the game and make the teleport move
-    const gameCopy = new Chess(gameState.game.fen());
-    gameCopy.remove(pieceSquare);
-    gameCopy.put({ type: piece.type, color: piece.color }, targetSquare);
-    
-    // Advance the turn after the teleportation (since this counts as a move)
-    // Chess.js doesn't automatically advance turns for direct manipulation
-    const currentFen = gameCopy.fen();
-    const fenParts = currentFen.split(' ');
-    fenParts[1] = activeTeleportColor === 'w' ? 'b' : 'w'; // Switch turn
-    // Increment full move number if it was black's turn
-    if (activeTeleportColor === 'b') {
-      fenParts[5] = (parseInt(fenParts[5]) + 1).toString();
-    }
-    // Increment half-move clock since this is not a capturing/pawn move
-    fenParts[4] = (parseInt(fenParts[4]) + 1).toString();
-    const newFen = fenParts.join(' ');
-    const finalGame = new Chess(newFen);
-    
-    // Create a special teleport move entry
-    const teleportMove: Move = {
-      san: `♦${piece.type.toUpperCase()}${pieceSquare}-${targetSquare}`,
-      from: pieceSquare,
-      to: targetSquare,
-      color: activeTeleportColor,
-      piece: piece.type,
-      flags: 't' as any, // Special flag for teleport
-    };
-    
-    setGameState(prev => ({
-      ...prev,
-      game: finalGame,
-      history: [...prev.history, teleportMove],
-      currentMoveIndex: prev.history.length,
-      teleportAvailable: {
-        white: activeTeleportColor === 'w' ? false : prev.teleportAvailable.white,
-        black: activeTeleportColor === 'b' ? false : prev.teleportAvailable.black,
-      },
-      teleportModeActive: {
-        white: false,
-        black: false,
-      },
-    }));
-    
-    return true;
-  }, [gameState.teleportModeActive, gameState.game]);
+  // Ainara-mode chess variants (nuclear chess + teleportation) — see hooks/useChessVariants
+  const ainaraModeEnabled = isFeatureEnabled('AINARA_MODE') && (authContext.profile?.preferences?.ainaraMode ?? false);
+  const {
+    canUseNuke,
+    activateNukeMode,
+    cancelNukeMode,
+    executeNuke,
+    canUseTeleport,
+    activateTeleportMode,
+    cancelTeleportMode,
+    executeTeleport,
+  } = useChessVariants(gameState, setGameState, ainaraModeEnabled);
 
   const currentPlayer = gameState.game.turn();
-  const ainaraModeEnabled = isFeatureEnabled('AINARA_MODE') && (authContext.profile?.preferences?.ainaraMode ?? false);
   const canUseHint = ainaraModeEnabled && isFeatureEnabled('HINTS') && 
                     (currentPlayer === 'w' ? gameState.hintAvailable.white : gameState.hintAvailable.black) && 
                     !gameState.gameResult && 

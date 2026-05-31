@@ -16,6 +16,7 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { format, parseISO } from 'date-fns';
 import 'chartjs-adapter-date-fns';
+import { logger } from '../../utils/logger';
 
 // Register Chart.js components
 ChartJS.register(
@@ -117,7 +118,7 @@ const StatisticalDashboard: React.FC = () => {
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
-      console.error('Error fetching dashboard data:', err);
+      logger.error('Error fetching dashboard data:', err);
     } finally {
       setLoading(false);
     }

@@ -3,6 +3,7 @@ import { useGame } from '../../contexts/GameContext';
 import { DifficultyLevel } from '../../utils/chessAI';
 import { OnlineGameModal } from '../OnlineGameModal';
 import { useSocket } from '../../contexts/SocketContext';
+import { logger } from '../../utils/logger';
 
 const GameModeSelector: React.FC = () => {
   const { gameState, setGameMode, setAIDifficulty, setAIvAIDifficulties } = useGame();
@@ -16,7 +17,7 @@ const GameModeSelector: React.FC = () => {
   const handleModeChange = async (mode: 'human-vs-human' | 'human-vs-ai' | 'ai-vs-ai') => {
     // Don't change mode if we're in an online game
     if (isOnlineGame) {
-      console.log('Cannot change game mode while in online room');
+      logger.debug('Cannot change game mode while in online room');
       return;
     }
     

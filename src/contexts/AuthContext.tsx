@@ -12,6 +12,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../config/firebase-client';
 import { AuthContextType, AuthUser, UserProfile, UserPreferences, UserStats } from '../types/auth';
+import { logger } from '../utils/logger';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -208,7 +209,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const profileData = await response.json();
       setProfile(profileData);
     } catch (err) {
-      console.error('Error creating user profile:', err);
+      logger.error('Error creating user profile:', err);
       throw err;
     }
   };
@@ -226,7 +227,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       return null;
     } catch (err) {
-      console.error('Error fetching user profile:', err);
+      logger.error('Error fetching user profile:', err);
       return null;
     }
   }, []);
@@ -237,7 +238,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       // If profile doesn't exist, create one
       if (!profileData) {
-        console.log('Creating new user profile for:', firebaseUser.email);
+        logger.debug('Creating new user profile for:', firebaseUser.email);
         const username = firebaseUser.email?.split('@')[0] || `user_${Date.now()}`;
         await createUserProfile(firebaseUser, username, false);
         
@@ -248,7 +249,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setProfile(profileData);
       setUser(Object.assign(firebaseUser, { profile: profileData || undefined }));
     } catch (err) {
-      console.error('Error loading user profile:', err);
+      logger.error('Error loading user profile:', err);
     }
   }, [fetchUserProfile]);
 

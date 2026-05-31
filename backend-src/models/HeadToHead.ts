@@ -1,4 +1,5 @@
 import { query } from '../config/database';
+import { logger } from '../utils/logger';
 
 export interface HeadToHeadRecord {
   id: number;
@@ -51,7 +52,7 @@ export class HeadToHeadModel {
       }
       return this.mapRowToRecord(result.rows[0]);
     } catch (error) {
-      console.error('Error fetching head-to-head record:', error);
+      logger.error('Error fetching head-to-head record:', error);
       // If table doesn't exist, return null
       if ((error as any).code === '42P01') {
         return null;
@@ -81,9 +82,9 @@ export class HeadToHeadModel {
       `;
       
       await query(updateQuery, [player1Id, player2Id, winnerId, gameId]);
-      console.log('✅ Head-to-head record updated');
+      logger.debug('✅ Head-to-head record updated');
     } catch (error) {
-      console.error('Error updating head-to-head record:', error);
+      logger.error('Error updating head-to-head record:', error);
       // If function doesn't exist, try direct insert/update
       if ((error as any).code === '42883') {
         await this.directUpdateRecord(player1Id, player2Id, winnerId, gameId);
@@ -168,9 +169,9 @@ export class HeadToHeadModel {
         ]);
       }
       
-      console.log('✅ Head-to-head record updated (direct method)');
+      logger.debug('✅ Head-to-head record updated (direct method)');
     } catch (error) {
-      console.error('Error in direct update of head-to-head record:', error);
+      logger.error('Error in direct update of head-to-head record:', error);
       // Don't throw - this is a non-critical feature
     }
   }
@@ -201,7 +202,7 @@ export class HeadToHeadModel {
       const result = await query(selectQuery, [playerId]);
       return result.rows.map(row => this.mapRowToStats(row, playerId));
     } catch (error) {
-      console.error('Error fetching player head-to-head records:', error);
+      logger.error('Error fetching player head-to-head records:', error);
       // If table doesn't exist, return empty array
       if ((error as any).code === '42P01') {
         return [];

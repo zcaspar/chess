@@ -13,6 +13,12 @@
 
 # production
 /build
+/dist
+backend-src/dist
+
+# logs
+*.log
+test-results.json
 
 # misc
 .DS_Store

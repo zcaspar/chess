@@ -1,5 +1,3 @@
-console.log('🔄 Server module loading...');
-
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -16,13 +14,16 @@ import systemRoutes from './routes/system';
 import { GameSocketHandler } from './sockets/gameSocket';
 import { testConnection, getPoolStatus, closePool } from './config/database';
 import { initializeRedis, RedisManager, closeRedis } from './config/redis';
+import { getAllowedOrigins, createOriginValidator } from './config/cors';
+import { logger } from './utils/logger';
 
-console.log('✅ All imports loaded successfully');
+logger.debug('🔄 Server module loading...');
+logger.debug('✅ All imports loaded successfully');
 
 // Load environment variables
 dotenv.config();
 
-console.log('📋 Environment:', {
+logger.info('📋 Environment:', {
   NODE_ENV: process.env.NODE_ENV || 'NOT SET',
   PORT: process.env.PORT || 'NOT SET (using 3005)',
   CORS_ORIGIN: process.env.CORS_ORIGIN ? 'set' : 'NOT SET',
@@ -34,72 +35,20 @@ const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 3005;
 
-// Configure CORS to support multiple origins
-const corsOrigins = process.env.CORS_ORIGIN 
-  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
-  : ['http://localhost:3000'];
-
-// Always include localhost for development purposes
-const allowedOrigins = [
-  ...corsOrigins,
-  'http://localhost:3000',
-  'http://localhost:3001', 
-  'http://127.0.0.1:3000'
-].filter((origin, index, self) => self.indexOf(origin) === index); // Remove duplicates
+// Allowed CORS origins, shared by Socket.IO and Express (see config/cors.ts)
+const allowedOrigins = getAllowedOrigins();
 
 // Initialize Socket.io
 const io = new Server(httpServer, {
   cors: {
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or Postman)
-      if (!origin) return callback(null, true);
-      
-      // Check if the origin is in the allowed list or matches Vercel preview pattern
-      const isAllowed = allowedOrigins.some(allowed => {
-        if (allowed.includes('*')) {
-          // Support wildcard patterns like https://chess-pu71-*.vercel.app
-          const pattern = allowed.replace(/\*/g, '.*');
-          const regex = new RegExp(`^${pattern}$`);
-          return regex.test(origin);
-        }
-        return allowed === origin;
-      });
-      
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        console.warn(`Socket.IO CORS blocked origin: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: createOriginValidator(allowedOrigins, 'Socket.IO'),
     credentials: true,
   },
 });
 
 // Middleware
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or Postman)
-    if (!origin) return callback(null, true);
-    
-    // Check if the origin is in the allowed list or matches Vercel preview pattern
-    const isAllowed = allowedOrigins.some(allowed => {
-      if (allowed.includes('*')) {
-        // Support wildcard patterns like https://chess-pu71-*.vercel.app
-        const pattern = allowed.replace(/\*/g, '.*');
-        const regex = new RegExp(`^${pattern}$`);
-        return regex.test(origin);
-      }
-      return allowed === origin;
-    });
-    
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.warn(`CORS blocked origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: createOriginValidator(allowedOrigins, 'Express'),
   credentials: true,
 }));
 app.use(express.json());
@@ -118,7 +67,7 @@ const WEIGHTS_PATH = '/home/caspar/Documents/Coding/Chess/lc0/lc0/build/release/
 // Initialize engines
 async function initializeEngines() {
   try {
-    console.log('Initializing Lc0 engines...');
+    logger.debug('Initializing Lc0 engines...');
     
     // Only initialize engines in development or when weights file exists
     if (process.env.NODE_ENV === 'development' && require('fs').existsSync(WEIGHTS_PATH)) {
@@ -127,47 +76,32 @@ async function initializeEngines() {
       engines.medium = await Lc0Engine.createIntermediate(WEIGHTS_PATH);
       engines.hard = await Lc0Engine.createAdvanced(WEIGHTS_PATH);
       engines.expert = await Lc0Engine.createAdvanced(WEIGHTS_PATH);
-      console.log('All Lc0 engines initialized successfully!');
+      logger.debug('All Lc0 engines initialized successfully!');
     } else {
-      console.log('⚠️  Lc0 engines not available in production. AI vs Human mode will be limited.');
+      logger.debug('⚠️  Lc0 engines not available in production. AI vs Human mode will be limited.');
       // Set all engines to null - they'll be handled gracefully in the endpoints
       Object.keys(engines).forEach(key => engines[key] = null);
     }
   } catch (error) {
-    console.error('Failed to initialize engines:', error);
-    console.log('⚠️  Continuing without Lc0 engines. Multiplayer will still work.');
+    logger.error('Failed to initialize engines:', error);
+    logger.debug('⚠️  Continuing without Lc0 engines. Multiplayer will still work.');
     Object.keys(engines).forEach(key => engines[key] = null);
   }
 }
 
 // Routes
-console.log('🔗 Registering user routes...');
-app.use('/api/users', userRoutes);
-console.log('✅ User routes registered at /api/users');
-
-console.log('🔗 Registering game history routes...');
-app.use('/api/game-history', gameHistoryRoutes);
-console.log('✅ Game history routes registered at /api/game-history');
-
-console.log('🔗 Registering analytics routes...');
-app.use('/api/analytics', analyticsRoutes);
-console.log('✅ Analytics routes registered at /api/analytics');
-console.log('📊 Analytics endpoints: /api/analytics/dashboard, /api/analytics/trends, /api/analytics/breakdowns');
-
-console.log('🔗 Registering analysis routes...');
-app.use('/api/analysis', analysisRoutes);
-console.log('✅ Analysis routes registered at /api/analysis');
-console.log('🧠 Analysis endpoints: /api/analysis/position, /api/analysis/health');
-
-console.log('🔗 Registering head-to-head routes...');
-app.use('/api/head-to-head', headToHeadRoutes);
-console.log('✅ Head-to-head routes registered at /api/head-to-head');
-console.log('🤝 Head-to-head endpoints: /api/head-to-head, /api/head-to-head/:opponentId');
-
-console.log('🔗 Registering system monitoring routes...');
-app.use('/api/system', systemRoutes);
-console.log('✅ System routes registered at /api/system');
-console.log('📊 System endpoints: /api/system/status, /api/system/metrics');
+const apiRoutes: Array<[string, express.Router]> = [
+  ['/api/users', userRoutes],
+  ['/api/game-history', gameHistoryRoutes],
+  ['/api/analytics', analyticsRoutes],
+  ['/api/analysis', analysisRoutes],
+  ['/api/head-to-head', headToHeadRoutes],
+  ['/api/system', systemRoutes],
+];
+for (const [path, router] of apiRoutes) {
+  app.use(path, router);
+  logger.debug(`✅ Route registered: ${path}`);
+}
 
 // Health check endpoint — keep this synchronous and simple so Railway healthcheck always passes
 app.get('/health', (req, res) => {
@@ -231,7 +165,7 @@ app.get('/health/db', async (req, res) => {
         dbTime: result.rows[0].now
       });
     } catch (queryError: any) {
-      console.error('Database query error in health check:', queryError);
+      logger.error('Database query error in health check:', queryError);
       res.status(503).json({ 
         status: 'error',
         database: 'disconnected',
@@ -369,7 +303,7 @@ app.get('/debug/test-game-history', async (req, res) => {
     });
     
   } catch (error: any) {
-    console.error('Debug test error:', error);
+    logger.error('Debug test error:', error);
     res.status(500).json({
       error: 'Debug test failed',
       message: error.message,
@@ -381,7 +315,7 @@ app.get('/debug/test-game-history', async (req, res) => {
 
 app.get('/debug/game-history', async (req, res) => {
   try {
-    console.log('🔍 Debug: Testing game history functionality...');
+    logger.debug('🔍 Debug: Testing game history functionality...');
     
     // Test database connection
     const { testConnection, query } = await import('./config/database');
@@ -398,7 +332,7 @@ app.get('/debug/game-history', async (req, res) => {
     // Test if game_history table exists
     try {
       await query("SELECT COUNT(*) FROM game_history WHERE 1=0");
-      console.log('✅ Debug: game_history table exists');
+      logger.debug('✅ Debug: game_history table exists');
       
       res.status(200).json({
         status: 'ok',
@@ -409,12 +343,12 @@ app.get('/debug/game-history', async (req, res) => {
         message: 'Game history functionality appears to be working'
       });
     } catch (tableError: any) {
-      console.log('❌ Debug: game_history table does not exist');
-      console.log('Table error:', tableError);
+      logger.debug('❌ Debug: game_history table does not exist');
+      logger.debug('Table error:', tableError);
       
       // Try to initialize tables
       try {
-        console.log('🔄 Debug: Attempting to initialize tables...');
+        logger.debug('🔄 Debug: Attempting to initialize tables...');
         const { GameHistoryModel } = await import('./models/GameHistory');
         await GameHistoryModel.initializeTables();
         
@@ -428,7 +362,7 @@ app.get('/debug/game-history', async (req, res) => {
           message: 'Game history tables were created successfully'
         });
       } catch (initError: any) {
-        console.error('❌ Debug: Failed to initialize tables:', initError);
+        logger.error('❌ Debug: Failed to initialize tables:', initError);
         
         res.status(503).json({
           status: 'error',
@@ -446,7 +380,7 @@ app.get('/debug/game-history', async (req, res) => {
       }
     }
   } catch (error: any) {
-    console.error('❌ Debug endpoint error:', error);
+    logger.error('❌ Debug endpoint error:', error);
     res.status(500).json({
       status: 'error',
       step: 'unknown',
@@ -482,7 +416,7 @@ app.post('/api/chess/move', async (req: any, res: any) => {
       return res.status(500).json({ error: 'Engine not available' });
     }
 
-    console.log(`Getting move for ${difficulty} difficulty, FEN: ${fen}`);
+    logger.debug(`Getting move for ${difficulty} difficulty, FEN: ${fen}`);
     const startTime = Date.now();
     
     const move = await engine.getBestMove(game, timeLimit);
@@ -496,7 +430,7 @@ app.post('/api/chess/move', async (req: any, res: any) => {
       });
     }
 
-    console.log(`Engine returned move: ${move.san} (${move.from}-${move.to}) in ${thinkingTime}ms`);
+    logger.debug(`Engine returned move: ${move.san} (${move.from}-${move.to}) in ${thinkingTime}ms`);
     
     res.json({
       move: {
@@ -511,7 +445,7 @@ app.post('/api/chess/move', async (req: any, res: any) => {
     });
     
   } catch (error) {
-    console.error('Error getting move:', error);
+    logger.error('Error getting move:', error);
     res.status(500).json({ 
       error: 'Internal server error', 
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -534,7 +468,7 @@ app.get('/api/chess/engines', async (req: any, res: any) => {
     
     res.json({ engines: status });
   } catch (error) {
-    console.error('Error checking engine status:', error);
+    logger.error('Error checking engine status:', error);
     res.status(500).json({ error: 'Failed to check engine status' });
   }
 });
@@ -550,7 +484,7 @@ app.post('/api/chess/test', async (req: any, res: any) => {
       return res.status(500).json({ error: 'Test engine not available' });
     }
     
-    console.log('Running test move from starting position...');
+    logger.debug('Running test move from starting position...');
     const move = await engine.getBestMove(game, 1000);
     
     res.json({
@@ -564,7 +498,7 @@ app.post('/api/chess/test', async (req: any, res: any) => {
     });
     
   } catch (error) {
-    console.error('Test failed:', error);
+    logger.error('Test failed:', error);
     res.status(500).json({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Test failed'
@@ -579,12 +513,12 @@ setInterval(() => {
   
   // Log memory usage periodically
   if (memUsedMB > 100) { // Log if using more than 100MB
-    console.log(`📊 Memory usage: ${memUsedMB}MB heap, ${Math.round(memUsage.rss / 1024 / 1024)}MB RSS`);
+    logger.debug(`📊 Memory usage: ${memUsedMB}MB heap, ${Math.round(memUsage.rss / 1024 / 1024)}MB RSS`);
   }
   
   // Force garbage collection if memory is high (Railway limit is typically 512MB)
   if (memUsedMB > 256 && global.gc) {
-    console.log('🧹 Running garbage collection to free memory');
+    logger.debug('🧹 Running garbage collection to free memory');
     global.gc();
   }
 }, 30000); // Check every 30 seconds
@@ -603,9 +537,9 @@ async function initializeServices() {
   try {
     const dbConnected = await testConnection();
     if (!dbConnected) {
-      console.error('⚠️  Warning: Database connection failed. Online multiplayer features will be limited.');
+      logger.error('⚠️  Warning: Database connection failed. Online multiplayer features will be limited.');
     } else {
-      console.log('✅ Database connection successful');
+      logger.debug('✅ Database connection successful');
 
       // Initialize game history tables if they don't exist
       try {
@@ -615,27 +549,27 @@ async function initializeServices() {
         let tableInitialized = false;
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
-            console.log(`🔄 Attempt ${attempt}/3: Initializing game history tables...`);
+            logger.debug(`🔄 Attempt ${attempt}/3: Initializing game history tables...`);
             await GameHistoryModel.initializeTables();
-            console.log('✅ Game history tables initialized successfully');
+            logger.debug('✅ Game history tables initialized successfully');
             tableInitialized = true;
             break;
           } catch (attemptError: any) {
-            console.error(`❌ Attempt ${attempt} failed:`, attemptError.message);
+            logger.error(`❌ Attempt ${attempt} failed:`, attemptError.message);
             if (attempt < 3) {
-              console.log(`⏳ Waiting 5 seconds before retry...`);
+              logger.debug(`⏳ Waiting 5 seconds before retry...`);
               await new Promise(resolve => setTimeout(resolve, 5000));
             }
           }
         }
 
         if (!tableInitialized) {
-          console.error('⚠️  Failed to initialize game history tables after 3 attempts');
-          console.log('⚠️  Game history features will be disabled until tables are created manually');
+          logger.error('⚠️  Failed to initialize game history tables after 3 attempts');
+          logger.debug('⚠️  Game history features will be disabled until tables are created manually');
         }
       } catch (tableError) {
-        console.error('⚠️  Warning: Could not initialize game history tables:', tableError);
-        console.log('⚠️  Game history features may not work properly.');
+        logger.error('⚠️  Warning: Could not initialize game history tables:', tableError);
+        logger.debug('⚠️  Game history features may not work properly.');
       }
 
       // Initialize analytics tables if they don't exist
@@ -646,32 +580,32 @@ async function initializeServices() {
         let analyticsInitialized = false;
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
-            console.log(`🔄 Attempt ${attempt}/3: Initializing analytics tables...`);
+            logger.debug(`🔄 Attempt ${attempt}/3: Initializing analytics tables...`);
             await AnalyticsModel.initializeAnalyticsTables();
-            console.log('✅ Analytics tables initialized successfully');
+            logger.debug('✅ Analytics tables initialized successfully');
             analyticsInitialized = true;
             break;
           } catch (attemptError: any) {
-            console.error(`❌ Attempt ${attempt} failed:`, attemptError.message);
+            logger.error(`❌ Attempt ${attempt} failed:`, attemptError.message);
             if (attempt < 3) {
-              console.log(`⏳ Waiting 5 seconds before retry...`);
+              logger.debug(`⏳ Waiting 5 seconds before retry...`);
               await new Promise(resolve => setTimeout(resolve, 5000));
             }
           }
         }
 
         if (!analyticsInitialized) {
-          console.error('⚠️  Failed to initialize analytics tables after 3 attempts');
-          console.log('⚠️  Analytics features will be disabled until tables are created manually');
+          logger.error('⚠️  Failed to initialize analytics tables after 3 attempts');
+          logger.debug('⚠️  Analytics features will be disabled until tables are created manually');
         }
       } catch (analyticsError) {
-        console.error('⚠️  Warning: Could not initialize analytics tables:', analyticsError);
-        console.log('⚠️  Analytics features may not work properly.');
+        logger.error('⚠️  Warning: Could not initialize analytics tables:', analyticsError);
+        logger.debug('⚠️  Analytics features may not work properly.');
       }
     }
   } catch (dbError) {
-    console.error('⚠️  Database connection error:', dbError);
-    console.log('⚠️  Continuing without database. Basic chess features will work.');
+    logger.error('⚠️  Database connection error:', dbError);
+    logger.debug('⚠️  Continuing without database. Basic chess features will work.');
   }
 
   // Initialize Redis (non-blocking)
@@ -679,40 +613,40 @@ async function initializeServices() {
     const redisConnected = await initializeRedis();
     if (redisConnected) {
       RedisManager.setAvailable(true);
-      console.log('✅ Redis initialization completed');
+      logger.debug('✅ Redis initialization completed');
     } else {
-      console.log('⚠️  Continuing without Redis. Session and game state will use memory storage.');
+      logger.debug('⚠️  Continuing without Redis. Session and game state will use memory storage.');
     }
   } catch (redisError) {
-    console.error('⚠️  Redis initialization error:', redisError);
-    console.log('⚠️  Continuing without Redis. Session and game state will use memory storage.');
+    logger.error('⚠️  Redis initialization error:', redisError);
+    logger.debug('⚠️  Continuing without Redis. Session and game state will use memory storage.');
   }
 
   // Initialize engines (non-blocking)
   try {
     await initializeEngines();
-    console.log('✅ Engine initialization completed');
+    logger.debug('✅ Engine initialization completed');
   } catch (engineError) {
-    console.error('⚠️  Engine initialization error:', engineError);
-    console.log('⚠️  Continuing without engines. Multiplayer will work without AI.');
+    logger.error('⚠️  Engine initialization error:', engineError);
+    logger.debug('⚠️  Continuing without engines. Multiplayer will work without AI.');
   }
 
-  console.log('✅ All service initialization completed');
+  logger.info('✅ All service initialization completed');
 }
 
 // Start server — listen FIRST so healthcheck passes, then initialize services
 function startServer() {
-  console.log(`🔄 Starting HTTP server on port ${PORT}...`);
+  logger.info(`🔄 Starting HTTP server on port ${PORT}...`);
   httpServer.listen(PORT, () => {
-    console.log(`🚀 Chess Engine Backend Server running on port ${PORT}`);
-    console.log(`💻 Health check: http://localhost:${PORT}/health`);
-    console.log(`🧠 API endpoint: http://localhost:${PORT}/api/chess/move`);
-    console.log(`🔌 Socket.io server ready for multiplayer connections`);
-    console.log(`🌍 CORS origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
+    logger.info(`🚀 Chess Engine Backend Server running on port ${PORT}`);
+    logger.debug(`💻 Health check: http://localhost:${PORT}/health`);
+    logger.debug(`🧠 API endpoint: http://localhost:${PORT}/api/chess/move`);
+    logger.debug(`🔌 Socket.io server ready for multiplayer connections`);
+    logger.debug(`🌍 CORS origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
 
     // Initialize DB, Redis, and engines in the background after server is listening
     initializeServices().catch((error) => {
-      console.error('⚠️  Background service initialization error:', error);
+      logger.error('⚠️  Background service initialization error:', error);
     });
   });
 }
@@ -721,31 +655,31 @@ startServer();
 
 // Graceful shutdown handling
 const gracefulShutdown = async (signal: string) => {
-  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+  logger.debug(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
   
   try {
     // Close Redis connection
     await closeRedis();
-    console.log('✅ Redis connection closed');
+    logger.debug('✅ Redis connection closed');
     
     // Close database pool
     await closePool();
-    console.log('✅ Database pool closed');
+    logger.debug('✅ Database pool closed');
     
     // Close HTTP server
     httpServer.close(() => {
-      console.log('✅ HTTP server closed');
+      logger.debug('✅ HTTP server closed');
       process.exit(0);
     });
     
     // Force exit after 10 seconds
     setTimeout(() => {
-      console.log('⚠️  Forced shutdown after 10 seconds');
+      logger.debug('⚠️  Forced shutdown after 10 seconds');
       process.exit(1);
     }, 10000);
     
   } catch (error) {
-    console.error('❌ Error during graceful shutdown:', error);
+    logger.error('❌ Error during graceful shutdown:', error);
     process.exit(1);
   }
 };
@@ -756,11 +690,11 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Handle uncaught exceptions — log but do NOT exit (keep server alive for healthcheck)
 process.on('uncaughtException', (error) => {
-  console.error('💥 Uncaught Exception:', error);
+  logger.error('💥 Uncaught Exception:', error);
   // Do NOT call process.exit() — keep the server running
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
   // Do NOT call process.exit() — keep the server running
 });

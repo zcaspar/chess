@@ -1,5 +1,6 @@
 import { Pool, PoolConfig } from 'pg';
 import dotenv from 'dotenv';
+import { logger } from '../utils/logger';
 
 dotenv.config();
 
@@ -34,13 +35,13 @@ export const pool = new Pool(poolConfig);
 
 // Enhanced pool monitoring and error handling
 pool.on('error', (err) => {
-  console.error('🔴 Unexpected error on idle client', err);
+  logger.error('🔴 Unexpected error on idle client', err);
   // Never exit — allow the server to recover and stay alive for healthchecks
 });
 
 pool.on('connect', () => {
   if (process.env.NODE_ENV === 'development') {
-    console.log('🟢 New database client connected');
+    logger.debug('🟢 New database client connected');
   }
 });
 
@@ -61,7 +62,7 @@ if (process.env.NODE_ENV === 'development') {
   setInterval(() => {
     const status = getPoolStatus();
     if (status.totalCount > 0) {
-      console.log('📊 DB Pool Status:', status);
+      logger.debug('📊 DB Pool Status:', status);
     }
   }, 30000); // Every 30 seconds
 }
@@ -70,15 +71,15 @@ if (process.env.NODE_ENV === 'development') {
 export const testConnection = async (): Promise<boolean> => {
   try {
     // Log connection attempt details (without password)
-    console.log('🔄 Attempting database connection...');
+    logger.debug('🔄 Attempting database connection...');
     if (process.env.DATABASE_URL) {
       const urlParts = process.env.DATABASE_URL.split('@');
       const sanitizedUrl = urlParts.length > 1 ? 
         `${urlParts[0].split(':')[0]}://***:***@${urlParts[1]}` : 
         'DATABASE_URL is set but format unclear';
-      console.log('📊 Using DATABASE_URL:', sanitizedUrl);
+      logger.debug('📊 Using DATABASE_URL:', sanitizedUrl);
     } else {
-      console.log('📊 Using individual PG/DB variables:', {
+      logger.debug('📊 Using individual PG/DB variables:', {
         host: process.env.PGHOST || process.env.DB_HOST || 'localhost',
         port: process.env.PGPORT || process.env.DB_PORT || '5432',
         database: process.env.PGDATABASE || process.env.DB_NAME || 'railway',
@@ -90,12 +91,12 @@ export const testConnection = async (): Promise<boolean> => {
     const client = await pool.connect();
     await client.query('SELECT NOW()');
     client.release();
-    console.log('✅ Database connection successful');
+    logger.debug('✅ Database connection successful');
     return true;
   } catch (error: any) {
-    console.error('❌ Database connection failed:', error.message);
-    console.error('Error code:', error.code);
-    console.error('Error details:', {
+    logger.error('❌ Database connection failed:', error.message);
+    logger.error('Error code:', error.code);
+    logger.error('Error details:', {
       errno: error.errno,
       syscall: error.syscall,
       hostname: error.hostname,
@@ -119,7 +120,7 @@ export const query = async (text: string, params?: any[], options?: { timeout?: 
     
     // Enhanced logging in development
     if (process.env.NODE_ENV === 'development') {
-      console.log(`🔍 Query ${queryId}:`, { 
+      logger.debug(`🔍 Query ${queryId}:`, { 
         text: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
         duration, 
         rows: res.rowCount,
@@ -129,13 +130,13 @@ export const query = async (text: string, params?: any[], options?: { timeout?: 
     
     // Warn about slow queries
     if (duration > 1000) {
-      console.warn(`⚠️ Slow query detected (${duration}ms):`, text.substring(0, 200));
+      logger.warn(`⚠️ Slow query detected (${duration}ms):`, text.substring(0, 200));
     }
     
     return res;
   } catch (error) {
     const duration = Date.now() - start;
-    console.error(`❌ Query ${queryId} failed after ${duration}ms:`, { 
+    logger.error(`❌ Query ${queryId} failed after ${duration}ms:`, { 
       text: text.substring(0, 200),
       error: error instanceof Error ? error.message : error,
       poolStatus: getPoolStatus()
@@ -158,9 +159,9 @@ export const queryWrite = async (text: string, params?: any[]) => {
 export const closePool = async (): Promise<void> => {
   try {
     await pool.end();
-    console.log('Database pool closed');
+    logger.debug('Database pool closed');
   } catch (error) {
-    console.error('Error closing database pool:', error);
+    logger.error('Error closing database pool:', error);
   }
 };
 

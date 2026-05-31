@@ -1,5 +1,22 @@
 import { Chess } from 'chess.js';
-import { ChessAI, DifficultyLevel } from '../utils/chessAI';
+import { ChessAI } from '../utils/chessAI';
+import type { DifficultyLevel } from '../utils/chessAI';
+
+// The real ChessAI tries the LC0 backend first via `./backendAI`, which fires a
+// network request that fails in jsdom ("Network request failed" / CORS). Mock the
+// backend so getBestMove resolves to `null`, forcing ChessAI down its deterministic
+// frontend fallback path. This keeps the AI exercising real move-generation/eval
+// logic while staying fast and offline.
+jest.mock('../utils/backendAI', () => {
+  const actual = jest.requireActual('../utils/backendAI');
+  return {
+    ...actual,
+    BackendAI: jest.fn().mockImplementation(() => ({
+      getBestMove: jest.fn().mockResolvedValue(null),
+      getEngineStatus: jest.fn().mockResolvedValue({ engines: {} }),
+    })),
+  };
+});
 
 describe('Performance Tests', () => {
   let chess: Chess;
@@ -18,7 +35,7 @@ describe('Performance Tests', () => {
 
     test.each(difficulties)('AI %s difficulty responds within reasonable time', async (difficulty) => {
       ai = new ChessAI(difficulty);
-      
+
       // Test opening position
       const startTime = performance.now();
       const move = await ai.getBestMove(chess);
@@ -26,7 +43,7 @@ describe('Performance Tests', () => {
       const duration = endTime - startTime;
 
       expect(move).not.toBeNull();
-      
+
       // Performance expectations by difficulty
       const maxTimes = {
         beginner: 2000,  // 2 seconds max
@@ -43,9 +60,9 @@ describe('Performance Tests', () => {
     test('AI performance in mid-game position', async () => {
       // Set up a more complex mid-game position
       chess.load('r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 4 4');
-      
+
       ai = new ChessAI('medium');
-      
+
       const startTime = performance.now();
       const move = await ai.getBestMove(chess);
       const endTime = performance.now();
@@ -61,47 +78,48 @@ describe('Performance Tests', () => {
 
       for (const difficulty of ['beginner', 'easy', 'medium'] as DifficultyLevel[]) {
         ai = new ChessAI(difficulty);
-        
+
         const startTime = performance.now();
         await ai.getBestMove(chess);
         const endTime = performance.now();
-        
+
         results.push({ difficulty, time: endTime - startTime });
       }
 
       // Each higher difficulty should not be dramatically slower
       console.log('Performance progression:', results);
-      
-      // Beginner should be fastest
-      expect(results[0].time).toBeLessThan(results[1].time);
-      // Medium should not be more than 5x slower than beginner
-      expect(results[2].time).toBeLessThan(results[0].time * 5);
+
+      // Beginner returns a random move without the evaluation loop, so it should
+      // never be dramatically slower than the others. Sub-millisecond timings are
+      // noisy, so allow a small tolerance rather than a strict less-than.
+      expect(results[0].time).toBeLessThanOrEqual(results[1].time + 50);
+      // Medium should not be dramatically slower than beginner.
+      expect(results[2].time).toBeLessThan(results[0].time * 5 + 50);
     });
 
     test('AI handles multiple rapid moves efficiently', async () => {
       ai = new ChessAI('easy'); // Use easier difficulty for rapid moves
-      
-      const moves = ['e2e4', 'e7e5', 'g1f3', 'd7d6', 'f1c4'];
+
+      // Play out a short opening, timing the AI's response at each position.
+      // We evaluate the AI on a throwaway copy so applying its choice never
+      // corrupts the scripted human move sequence.
+      const moves = ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'f8c5'];
       const times: number[] = [];
 
-      for (let i = 0; i < moves.length; i += 2) {
-        // Make human moves
-        if (i < moves.length) chess.move(moves[i]);
-        if (i + 1 < moves.length) chess.move(moves[i + 1]);
+      for (const move of moves) {
+        chess.move(move);
 
-        // Time AI response
+        const positionCopy = new Chess(chess.fen());
         const startTime = performance.now();
-        const aiMove = await ai.getBestMove(chess);
+        const aiMove = await ai.getBestMove(positionCopy);
         const endTime = performance.now();
-        
-        if (aiMove) {
-          chess.move(aiMove);
-          times.push(endTime - startTime);
-        }
+
+        expect(aiMove).not.toBeNull();
+        times.push(endTime - startTime);
       }
 
       console.log('Rapid move times:', times.map(t => `${t.toFixed(2)}ms`));
-      
+
       // All moves should be reasonably fast
       times.forEach(time => {
         expect(time).toBeLessThan(5000); // Max 5 seconds per move
@@ -116,16 +134,16 @@ describe('Performance Tests', () => {
   describe('Browser Performance Tests', () => {
     test('measures basic JavaScript performance', () => {
       const start = performance.now();
-      
+
       // Simulate some work
       let sum = 0;
       for (let i = 0; i < 1000000; i++) {
         sum += Math.random();
       }
-      
+
       const end = performance.now();
       const duration = end - start;
-      
+
       console.log(`Basic JS performance: ${duration.toFixed(2)}ms for 1M operations`);
       expect(duration).toBeLessThan(1000); // Should complete in under 1 second
       expect(sum).toBeGreaterThan(0); // Ensure work was done
@@ -133,7 +151,7 @@ describe('Performance Tests', () => {
 
     test('measures Chess.js library performance', () => {
       const start = performance.now();
-      
+
       // Create multiple chess instances and make moves
       for (let i = 0; i < 100; i++) {
         const testChess = new Chess();
@@ -144,37 +162,37 @@ describe('Performance Tests', () => {
         testChess.undo();
         testChess.undo();
       }
-      
+
       const end = performance.now();
       const duration = end - start;
-      
+
       console.log(`Chess.js performance: ${duration.toFixed(2)}ms for 100 game simulations`);
       expect(duration).toBeLessThan(500); // Should be very fast
     });
 
     test('measures memory allocation patterns', () => {
       const initialMemory = (performance as any).memory?.usedJSHeapSize || 0;
-      
+
       // Create and destroy many chess instances
       const instances = [];
       for (let i = 0; i < 1000; i++) {
         instances.push(new Chess());
       }
-      
+
       const peakMemory = (performance as any).memory?.usedJSHeapSize || 0;
-      
+
       // Clear references
       instances.length = 0;
-      
+
       // Force garbage collection if available
       if (global.gc) {
         global.gc();
       }
-      
+
       const finalMemory = (performance as any).memory?.usedJSHeapSize || 0;
-      
+
       console.log(`Memory usage: Initial=${initialMemory}, Peak=${peakMemory}, Final=${finalMemory}`);
-      
+
       // Memory should not grow excessively
       if (peakMemory > 0) {
         expect(peakMemory - initialMemory).toBeLessThan(50 * 1024 * 1024); // Less than 50MB increase
@@ -269,7 +287,7 @@ describe('Performance Tests', () => {
       }
 
       console.log('System Recommendations:', recommendations);
-      
+
       // Always pass but log recommendations
       expect(recommendations).toBeDefined();
     });
@@ -283,12 +301,17 @@ describe('Performance Tests', () => {
         { difficulty: 'expert' as DifficultyLevel, expectedTime: 12000 }
       ];
 
+      const durations: number[] = [];
+
       for (const config of configs) {
         ai = new ChessAI(config.difficulty);
-        
+
         const start = performance.now();
-        await ai.getBestMove(chess);
+        const move = await ai.getBestMove(chess);
         const duration = performance.now() - start;
+        durations.push(duration);
+
+        expect(move).not.toBeNull();
 
         console.log(`${config.difficulty}: ${duration.toFixed(2)}ms (expected <${config.expectedTime}ms)`);
 
@@ -302,8 +325,10 @@ describe('Performance Tests', () => {
         }
       }
 
-      // Test always passes, but provides diagnostic information
-      expect(true).toBe(true);
+      // Every configuration should produce a move within its expected budget.
+      durations.forEach((duration, i) => {
+        expect(duration).toBeLessThan(configs[i].expectedTime);
+      });
     });
   });
 });
