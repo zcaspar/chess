@@ -188,6 +188,95 @@ router.post('/hint', async (req, res) => {
 });
 
 /**
+ * POST /api/analysis/best-move
+ * Proxy an AI-opponent move request to the LC0 server.
+ *
+ * The browser cannot call the LC0 server directly (it sends no CORS headers for
+ * the app origin), so AI moves are routed through this backend endpoint
+ * server-to-server, exactly like /hint and /position.
+ */
+router.post('/best-move', async (req, res) => {
+  try {
+    const { fen, difficulty = 'medium' } = req.body;
+
+    if (!fen) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bad Request',
+        message: 'FEN position is required'
+      });
+    }
+
+    const LC0_SERVER_URL = process.env.LC0_SERVER_URL || 'https://web-production-4cc9.up.railway.app';
+    logger.debug('🔗 Calling LC0 server for best move:', { LC0_SERVER_URL, difficulty });
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const moveResponse = await fetch(`${LC0_SERVER_URL}/move`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ fen, difficulty }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!moveResponse.ok) {
+        throw new Error(`LC0 server responded with ${moveResponse.status}: ${moveResponse.statusText}`);
+      }
+
+      const data = await moveResponse.json() as any;
+
+      // The LC0 server returns the move primarily as a UCI string; derive
+      // from/to/promotion from it when explicit fields are absent.
+      const uci: string | undefined = data?.move?.uci;
+      let from: string | undefined = data?.move?.from;
+      let to: string | undefined = data?.move?.to;
+      let promotion: string | undefined = data?.move?.promotion;
+
+      if ((!from || !to) && typeof uci === 'string' && uci.length >= 4) {
+        from = uci.substring(0, 2);
+        to = uci.substring(2, 4);
+        promotion = uci.length > 4 ? uci.substring(4) : promotion;
+      }
+
+      if (!from || !to) {
+        throw new Error('No valid move returned from LC0 server');
+      }
+
+      res.json({
+        success: true,
+        move: { from, to, promotion, uci, san: data?.move?.san },
+        engine: data?.engine || 'lc0',
+        responseTime: data?.responseTime || 0
+      });
+
+    } catch (engineError) {
+      logger.warn('LC0 engine unavailable for best move:', engineError);
+
+      res.status(503).json({
+        success: false,
+        error: 'Service Unavailable',
+        message: 'LC0 engine temporarily unavailable.',
+        fallback: true
+      });
+    }
+
+  } catch (error) {
+    logger.error('Error getting best move:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: 'Failed to get best move'
+    });
+  }
+});
+
+/**
  * GET /api/analysis/test
  * Simple test endpoint to verify route is working
  */

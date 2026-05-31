@@ -6,22 +6,24 @@ export type DifficultyLevel = 'beginner' | 'easy' | 'medium' | 'hard' | 'expert'
 // Removed unused BackendAIMove interface - moves come as Move objects from chess.js
 
 export class BackendAI {
-  private lc0ServerUrl: string;
+  private backendUrl: string;
 
   constructor() {
-    // Call LC0 server directly since main backend doesn't have AI endpoints
-    this.lc0ServerUrl = process.env.REACT_APP_LC0_SERVER_URL || 'https://web-production-4cc9.up.railway.app';
+    // Route AI move requests through our backend (which calls the LC0 server
+    // server-to-server). The browser cannot call the LC0 server directly — it
+    // sends no CORS headers for the app origin, so direct calls are blocked.
+    this.backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3005';
   }
 
   async getBestMove(fen: string, difficulty: DifficultyLevel = 'medium'): Promise<Move | null> {
-    // Abort if the LC0 server takes too long (e.g. a Railway cold start that
+    // Abort if the backend/LC0 takes too long (e.g. a Railway cold start that
     // never recovers) so the UI falls back instead of hanging indefinitely.
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
     try {
-      logger.debug(`🧠 Requesting LC0 move directly from neural network (${difficulty})`);
+      logger.debug(`🧠 Requesting LC0 move via backend (${difficulty})`);
 
-      const response = await fetch(`${this.lc0ServerUrl}/move`, {
+      const response = await fetch(`${this.backendUrl}/api/analysis/best-move`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -78,21 +80,21 @@ export class BackendAI {
 
   async getEngineStatus() {
     try {
-      const response = await fetch(`${this.lc0ServerUrl}/health`);
+      const response = await fetch(`${this.backendUrl}/api/analysis/health`);
       if (!response.ok) {
         throw new Error(`LC0 status request failed: ${response.status}`);
       }
       const data = await response.json();
-      return { 
-        engines: { 
-          beginner: true, 
-          easy: true, 
-          medium: true, 
-          hard: true, 
+      return {
+        engines: {
+          beginner: true,
+          easy: true,
+          medium: true,
+          hard: true,
           expert: true,
           engine: 'lc0',
-          lc0Available: data.status === 'ok'
-        } 
+          lc0Available: data.lc0Available === true
+        }
       };
     } catch (error) {
       logger.error('Failed to get LC0 engine status:', error);
