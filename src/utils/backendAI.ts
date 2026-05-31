@@ -14,9 +14,13 @@ export class BackendAI {
   }
 
   async getBestMove(fen: string, difficulty: DifficultyLevel = 'medium'): Promise<Move | null> {
+    // Abort if the LC0 server takes too long (e.g. a Railway cold start that
+    // never recovers) so the UI falls back instead of hanging indefinitely.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     try {
       logger.debug(`🧠 Requesting LC0 move directly from neural network (${difficulty})`);
-      
+
       const response = await fetch(`${this.lc0ServerUrl}/move`, {
         method: 'POST',
         headers: {
@@ -26,6 +30,7 @@ export class BackendAI {
           fen,
           difficulty
         }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -35,26 +40,39 @@ export class BackendAI {
       const data = await response.json();
       logger.debug(`⚡ LC0 neural network responded in ${data.responseTime}ms with engine: ${data.engine}`);
 
-      // Validate response structure
-      if (!data.move || !data.move.from || !data.move.to) {
+      // The LC0 server returns the move primarily as a UCI string (e.g. "e2e4",
+      // "e7e8q"); explicit from/to are not guaranteed, so derive them from the
+      // UCI string when missing (mirrors the backend hint route).
+      const rawMove = data?.move;
+      const uci: string | undefined = rawMove?.uci;
+      let from: string | undefined = rawMove?.from;
+      let to: string | undefined = rawMove?.to;
+      let promotion: string | undefined = rawMove?.promotion;
+
+      if ((!from || !to) && typeof uci === 'string' && uci.length >= 4) {
+        from = uci.substring(0, 2);
+        to = uci.substring(2, 4);
+        promotion = uci.length > 4 ? uci.substring(4) : promotion;
+      }
+
+      if (!from || !to) {
         logger.error('LC0 returned invalid move format:', data);
         return null;
       }
 
-      // Convert LC0 response to chess.js Move format
-      const move = {
-        from: data.move.from,
-        to: data.move.to,
-        promotion: data.move.uci && data.move.uci.length > 4 ? data.move.uci[4] : undefined,
-        san: data.move.uci // Will be updated when move is validated
-      };
+      // chess.js derives/validates SAN when the move is applied via { from, to }.
+      return { from, to, promotion } as Move;
 
-      return move as Move;
-      
     } catch (error) {
-      logger.error('LC0 neural network error:', error);
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        logger.error('LC0 neural network request timed out');
+      } else {
+        logger.error('LC0 neural network error:', error);
+      }
       logger.debug('🔄 Falling back to frontend AI');
       return null; // Caller should fall back to frontend AI
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
