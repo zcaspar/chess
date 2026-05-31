@@ -74,6 +74,11 @@ interface GameState {
     white: boolean;
     black: boolean;
   };
+  // Online game metadata (populated for online human-vs-human games)
+  onlineGameRoom?: {
+    opponentId?: string;
+    opponentName?: string;
+  } | null;
 }
 
 interface GameContextType {
@@ -201,7 +206,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   const completedGamesRef = useRef<Set<string>>(new Set());
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const aiRef = useRef<ChessAI>(new ChessAI('medium', 1000));
+  const aiRef = useRef<ChessAI>(new ChessAI('medium'));
   const isAiThinking = useRef<boolean>(false);
   const gameEndedRef = useRef<boolean>(false); // Track game end state to prevent race conditions
   const aiMoveGameId = useRef<string>(''); // Track which game the AI is thinking for
@@ -986,6 +991,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       gameMode: 'human-vs-human',
       aiColor: null,
       aiDifficulty: 'medium',
+      // Reset hint system
+      hintAvailable: { white: true, black: true },
+      currentHint: null,
+      // Reset nuclear system
+      nukeAvailable: { white: true, black: true },
+      nukeModeActive: { white: false, black: false },
+      // Reset teleportation system
+      teleportAvailable: { white: true, black: true },
+      teleportModeActive: { white: false, black: false },
     });
   }, []);
 
@@ -1310,8 +1324,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         gameMode: 'human-vs-human', // Online games are always human vs human
         // Set player names based on color assignment
         players: {
-          player1: prev.colorAssignment.player1 === 'w' ? whitePlayerName : blackPlayerName,
-          player2: prev.colorAssignment.player2 === 'w' ? whitePlayerName : blackPlayerName,
+          player1: prev.colorAssignment.white === 'player1' ? whitePlayerName : blackPlayerName,
+          player2: prev.colorAssignment.white === 'player2' ? whitePlayerName : blackPlayerName,
         },
       }));
 
@@ -1331,8 +1345,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       setGameState(prev => ({
         ...prev,
         players: {
-          player1: prev.colorAssignment.player1 === 'w' ? whitePlayerName : blackPlayerName,
-          player2: prev.colorAssignment.player2 === 'w' ? whitePlayerName : blackPlayerName,
+          player1: prev.colorAssignment.white === 'player1' ? whitePlayerName : blackPlayerName,
+          player2: prev.colorAssignment.white === 'player2' ? whitePlayerName : blackPlayerName,
         },
       }));
     };
@@ -1547,16 +1561,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     const newFen = fenParts.join(' ');
     const finalGame = new Chess(newFen);
     
-    // Create a special nuke move entry
-    const nukeMove: Move = {
+    // Create a special nuke move entry (synthetic, not a real chess.js Move)
+    const nukeMove = {
       san: `💣x${targetPiece.type.toUpperCase()}${targetSquare}`,
       from: targetSquare,
       to: targetSquare,
       color: activeNukeColor,
       piece: targetPiece.type,
       captured: targetPiece.type,
-      flags: 'n' as any, // Special flag for nuke
-    };
+      flags: 'n', // Special flag for nuke
+    } as unknown as Move;
     
     setGameState(prev => ({
       ...prev,
@@ -1669,14 +1683,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     const finalGame = new Chess(newFen);
     
     // Create a special teleport move entry
-    const teleportMove: Move = {
+    // Create a special teleport move entry (synthetic, not a real chess.js Move)
+    const teleportMove = {
       san: `♦${piece.type.toUpperCase()}${pieceSquare}-${targetSquare}`,
       from: pieceSquare,
       to: targetSquare,
       color: activeTeleportColor,
       piece: piece.type,
-      flags: 't' as any, // Special flag for teleport
-    };
+      flags: 't', // Special flag for teleport
+    } as unknown as Move;
     
     setGameState(prev => ({
       ...prev,

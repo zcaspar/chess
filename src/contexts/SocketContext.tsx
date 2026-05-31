@@ -195,8 +195,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
         // Additional error handlers for debugging
         socketInstance.on('connect_error', (error) => {
+          const errType = (error as Error & { type?: string }).type;
           console.error('Socket connection error:', error.message);
-          console.error('Error type:', error.type);
+          console.error('Error type:', errType);
           console.error('Error details:', error);
         });
 

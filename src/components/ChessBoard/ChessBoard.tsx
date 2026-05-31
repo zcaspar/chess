@@ -266,7 +266,7 @@ const ChessBoard: React.FC = () => {
 
   // Custom square styles for highlights
   const customSquareStyles = useMemo(() => {
-    const styles: Partial<Record<Square, { backgroundColor?: string; background?: string; cursor?: string }>> = {};
+    const styles: { [square: string]: React.CSSProperties } = {};
     
     // Handle nuclear mode highlighting
     const isNukeModeActive = (gameState.nukeModeActive.white || gameState.nukeModeActive.black);
@@ -357,14 +357,14 @@ const ChessBoard: React.FC = () => {
   const getGamePhase = () => {
     const moveCount = gameState.history.length;
     if (gameState.gameResult) return 'ended';
-    if (gameState.inCheck) return 'check';
+    if (gameState.game.isCheck()) return 'check';
     if (moveCount < 10) return 'opening';
     if (moveCount < 30) return 'middlegame';
     return 'endgame';
   };
 
   return (
-    <div className={`chess-board-hero-container ${gameState.gameResult ? 'game-ended' : ''} ${gameState.inCheck ? 'in-check' : ''} phase-${getGamePhase()}`}>
+    <div className={`chess-board-hero-container ${gameState.gameResult ? 'game-ended' : ''} ${gameState.game.isCheck() ? 'in-check' : ''} phase-${getGamePhase()}`}>
       <div className="chess-board-stage">
         <div className="board-glow-effect"></div>
         <div className="board-ambient-particles"></div>

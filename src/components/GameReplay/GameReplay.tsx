@@ -82,18 +82,14 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
       try {
         const chessGame = new Chess();
         console.log('🔍 Attempting direct PGN load...');
-        const success = chessGame.loadPgn(game.pgn);
-        if (success) {
-          history = chessGame.history({ verbose: true });
-          console.log('✅ Direct PGN load successful, moves:', history.length);
-          if (history.length > 0) {
-            console.log('🔍 Sample moves from direct load:', history.slice(0, 5).map(m => m.san));
-            return history;
-          } else {
-            console.log('⚠️ Direct PGN load succeeded but returned 0 moves');
-          }
+        chessGame.loadPgn(game.pgn); // chess.js v1 returns void and throws on invalid PGN (caught below)
+        history = chessGame.history({ verbose: true });
+        console.log('✅ Direct PGN load successful, moves:', history.length);
+        if (history.length > 0) {
+          console.log('🔍 Sample moves from direct load:', history.slice(0, 5).map(m => m.san));
+          return history;
         } else {
-          console.log('❌ Direct PGN load failed');
+          console.log('⚠️ Direct PGN load succeeded but returned 0 moves');
         }
       } catch (pgnError) {
         console.log('❌ Direct PGN load error:', pgnError);
@@ -118,15 +114,14 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         
         if (cleanedPgn.length > 0) {
           const chessGame = new Chess();
-          const success = chessGame.loadPgn(cleanedPgn);
-          if (success) {
-            history = chessGame.history({ verbose: true });
-            console.log('✅ Cleaned PGN load successful, moves:', history.length);
-            console.log('🔍 Sample moves from cleaned load:', history.slice(0, 5).map(m => m.san));
+          chessGame.loadPgn(cleanedPgn); // throws on invalid PGN (caught below)
+          history = chessGame.history({ verbose: true });
+          console.log('✅ Cleaned PGN load successful, moves:', history.length);
+          console.log('🔍 Sample moves from cleaned load:', history.slice(0, 5).map(m => m.san));
+          if (history.length > 0) {
             return history;
-          } else {
-            console.log('❌ Cleaned PGN load failed - chess.js could not parse');
           }
+          console.log('❌ Cleaned PGN load produced 0 moves');
         } else {
           console.log('❌ Cleaned PGN is empty after removing headers');
         }

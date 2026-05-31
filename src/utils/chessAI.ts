@@ -1,6 +1,9 @@
 import { Chess, Move } from 'chess.js';
 import { BackendAI, DifficultyLevel } from './backendAI';
 
+// Re-export so consumers can import the type alongside ChessAI from this module
+export type { DifficultyLevel } from './backendAI';
+
 const backendAI = new BackendAI();
 
 interface AISettings {
@@ -121,5 +124,6 @@ export class SimpleChessAI {
   }
 }
 
-// Legacy export for compatibility
+// Legacy export for compatibility (value + type alias)
 export const ChessAI = SimpleChessAI;
+export type ChessAI = SimpleChessAI;
