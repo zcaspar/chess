@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { logger } from '../../utils/logger';
 
 interface HeadToHeadStats {
   opponentId: string;
@@ -61,7 +62,7 @@ const HeadToHead: React.FC<HeadToHeadProps> = ({
         const data = await response.json();
         setStats(data.stats);
       } catch (err) {
-        console.error('Error fetching head-to-head stats:', err);
+        logger.error('Error fetching head-to-head stats:', err);
         setError(err instanceof Error ? err.message : 'Failed to load stats');
       } finally {
         setLoading(false);

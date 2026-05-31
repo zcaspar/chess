@@ -1,3 +1,4 @@
+import { logger } from './logger';
 /**
  * Opening Detector - Trie-based chess opening name matcher
  * Walks a trie of known openings as the game progresses,
@@ -68,7 +69,7 @@ export async function initOpenings(): Promise<void> {
     }
     openingsLoaded = true;
   } catch (e) {
-    console.warn('Failed to load openings data:', e);
+    logger.warn('Failed to load openings data:', e);
   }
 }
 

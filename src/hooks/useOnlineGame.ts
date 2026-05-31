@@ -2,6 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { useSocket } from '../contexts/SocketContext';
 import { useGame } from '../contexts/GameContext';
 import { Square } from 'chess.js';
+import { logger } from '../utils/logger';
 
 export const useOnlineGame = () => {
   const { roomCode, assignedColor } = useSocket();
@@ -21,7 +22,7 @@ export const useOnlineGame = () => {
 
     // Apply the move to the local game state
     // Note: The move has already been validated on the server
-    console.log('[useOnlineGame] Received move from opponent:', data.move);
+    logger.debug('[useOnlineGame] Received move from opponent:', data.move);
     makeMove(data.move.from as Square, data.move.to as Square, data.move.promotion);
   }, [makeMove]);
 
@@ -34,7 +35,7 @@ export const useOnlineGame = () => {
     const data = customEvent.detail;
 
     // Update local game state to reflect game end
-    console.log('[useOnlineGame] Game ended:', data);
+    logger.debug('[useOnlineGame] Game ended:', data);
     // TODO: Update GameContext to handle remote game endings
   }, []);
 
@@ -45,13 +46,13 @@ export const useOnlineGame = () => {
     // SocketContext receives raw socket events and converts them to CustomEvents
     // Note: Draw events (socketDrawOffered, socketDrawOfferSent, socketDrawDeclined)
     // are handled by GameContext directly
-    console.log('[useOnlineGame] Setting up event listeners for room:', roomCode);
+    logger.debug('[useOnlineGame] Setting up event listeners for room:', roomCode);
 
     window.addEventListener('socketMoveMade', handleMoveMade);
     window.addEventListener('socketGameEnded', handleGameEnded);
 
     return () => {
-      console.log('[useOnlineGame] Cleaning up event listeners');
+      logger.debug('[useOnlineGame] Cleaning up event listeners');
       window.removeEventListener('socketMoveMade', handleMoveMade);
       window.removeEventListener('socketGameEnded', handleGameEnded);
     };

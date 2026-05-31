@@ -1,3 +1,4 @@
+import { logger } from './utils/logger';
 // Service Worker Registration for PWA
 
 const isLocalhost = Boolean(
@@ -31,7 +32,7 @@ export function register(config?: Config) {
 
         // Add some additional logging to localhost
         navigator.serviceWorker.ready.then(() => {
-          console.log(
+          logger.debug(
             'This web app is being served cache-first by a service worker.'
           );
         });
@@ -57,7 +58,7 @@ function registerValidSW(swUrl: string, config?: Config) {
             if (navigator.serviceWorker.controller) {
               // At this point, the updated precached content has been fetched,
               // but the previous service worker will still serve the older content
-              console.log(
+              logger.debug(
                 'New content is available and will be used when all tabs are closed.'
               );
 
@@ -67,7 +68,7 @@ function registerValidSW(swUrl: string, config?: Config) {
               }
             } else {
               // At this point, everything has been precached.
-              console.log('Content is cached for offline use.');
+              logger.debug('Content is cached for offline use.');
 
               // Execute callback
               if (config && config.onSuccess) {
@@ -79,7 +80,7 @@ function registerValidSW(swUrl: string, config?: Config) {
       };
     })
     .catch((error) => {
-      console.error('Error during service worker registration:', error);
+      logger.error('Error during service worker registration:', error);
     });
 }
 
@@ -107,7 +108,7 @@ function checkValidServiceWorker(swUrl: string, config?: Config) {
       }
     })
     .catch(() => {
-      console.log('No internet connection found. App is running in offline mode.');
+      logger.debug('No internet connection found. App is running in offline mode.');
     });
 }
 
@@ -118,7 +119,7 @@ export function unregister() {
         registration.unregister();
       })
       .catch((error) => {
-        console.error(error.message);
+        logger.error(error.message);
       });
   }
 }

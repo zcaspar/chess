@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { firebaseConfigInfo } from '../../config/firebase-client';
+import { logger } from '../../utils/logger';
 
 interface GoogleLoginButtonProps {
   onSuccess: () => void;
@@ -14,20 +15,20 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ onSuccess 
   const handleGoogleSignIn = async () => {
     try {
       setIsGoogleLoading(true);
-      console.log('🔍 Starting Google Sign-In...');
-      console.log('📍 Current URL:', window.location.href);
-      console.log('🔥 Firebase config:', firebaseConfigInfo);
-      console.log('🌐 Backend URL:', process.env.REACT_APP_BACKEND_URL);
+      logger.debug('🔍 Starting Google Sign-In...');
+      logger.debug('📍 Current URL:', window.location.href);
+      logger.debug('🔥 Firebase config:', firebaseConfigInfo);
+      logger.debug('🌐 Backend URL:', process.env.REACT_APP_BACKEND_URL);
       
       await signInWithGoogle();
-      console.log('✅ Google Sign-In successful');
+      logger.debug('✅ Google Sign-In successful');
       onSuccess();
     } catch (error: any) {
-      console.error('❌ Google sign-in failed:', error);
-      console.error('Error type:', error.constructor.name);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      console.error('Full error object:', error);
+      logger.error('❌ Google sign-in failed:', error);
+      logger.error('Error type:', error.constructor.name);
+      logger.error('Error code:', error.code);
+      logger.error('Error message:', error.message);
+      logger.error('Full error object:', error);
       
       // Check for specific error types
       if (error.code === 'auth/popup-blocked') {
@@ -53,7 +54,7 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ onSuccess 
       await createGuestAccount();
       onSuccess();
     } catch (error) {
-      console.error('Guest account creation failed:', error);
+      logger.error('Guest account creation failed:', error);
     } finally {
       setIsGoogleLoading(false);
     }

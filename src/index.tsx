@@ -4,6 +4,7 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
+import { logger } from './utils/logger';
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
@@ -22,9 +23,9 @@ reportWebVitals();
 // Register service worker for PWA functionality
 serviceWorkerRegistration.register({
   onSuccess: (registration) => {
-    console.log('PWA: Service Worker registered successfully');
+    logger.debug('PWA: Service Worker registered successfully');
   },
   onUpdate: (registration) => {
-    console.log('PWA: New app version available');
+    logger.debug('PWA: New app version available');
   }
 });

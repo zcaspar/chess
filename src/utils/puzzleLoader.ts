@@ -1,3 +1,4 @@
+import { logger } from './logger';
 /**
  * Puzzle Loader - Loads and filters puzzles from static JSON
  */
@@ -20,7 +21,7 @@ export async function loadPuzzles(): Promise<Puzzle[]> {
     puzzlesCache = data;
     return data;
   } catch (e) {
-    console.warn('Failed to load puzzles:', e);
+    logger.warn('Failed to load puzzles:', e);
     return [];
   }
 }

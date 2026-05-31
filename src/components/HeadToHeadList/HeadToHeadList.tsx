@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import HeadToHead from '../HeadToHead/HeadToHead';
+import { logger } from '../../utils/logger';
 
 interface HeadToHeadRecord {
   opponentId: string;
@@ -47,7 +48,7 @@ const HeadToHeadList: React.FC = () => {
         const data = await response.json();
         setRecords(data.records || []);
       } catch (err) {
-        console.error('Error fetching head-to-head records:', err);
+        logger.error('Error fetching head-to-head records:', err);
         setError(err instanceof Error ? err.message : 'Failed to load records');
       } finally {
         setLoading(false);

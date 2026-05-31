@@ -3,6 +3,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useGame } from '../../contexts/GameContext';
 import { AuthModal, UserProfile } from '../Auth';
 import { isFeatureEnabled } from '../../config/gameFeatures';
+import { logger } from '../../utils/logger';
 
 interface HeaderProps {
   onShowHistory?: () => void;
@@ -25,7 +26,7 @@ export const Header: React.FC<HeaderProps> = ({ onShowHistory, onShowStats, onSh
       // Then sign out the user
       await signOut();
     } catch (error) {
-      console.error('Sign out error:', error);
+      logger.error('Sign out error:', error);
     }
   };
 

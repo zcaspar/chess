@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { logger } from '../../utils/logger';
 
 interface GameHistoryEntry {
   id: number;
@@ -58,7 +59,7 @@ const GameHistory: React.FC<GameHistoryProps> = ({ onReplayGame }) => {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Game history fetch failed:', response.status, errorText);
+        logger.error('Game history fetch failed:', response.status, errorText);
         
         // Try to parse error response
         try {

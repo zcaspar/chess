@@ -1,4 +1,5 @@
 import { Move } from 'chess.js';
+import { logger } from './logger';
 
 export type DifficultyLevel = 'beginner' | 'easy' | 'medium' | 'hard' | 'expert';
 
@@ -14,7 +15,7 @@ export class BackendAI {
 
   async getBestMove(fen: string, difficulty: DifficultyLevel = 'medium'): Promise<Move | null> {
     try {
-      console.log(`🧠 Requesting LC0 move directly from neural network (${difficulty})`);
+      logger.debug(`🧠 Requesting LC0 move directly from neural network (${difficulty})`);
       
       const response = await fetch(`${this.lc0ServerUrl}/move`, {
         method: 'POST',
@@ -32,11 +33,11 @@ export class BackendAI {
       }
 
       const data = await response.json();
-      console.log(`⚡ LC0 neural network responded in ${data.responseTime}ms with engine: ${data.engine}`);
+      logger.debug(`⚡ LC0 neural network responded in ${data.responseTime}ms with engine: ${data.engine}`);
 
       // Validate response structure
       if (!data.move || !data.move.from || !data.move.to) {
-        console.error('LC0 returned invalid move format:', data);
+        logger.error('LC0 returned invalid move format:', data);
         return null;
       }
 
@@ -51,8 +52,8 @@ export class BackendAI {
       return move as Move;
       
     } catch (error) {
-      console.error('LC0 neural network error:', error);
-      console.log('🔄 Falling back to frontend AI');
+      logger.error('LC0 neural network error:', error);
+      logger.debug('🔄 Falling back to frontend AI');
       return null; // Caller should fall back to frontend AI
     }
   }
@@ -76,7 +77,7 @@ export class BackendAI {
         } 
       };
     } catch (error) {
-      console.error('Failed to get LC0 engine status:', error);
+      logger.error('Failed to get LC0 engine status:', error);
       return { engines: { beginner: false, easy: false, medium: false, hard: false, expert: false } };
     }
   }

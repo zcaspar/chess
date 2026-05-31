@@ -1,5 +1,6 @@
 import { Chess, Move } from 'chess.js';
 import { BackendAI, DifficultyLevel } from './backendAI';
+import { logger } from './logger';
 
 // Re-export so consumers can import the type alongside ChessAI from this module
 export type { DifficultyLevel } from './backendAI';
@@ -46,15 +47,15 @@ export class SimpleChessAI {
     try {
       const backendMove = await backendAI.getBestMove(game.fen(), this.difficulty);
       if (backendMove) {
-        console.log(`🎯 Using backend AI for ${this.difficulty} difficulty`);
+        logger.debug(`🎯 Using backend AI for ${this.difficulty} difficulty`);
         return backendMove;
       }
     } catch (error) {
-      console.log('Backend AI unavailable, using frontend AI');
+      logger.debug('Backend AI unavailable, using frontend AI');
     }
 
     // Fallback to frontend AI
-    console.log(`🎲 Using frontend AI for ${this.difficulty} difficulty`);
+    logger.debug(`🎲 Using frontend AI for ${this.difficulty} difficulty`);
 
     // For beginner level, just pick a random move
     if (this.difficulty === 'beginner') {
@@ -120,7 +121,7 @@ export class SimpleChessAI {
 
   async initializeLc0(): Promise<void> {
     // For frontend AI, this is a no-op since we delegate to backend
-    console.log('Frontend AI initialized (uses backend LC0)');
+    logger.debug('Frontend AI initialized (uses backend LC0)');
   }
 }
 

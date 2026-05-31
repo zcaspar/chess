@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { useAuth } from '../../hooks/useAuth';
+import { logger } from '../../utils/logger';
 
 interface GameHistoryEntry {
   id: number;
@@ -67,13 +68,13 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         throw new Error('Invalid PGN data - PGN is missing or not a string');
       }
       
-      console.log('🔍 Raw PGN data:', game.pgn);
-      console.log('🔍 PGN length:', game.pgn.length);
-      console.log('🔍 PGN type:', typeof game.pgn);
-      console.log('🔍 PGN char codes:', game.pgn.split('').slice(0, 20).map(c => c.charCodeAt(0)));
-      console.log('🔍 Game moveCount:', game.moveCount);
-      console.log('🔍 Game finalFen:', game.finalFen);
-      console.log('🔍 Full PGN content:', JSON.stringify(game.pgn));
+      logger.debug('🔍 Raw PGN data:', game.pgn);
+      logger.debug('🔍 PGN length:', game.pgn.length);
+      logger.debug('🔍 PGN type:', typeof game.pgn);
+      logger.debug('🔍 PGN char codes:', game.pgn.split('').slice(0, 20).map(c => c.charCodeAt(0)));
+      logger.debug('🔍 Game moveCount:', game.moveCount);
+      logger.debug('🔍 Game finalFen:', game.finalFen);
+      logger.debug('🔍 Full PGN content:', JSON.stringify(game.pgn));
       
       // Try multiple approaches to parse the game
       let history: any[] = [];
@@ -81,23 +82,23 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
       // Approach 1: Direct PGN loading
       try {
         const chessGame = new Chess();
-        console.log('🔍 Attempting direct PGN load...');
+        logger.debug('🔍 Attempting direct PGN load...');
         chessGame.loadPgn(game.pgn); // chess.js v1 returns void and throws on invalid PGN (caught below)
         history = chessGame.history({ verbose: true });
-        console.log('✅ Direct PGN load successful, moves:', history.length);
+        logger.debug('✅ Direct PGN load successful, moves:', history.length);
         if (history.length > 0) {
-          console.log('🔍 Sample moves from direct load:', history.slice(0, 5).map(m => m.san));
+          logger.debug('🔍 Sample moves from direct load:', history.slice(0, 5).map(m => m.san));
           return history;
         } else {
-          console.log('⚠️ Direct PGN load succeeded but returned 0 moves');
+          logger.debug('⚠️ Direct PGN load succeeded but returned 0 moves');
         }
       } catch (pgnError) {
-        console.log('❌ Direct PGN load error:', pgnError);
+        logger.debug('❌ Direct PGN load error:', pgnError);
       }
       
       // Approach 2: Try cleaning the PGN and removing result markers
       try {
-        console.log('🔍 Attempting cleaned PGN load...');
+        logger.debug('🔍 Attempting cleaned PGN load...');
         let cleanedPgn = game.pgn.trim();
         
         // Remove PGN metadata tags (everything in square brackets) but keep newlines
@@ -109,29 +110,29 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         // Clean up multiple whitespaces but preserve structure
         cleanedPgn = cleanedPgn.replace(/\n\s*\n/g, '\n').replace(/[ \t]+/g, ' ').trim();
         
-        console.log('🔍 Cleaned PGN length:', cleanedPgn.length);
-        console.log('🔍 Cleaned PGN preview:', cleanedPgn.substring(0, 200));
+        logger.debug('🔍 Cleaned PGN length:', cleanedPgn.length);
+        logger.debug('🔍 Cleaned PGN preview:', cleanedPgn.substring(0, 200));
         
         if (cleanedPgn.length > 0) {
           const chessGame = new Chess();
           chessGame.loadPgn(cleanedPgn); // throws on invalid PGN (caught below)
           history = chessGame.history({ verbose: true });
-          console.log('✅ Cleaned PGN load successful, moves:', history.length);
-          console.log('🔍 Sample moves from cleaned load:', history.slice(0, 5).map(m => m.san));
+          logger.debug('✅ Cleaned PGN load successful, moves:', history.length);
+          logger.debug('🔍 Sample moves from cleaned load:', history.slice(0, 5).map(m => m.san));
           if (history.length > 0) {
             return history;
           }
-          console.log('❌ Cleaned PGN load produced 0 moves');
+          logger.debug('❌ Cleaned PGN load produced 0 moves');
         } else {
-          console.log('❌ Cleaned PGN is empty after removing headers');
+          logger.debug('❌ Cleaned PGN is empty after removing headers');
         }
       } catch (cleanError) {
-        console.log('❌ Cleaned PGN load error:', cleanError);
+        logger.debug('❌ Cleaned PGN load error:', cleanError);
       }
       
       // Approach 3: Try parsing as space-separated moves without move numbers
       try {
-        console.log('🔍 Attempting manual move parsing...');
+        logger.debug('🔍 Attempting manual move parsing...');
         const chessGame = new Chess();
         
         // Extract just the moves from PGN, removing move numbers and results
@@ -142,22 +143,22 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
           .replace(/\s+/g, ' ') // Normalize whitespace
           .trim();
         
-        console.log('🔍 Extracted move string:', moveString);
+        logger.debug('🔍 Extracted move string:', moveString);
         
         if (moveString) {
           const moves = moveString.split(' ').filter(move => move.trim());
-          console.log('🔍 Move array:', moves);
+          logger.debug('🔍 Move array:', moves);
           
           for (const moveStr of moves) {
             if (moveStr.trim()) {
               try {
                 const move = chessGame.move(moveStr.trim());
                 if (!move) {
-                  console.log('❌ Invalid move:', moveStr);
+                  logger.debug('❌ Invalid move:', moveStr);
                   break;
                 }
               } catch (moveErr) {
-                console.log('❌ Move error for', moveStr, ':', moveErr);
+                logger.debug('❌ Move error for', moveStr, ':', moveErr);
                 break;
               }
             }
@@ -165,36 +166,36 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
           
           history = chessGame.history({ verbose: true });
           if (history.length > 0) {
-            console.log('✅ Manual parsing successful, moves:', history.length);
+            logger.debug('✅ Manual parsing successful, moves:', history.length);
             return history;
           }
         }
       } catch (manualError) {
-        console.log('❌ Manual parsing error:', manualError);
+        logger.debug('❌ Manual parsing error:', manualError);
       }
       
       // Approach 3.5: Try regex-based move extraction
       try {
-        console.log('🔍 Attempting regex-based move extraction...');
+        logger.debug('🔍 Attempting regex-based move extraction...');
         const chessGame = new Chess();
         
         // More comprehensive regex to catch various move formats
         const movePattern = /([KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|O-O(?:-O)?[+#]?)/g;
         const extractedMoves = game.pgn.match(movePattern);
         
-        console.log('🔍 Regex extracted moves:', extractedMoves);
+        logger.debug('🔍 Regex extracted moves:', extractedMoves);
         
         if (extractedMoves && extractedMoves.length > 0) {
           for (const moveStr of extractedMoves) {
             try {
               const move = chessGame.move(moveStr.trim());
               if (!move) {
-                console.log('❌ Invalid regex move:', moveStr);
+                logger.debug('❌ Invalid regex move:', moveStr);
                 // Continue instead of breaking to try more moves
                 continue;
               }
             } catch (moveErr) {
-              console.log('❌ Regex move error for', moveStr, ':', moveErr);
+              logger.debug('❌ Regex move error for', moveStr, ':', moveErr);
               // Continue instead of breaking to try more moves
               continue;
             }
@@ -202,22 +203,22 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
           
           history = chessGame.history({ verbose: true });
           if (history.length > 0) {
-            console.log('✅ Regex parsing successful, moves:', history.length);
+            logger.debug('✅ Regex parsing successful, moves:', history.length);
             return history;
           }
         }
       } catch (regexError) {
-        console.log('❌ Regex parsing error:', regexError);
+        logger.debug('❌ Regex parsing error:', regexError);
       }
       
       // Approach 4: Try very aggressive text parsing
       try {
-        console.log('🔍 Attempting aggressive text parsing...');
+        logger.debug('🔍 Attempting aggressive text parsing...');
         const chessGame = new Chess();
         
         // Split on any whitespace and filter for chess move patterns
         const tokens = game.pgn.split(/\s+/).filter(token => token.trim());
-        console.log('🔍 All tokens:', tokens);
+        logger.debug('🔍 All tokens:', tokens);
         
         for (const token of tokens) {
           // Skip move numbers, results, annotations, and PGN metadata tags
@@ -237,41 +238,41 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
             const move = chessGame.move(token);
             if (!move) {
               // If move fails, continue to next token instead of breaking
-              console.log('⚠️ Skipping invalid token:', token);
+              logger.debug('⚠️ Skipping invalid token:', token);
               continue;
             }
           } catch (moveErr) {
-            console.log('⚠️ Skipping problematic token:', token, moveErr);
+            logger.debug('⚠️ Skipping problematic token:', token, moveErr);
             continue;
           }
         }
         
         history = chessGame.history({ verbose: true });
         if (history.length > 0) {
-          console.log('✅ Aggressive parsing successful, moves:', history.length);
+          logger.debug('✅ Aggressive parsing successful, moves:', history.length);
           return history;
         }
       } catch (aggressiveError) {
-        console.log('❌ Aggressive parsing error:', aggressiveError);
+        logger.debug('❌ Aggressive parsing error:', aggressiveError);
       }
       
       // Approach 5: Last resort - try to extract moves from PGN using a different method
       try {
-        console.log('🔍 Last resort: trying to build moves from FEN and moveCount...');
+        logger.debug('🔍 Last resort: trying to build moves from FEN and moveCount...');
         
         // If we have a final FEN and move count, we can at least show the final position
         if (game.finalFen && game.moveCount > 0) {
-          console.log('⚠️ Using final position fallback - showing end position only');
+          logger.debug('⚠️ Using final position fallback - showing end position only');
           // Return empty array to trigger final position display
           return [];
         }
       } catch (lastError) {
-        console.log('❌ Last resort failed:', lastError);
+        logger.debug('❌ Last resort failed:', lastError);
       }
       
       // If all approaches fail
-      console.log('❌ All PGN parsing methods failed - no moves will be shown');
-      console.log('🔍 PGN details:', {
+      logger.debug('❌ All PGN parsing methods failed - no moves will be shown');
+      logger.debug('🔍 PGN details:', {
         hasRealCredentials: !!game.pgn,
         pgnLength: game.pgn?.length || 0,
         moveCount: game.moveCount,
@@ -281,7 +282,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
       throw new Error(`Unable to parse PGN. Expected ${game.moveCount} moves but could not extract them from PGN.`);
       
     } catch (error) {
-      console.error('❌ All PGN parsing methods failed:', error);
+      logger.error('❌ All PGN parsing methods failed:', error);
       setGameError(`Failed to load PGN: ${error instanceof Error ? error.message : 'Unknown error'}`);
       return [];
     }
@@ -289,11 +290,11 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
 
   // Log the final gameHistory result
   useEffect(() => {
-    console.log('🎯 Final gameHistory length:', gameHistory.length);
-    console.log('🎯 Expected moveCount:', game.moveCount);
+    logger.debug('🎯 Final gameHistory length:', gameHistory.length);
+    logger.debug('🎯 Expected moveCount:', game.moveCount);
     if (gameHistory.length > 0) {
-      console.log('🎯 First 10 moves:', gameHistory.slice(0, 10).map(m => m.san));
-      console.log('🎯 Last 5 moves:', gameHistory.slice(-5).map(m => m.san));
+      logger.debug('🎯 First 10 moves:', gameHistory.slice(0, 10).map(m => m.san));
+      logger.debug('🎯 Last 5 moves:', gameHistory.slice(-5).map(m => m.san));
     }
   }, [gameHistory, game.moveCount]);
 
@@ -313,11 +314,11 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
               promotion: move.promotion
             });
             if (!result) {
-              console.error('Invalid move at index', i, move);
+              logger.error('Invalid move at index', i, move);
               break;
             }
           } catch (moveError) {
-            console.error('Error applying move at index', i, move, moveError);
+            logger.error('Error applying move at index', i, move, moveError);
             break;
           }
         }
@@ -326,17 +327,17 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         // If no move history but we have a final FEN, show that position
         if (game.finalFen) {
           try {
-            console.log('🔄 Loading final position from FEN:', game.finalFen);
+            logger.debug('🔄 Loading final position from FEN:', game.finalFen);
             return new Chess(game.finalFen);
           } catch (fenError) {
-            console.error('❌ Error loading final FEN:', fenError);
+            logger.error('❌ Error loading final FEN:', fenError);
             return new Chess(); // Return starting position as fallback
           }
         }
         return new Chess(); // Return starting position as fallback
       }
     } catch (error) {
-      console.error('Error creating current game position:', error);
+      logger.error('Error creating current game position:', error);
       return new Chess(); // Return starting position as fallback
     }
   }, [gameHistory, currentMoveIndex, game.finalFen]);
@@ -355,7 +356,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
           return prevIndex + 1;
         });
       } catch (error) {
-        console.error('Error in auto-play interval:', error);
+        logger.error('Error in auto-play interval:', error);
         setIsAutoPlaying(false);
       }
     }, autoPlaySpeed);
@@ -403,7 +404,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
       }
       setIsAutoPlaying(false);
     } catch (error) {
-      console.error('Error in goToNext:', error);
+      logger.error('Error in goToNext:', error);
       setIsAutoPlaying(false);
     }
   };
@@ -413,7 +414,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
       setCurrentMoveIndex(gameHistory.length - 1);
       setIsAutoPlaying(false);
     } catch (error) {
-      console.error('Error in goToEnd:', error);
+      logger.error('Error in goToEnd:', error);
       setIsAutoPlaying(false);
     }
   };
@@ -422,7 +423,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
     try {
       setIsAutoPlaying(!isAutoPlaying);
     } catch (error) {
-      console.error('Error in toggleAutoPlay:', error);
+      logger.error('Error in toggleAutoPlay:', error);
       setIsAutoPlaying(false);
     }
   };
@@ -501,7 +502,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
       }
 
     } catch (error) {
-      console.error('Analysis error:', error);
+      logger.error('Analysis error:', error);
       setAnalysisError(error instanceof Error ? error.message : 'Analysis failed');
     } finally {
       setIsAnalyzing(false);
@@ -771,7 +772,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                               setCurrentMoveIndex(whiteIndex);
                               setIsAutoPlaying(false);
                             } catch (error) {
-                              console.error('Error setting move index:', error);
+                              logger.error('Error setting move index:', error);
                             }
                           }}
                           className={`px-2 py-0.5 rounded text-sm transition-colors min-w-[60px] bg-yellow-200 text-yellow-800 ${
@@ -792,7 +793,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                                 setCurrentMoveIndex(blackIndex);
                                 setIsAutoPlaying(false);
                               } catch (error) {
-                                console.error('Error setting move index:', error);
+                                logger.error('Error setting move index:', error);
                               }
                             }}
                             className={`px-2 py-0.5 rounded text-sm transition-colors min-w-[60px] bg-yellow-200 text-yellow-800 ${
@@ -833,7 +834,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                             setCurrentMoveIndex(whiteIndex);
                             setIsAutoPlaying(false);
                           } catch (error) {
-                            console.error('Error setting move index:', error);
+                            logger.error('Error setting move index:', error);
                           }
                         }}
                         className={`px-2 py-0.5 rounded text-sm transition-colors min-w-[60px] ${
@@ -853,7 +854,7 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                               setCurrentMoveIndex(blackIndex);
                               setIsAutoPlaying(false);
                             } catch (error) {
-                              console.error('Error setting move index:', error);
+                              logger.error('Error setting move index:', error);
                             }
                           }}
                           className={`px-2 py-0.5 rounded text-sm transition-colors min-w-[60px] ${
@@ -944,29 +945,29 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
             </button>
             <button
               onClick={() => {
-                console.log('=== DEBUG PGN ===');
-                console.log('Raw PGN:', game.pgn);
-                console.log('PGN type:', typeof game.pgn);
-                console.log('PGN length:', game.pgn.length);
-                console.log('Move count:', game.moveCount);
-                console.log('Final FEN:', game.finalFen);
-                console.log('First 100 chars:', game.pgn.substring(0, 100));
-                console.log('Last 100 chars:', game.pgn.substring(game.pgn.length - 100));
-                console.log('PGN as JSON:', JSON.stringify(game.pgn));
-                console.log('Current gameHistory length:', gameHistory.length);
-                console.log('Discrepancy:', game.moveCount, 'expected vs', gameHistory.length, 'actual');
+                logger.debug('=== DEBUG PGN ===');
+                logger.debug('Raw PGN:', game.pgn);
+                logger.debug('PGN type:', typeof game.pgn);
+                logger.debug('PGN length:', game.pgn.length);
+                logger.debug('Move count:', game.moveCount);
+                logger.debug('Final FEN:', game.finalFen);
+                logger.debug('First 100 chars:', game.pgn.substring(0, 100));
+                logger.debug('Last 100 chars:', game.pgn.substring(game.pgn.length - 100));
+                logger.debug('PGN as JSON:', JSON.stringify(game.pgn));
+                logger.debug('Current gameHistory length:', gameHistory.length);
+                logger.debug('Discrepancy:', game.moveCount, 'expected vs', gameHistory.length, 'actual');
                 
                 // Try to manually parse and see where it stops
                 const testGame = new Chess();
-                console.log('=== MANUAL PARSING TEST ===');
+                logger.debug('=== MANUAL PARSING TEST ===');
                 try {
                   const result = testGame.loadPgn(game.pgn);
-                  console.log('Manual loadPgn result:', result);
+                  logger.debug('Manual loadPgn result:', result);
                   const moves = testGame.history({ verbose: true });
-                  console.log('Manual parsing got', moves.length, 'moves');
-                  console.log('All moves:', moves.map(m => m.san).join(' '));
+                  logger.debug('Manual parsing got', moves.length, 'moves');
+                  logger.debug('All moves:', moves.map(m => m.san).join(' '));
                 } catch (e) {
-                  console.log('Manual parsing failed:', e);
+                  logger.debug('Manual parsing failed:', e);
                 }
                 
                 alert('PGN debug info logged to console. Check developer tools.');

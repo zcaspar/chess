@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { logger } from '../utils/logger';
 
 // Firebase configuration object
 // Real Firebase project configuration
@@ -31,18 +32,18 @@ export const auth = getAuth(app);
 if (useEmulator) {
   try {
     connectAuthEmulator(auth, 'http://localhost:9099');
-    console.log('🔥 Firebase Auth emulator connected (development mode)');
-    console.log('✅ Authentication will work with guest accounts and local development');
+    logger.debug('🔥 Firebase Auth emulator connected (development mode)');
+    logger.debug('✅ Authentication will work with guest accounts and local development');
   } catch (error) {
-    console.log('Firebase Auth emulator connection failed, using fallback auth:', error);
-    console.log('✅ Guest mode authentication will still work');
+    logger.debug('Firebase Auth emulator connection failed, using fallback auth:', error);
+    logger.debug('✅ Guest mode authentication will still work');
     // Continue without emulator - the app will work with guest mode
   }
 } else if (hasRealCredentials) {
-  console.log('🔥 Firebase initialized with production credentials');
-  console.log('✅ Google authentication enabled');
+  logger.debug('🔥 Firebase initialized with production credentials');
+  logger.debug('✅ Google authentication enabled');
 } else {
-  console.log('⚠️ Firebase using demo credentials - limited functionality');
+  logger.debug('⚠️ Firebase using demo credentials - limited functionality');
 }
 
 // Export configuration info for debugging
