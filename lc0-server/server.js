@@ -24,8 +24,15 @@ const fs = require('fs');
 const PORT = parseInt(process.env.PORT || '3006', 10);
 const LC0_PATH = process.env.LC0_PATH || '/app/lc0/lc0';
 const WEIGHTS_PATH = process.env.LC0_WEIGHTS || '/app/weights.pb.gz';
+// Primary weights: a distilled T1 net (~37 MB) — far stronger than the old Maia
+// default while staying CPU-friendly. Falls back to a small Maia net (stable
+// GitHub URL) if the primary can't be fetched, so the engine is never left
+// without weights. Override either via env.
 const WEIGHTS_URL =
   process.env.LC0_WEIGHTS_URL ||
+  'https://storage.lczero.org/files/networks-contrib/t1-256x10-distilled-swa-2432500.pb.gz';
+const WEIGHTS_FALLBACK_URL =
+  process.env.LC0_WEIGHTS_FALLBACK_URL ||
   'https://github.com/CSSLab/maia-chess/raw/master/maia_weights/maia-1900.pb.gz';
 const LC0_BACKEND = process.env.LC0_BACKEND || ''; // empty => let lc0 auto-select
 const EXTRA_ARGS = process.env.LC0_EXTRA_ARGS ? process.env.LC0_EXTRA_ARGS.split(' ') : [];
@@ -99,26 +106,52 @@ function sendAndWait(cmd, predicate, timeoutMs) {
   });
 }
 
-function downloadWeights() {
+let loadedWeightsSource = null; // which URL (or 'preexisting') the weights came from
+
+function fetchWeights(url) {
   return new Promise((resolve, reject) => {
-    if (fs.existsSync(WEIGHTS_PATH) && fs.statSync(WEIGHTS_PATH).size > 0) {
-      log('Weights already present at', WEIGHTS_PATH);
-      return resolve();
-    }
-    log('Downloading weights from', WEIGHTS_URL);
     execFile(
       'wget',
-      ['--tries=3', '--timeout=120', '-q', '-O', WEIGHTS_PATH, WEIGHTS_URL],
+      ['--tries=3', '--timeout=120', '-q', '-O', WEIGHTS_PATH, url],
       (err) => {
-        if (err) return reject(new Error('Weights download failed: ' + err.message));
+        if (err) return reject(new Error('wget failed: ' + err.message));
         if (!fs.existsSync(WEIGHTS_PATH) || fs.statSync(WEIGHTS_PATH).size === 0) {
-          return reject(new Error('Weights download produced an empty file'));
+          return reject(new Error('downloaded an empty file'));
         }
-        log('Weights downloaded:', Math.round(fs.statSync(WEIGHTS_PATH).size / 1024), 'KB');
         resolve();
       },
     );
   });
+}
+
+async function downloadWeights() {
+  if (fs.existsSync(WEIGHTS_PATH) && fs.statSync(WEIGHTS_PATH).size > 0) {
+    log('Weights already present at', WEIGHTS_PATH);
+    loadedWeightsSource = 'preexisting';
+    return;
+  }
+
+  // Try the primary (strong) net first, then the fallback (known-good Maia), so
+  // a primary-URL problem can never leave the engine without weights.
+  const candidates = [WEIGHTS_URL];
+  if (WEIGHTS_FALLBACK_URL && WEIGHTS_FALLBACK_URL !== WEIGHTS_URL) {
+    candidates.push(WEIGHTS_FALLBACK_URL);
+  }
+
+  let lastErr;
+  for (const url of candidates) {
+    try {
+      log('Downloading weights from', url);
+      await fetchWeights(url);
+      loadedWeightsSource = url;
+      log('Weights downloaded:', Math.round(fs.statSync(WEIGHTS_PATH).size / 1024), 'KB from', url);
+      return;
+    } catch (e) {
+      lastErr = e;
+      log('Weights download failed from', url, '-', e.message);
+    }
+  }
+  throw new Error('All weights downloads failed: ' + (lastErr && lastErr.message));
 }
 
 async function startEngine() {
@@ -187,6 +220,7 @@ app.get('/health', (req, res) => {
     engine: 'lc0',
     engineReady,
     weights: WEIGHTS_PATH,
+    weightsSource: loadedWeightsSource,
     error: initError ? initError.message : undefined,
   });
 });
