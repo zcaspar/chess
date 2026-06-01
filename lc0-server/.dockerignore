@@ -1,0 +1,7 @@
+node_modules
+npm-debug.log
+*.pb
+*.pb.gz
+weights*
+.git
+README.md
