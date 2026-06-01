@@ -751,20 +751,35 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const newHistory = gameState.history.slice(0, gameState.currentMoveIndex + 1);
       newHistory.push(move);
 
+      // Build a position WITH full move history so draw-by-repetition is
+      // detected. gameCopy is created from a bare FEN and therefore has no
+      // history, so chess.js's isThreefoldRepetition() would always be false.
+      let outcomeGame = gameCopy;
+      try {
+        const replay = new Chess();
+        newHistory.forEach((m) =>
+          replay.move({ from: m.from as Square, to: m.to as Square, promotion: m.promotion }),
+        );
+        outcomeGame = replay;
+      } catch {
+        // Synthetic variant (nuke/teleport) moves aren't replayable; fall back.
+        outcomeGame = gameCopy;
+      }
+
       let result = '';
       let winningColor: 'w' | 'b' | undefined;
-      if (gameCopy.isGameOver()) {
-        if (gameCopy.isCheckmate()) {
-          winningColor = gameCopy.turn() === 'w' ? 'b' : 'w';
+      if (outcomeGame.isGameOver()) {
+        if (outcomeGame.isCheckmate()) {
+          winningColor = outcomeGame.turn() === 'w' ? 'b' : 'w';
           const winnerPlayerKey = getPlayerKeyByColor(winningColor, gameState.colorAssignment);
           const winnerName = gameState.players[winnerPlayerKey];
           result = `Checkmate! ${winnerName} wins!`;
-        } else if (gameCopy.isDraw()) {
-          if (gameCopy.isStalemate()) {
+        } else if (outcomeGame.isDraw()) {
+          if (outcomeGame.isStalemate()) {
             result = 'Draw by stalemate!';
-          } else if (gameCopy.isThreefoldRepetition()) {
+          } else if (outcomeGame.isThreefoldRepetition()) {
             result = 'Draw by threefold repetition!';
-          } else if (gameCopy.isInsufficientMaterial()) {
+          } else if (outcomeGame.isInsufficientMaterial()) {
             result = 'Draw by insufficient material!';
           } else {
             result = 'Draw by fifty-move rule!';
@@ -797,18 +812,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           
           // Update user statistics for game completion
           updateUserStats(result, winningColor);
-          
-          // Save game to history with the full PGN
-          // Reconstruct the full game from all moves to ensure complete PGN
-          const fullGameForPgn = new Chess();
-          newHistory.forEach((move) => {
-            fullGameForPgn.move({
-              from: move.from,
-              to: move.to,
-              promotion: move.promotion
-            });
-          });
-          saveGameToHistory(result, winningColor, gameCopy.fen(), fullGameForPgn.pgn());
+
+          // Save game to history. outcomeGame already holds the full move
+          // history (so its PGN is complete), reused here from the game-over check.
+          saveGameToHistory(result, winningColor, outcomeGame.fen(), outcomeGame.pgn());
         }
 
         // Check if this move matches the current hint and clear it
