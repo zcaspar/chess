@@ -24,19 +24,40 @@ const fs = require('fs');
 const PORT = parseInt(process.env.PORT || '3006', 10);
 const LC0_PATH = process.env.LC0_PATH || '/app/lc0/lc0';
 const WEIGHTS_PATH = process.env.LC0_WEIGHTS || '/app/weights.pb.gz';
+// Primary weights: a distilled T1 net (~37 MB) — far stronger than the old Maia
+// default while staying CPU-friendly. Falls back to a small Maia net (stable
+// GitHub URL) if the primary can't be fetched, so the engine is never left
+// without weights. Override either via env.
 const WEIGHTS_URL =
   process.env.LC0_WEIGHTS_URL ||
+  'https://storage.lczero.org/files/networks-contrib/t1-256x10-distilled-swa-2432500.pb.gz';
+const WEIGHTS_FALLBACK_URL =
+  process.env.LC0_WEIGHTS_FALLBACK_URL ||
   'https://github.com/CSSLab/maia-chess/raw/master/maia_weights/maia-1900.pb.gz';
 const LC0_BACKEND = process.env.LC0_BACKEND || ''; // empty => let lc0 auto-select
 const EXTRA_ARGS = process.env.LC0_EXTRA_ARGS ? process.env.LC0_EXTRA_ARGS.split(' ') : [];
 
-// Difficulty -> search nodes. Overridable via env (e.g. LC0_NODES_EXPERT=2000).
-const NODES = {
-  beginner: parseInt(process.env.LC0_NODES_BEGINNER || '1', 10),
-  easy: parseInt(process.env.LC0_NODES_EASY || '10', 10),
-  medium: parseInt(process.env.LC0_NODES_MEDIUM || '50', 10),
-  hard: parseInt(process.env.LC0_NODES_HARD || '200', 10),
-  expert: parseInt(process.env.LC0_NODES_EXPERT || '800', 10),
+// Difficulty -> { nodes, temperature }.
+//  - nodes:       search depth/strength (more = stronger, slower).
+//  - temperature: how randomly lc0 samples among candidate moves. 0 = always the
+//                 best move (strongest); higher = weaker / more varied. This is
+//                 what makes the lower levels genuinely weaker — a neural net
+//                 plays strongly even at low node counts, so nodes alone don't
+//                 produce a real beginner→expert spread.
+// All values are overridable via env: LC0_NODES_<LEVEL>, LC0_TEMP_<LEVEL>.
+function levelConfig(name, defNodes, defTemp) {
+  const key = name.toUpperCase();
+  return {
+    nodes: parseInt(process.env[`LC0_NODES_${key}`] || String(defNodes), 10),
+    temperature: parseFloat(process.env[`LC0_TEMP_${key}`] || String(defTemp)),
+  };
+}
+const DIFFICULTY = {
+  beginner: levelConfig('beginner', 10, 1.2),
+  easy: levelConfig('easy', 25, 0.8),
+  medium: levelConfig('medium', 80, 0.4),
+  hard: levelConfig('hard', 300, 0.15),
+  expert: levelConfig('expert', 1000, 0.0),
 };
 
 let engine = null;
@@ -85,26 +106,52 @@ function sendAndWait(cmd, predicate, timeoutMs) {
   });
 }
 
-function downloadWeights() {
+let loadedWeightsSource = null; // which URL (or 'preexisting') the weights came from
+
+function fetchWeights(url) {
   return new Promise((resolve, reject) => {
-    if (fs.existsSync(WEIGHTS_PATH) && fs.statSync(WEIGHTS_PATH).size > 0) {
-      log('Weights already present at', WEIGHTS_PATH);
-      return resolve();
-    }
-    log('Downloading weights from', WEIGHTS_URL);
     execFile(
       'wget',
-      ['--tries=3', '--timeout=120', '-q', '-O', WEIGHTS_PATH, WEIGHTS_URL],
+      ['--tries=3', '--timeout=120', '-q', '-O', WEIGHTS_PATH, url],
       (err) => {
-        if (err) return reject(new Error('Weights download failed: ' + err.message));
+        if (err) return reject(new Error('wget failed: ' + err.message));
         if (!fs.existsSync(WEIGHTS_PATH) || fs.statSync(WEIGHTS_PATH).size === 0) {
-          return reject(new Error('Weights download produced an empty file'));
+          return reject(new Error('downloaded an empty file'));
         }
-        log('Weights downloaded:', Math.round(fs.statSync(WEIGHTS_PATH).size / 1024), 'KB');
         resolve();
       },
     );
   });
+}
+
+async function downloadWeights() {
+  if (fs.existsSync(WEIGHTS_PATH) && fs.statSync(WEIGHTS_PATH).size > 0) {
+    log('Weights already present at', WEIGHTS_PATH);
+    loadedWeightsSource = 'preexisting';
+    return;
+  }
+
+  // Try the primary (strong) net first, then the fallback (known-good Maia), so
+  // a primary-URL problem can never leave the engine without weights.
+  const candidates = [WEIGHTS_URL];
+  if (WEIGHTS_FALLBACK_URL && WEIGHTS_FALLBACK_URL !== WEIGHTS_URL) {
+    candidates.push(WEIGHTS_FALLBACK_URL);
+  }
+
+  let lastErr;
+  for (const url of candidates) {
+    try {
+      log('Downloading weights from', url);
+      await fetchWeights(url);
+      loadedWeightsSource = url;
+      log('Weights downloaded:', Math.round(fs.statSync(WEIGHTS_PATH).size / 1024), 'KB from', url);
+      return;
+    } catch (e) {
+      lastErr = e;
+      log('Weights download failed from', url, '-', e.message);
+    }
+  }
+  throw new Error('All weights downloads failed: ' + (lastErr && lastErr.message));
 }
 
 async function startEngine() {
@@ -146,8 +193,9 @@ async function startEngine() {
 
 // Serialise getBestMove calls (single UCI process).
 let queue = Promise.resolve();
-function getBestMove(fen, nodes) {
+function getBestMove(fen, { nodes, temperature }) {
   const task = queue.then(async () => {
+    send(`setoption name Temperature value ${temperature}`);
     send('position fen ' + fen);
     const uci = await sendAndWait(
       `go nodes ${nodes}`,
@@ -172,6 +220,7 @@ app.get('/health', (req, res) => {
     engine: 'lc0',
     engineReady,
     weights: WEIGHTS_PATH,
+    weightsSource: loadedWeightsSource,
     error: initError ? initError.message : undefined,
   });
 });
@@ -199,10 +248,10 @@ app.post('/move', async (req, res) => {
     return res.status(400).json({ error: 'Invalid FEN position' });
   }
 
-  const nodes = NODES[difficulty] || NODES.medium;
+  const cfg = DIFFICULTY[difficulty] || DIFFICULTY.medium;
 
   try {
-    const uci = await getBestMove(fen, nodes);
+    const uci = await getBestMove(fen, cfg);
     if (!uci || uci === '(none)') {
       return res.status(200).json({ move: null, message: 'No legal moves', responseTime: Date.now() - start });
     }
@@ -224,7 +273,9 @@ app.post('/move', async (req, res) => {
       move: { uci, san, from, to, promotion },
       responseTime: Date.now() - start,
       engine: 'lc0',
-      nodes,
+      difficulty,
+      nodes: cfg.nodes,
+      temperature: cfg.temperature,
     });
   } catch (err) {
     log('move error:', err.message);

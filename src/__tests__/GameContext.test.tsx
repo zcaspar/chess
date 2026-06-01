@@ -2,7 +2,7 @@ import React from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
 import { act } from 'react';
 import { GameProvider, useGame } from '../contexts/GameContext';
-import { Chess } from 'chess.js';
+import { Chess, Square } from 'chess.js';
 import { AuthProvider } from '../contexts/AuthContext';
 import { ChessAI } from '../utils/chessAI';
 
@@ -103,6 +103,26 @@ describe('GameContext', () => {
 
       expect(result.current.gameState.history).toHaveLength(0);
       expect(result.current.gameState.game.fen()).toBe(new Chess().fen());
+    });
+
+    it('detects draw by threefold repetition', () => {
+      const { result } = renderHook(() => useGame(), { wrapper });
+
+      // Knights out and back, returning to the start position three times.
+      // Requires full move history (regression test: detection used to run on a
+      // historyless Chess copy, so threefold was never caught).
+      const moves: Array<[Square, Square]> = [
+        ['g1', 'f3'], ['g8', 'f6'], ['f3', 'g1'], ['f6', 'g8'],
+        ['g1', 'f3'], ['g8', 'f6'], ['f3', 'g1'], ['f6', 'g8'],
+      ];
+
+      moves.forEach(([from, to]) => {
+        act(() => {
+          result.current.makeMove(from, to);
+        });
+      });
+
+      expect(result.current.gameState.gameResult).toBe('Draw by threefold repetition!');
     });
 
     it('should not allow moves after game ends', () => {
