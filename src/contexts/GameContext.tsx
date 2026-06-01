@@ -631,17 +631,18 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
             return;
           }
           
-          // Determine which difficulty to use for AI vs AI
+          // Determine which difficulty to use (per-side for AI vs AI)
           let difficultyToUse = gameState.aiDifficulty;
           if (gameState.gameMode === 'ai-vs-ai') {
-            difficultyToUse = currentTurn === 'w' ? 
-              (gameState.whiteAiDifficulty || 'medium') : 
+            difficultyToUse = currentTurn === 'w' ?
+              (gameState.whiteAiDifficulty || 'medium') :
               (gameState.blackAiDifficulty || 'medium');
-            
-            // Update the AI engine with the correct difficulty
-            await aiRef.current.setDifficulty(difficultyToUse);
           }
-          
+
+          // Always sync the engine to this move's difficulty so it can never
+          // drift from gameState.aiDifficulty (e.g. after restore/reset/remount).
+          await aiRef.current.setDifficulty(difficultyToUse);
+
           const aiMove = await aiRef.current.getBestMove(gameState.game);
           logger.debug('🤖 AI found move:', aiMove, 'for gameId:', gameState.gameId);
           

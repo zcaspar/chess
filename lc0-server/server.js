@@ -30,13 +30,27 @@ const WEIGHTS_URL =
 const LC0_BACKEND = process.env.LC0_BACKEND || ''; // empty => let lc0 auto-select
 const EXTRA_ARGS = process.env.LC0_EXTRA_ARGS ? process.env.LC0_EXTRA_ARGS.split(' ') : [];
 
-// Difficulty -> search nodes. Overridable via env (e.g. LC0_NODES_EXPERT=2000).
-const NODES = {
-  beginner: parseInt(process.env.LC0_NODES_BEGINNER || '1', 10),
-  easy: parseInt(process.env.LC0_NODES_EASY || '10', 10),
-  medium: parseInt(process.env.LC0_NODES_MEDIUM || '50', 10),
-  hard: parseInt(process.env.LC0_NODES_HARD || '200', 10),
-  expert: parseInt(process.env.LC0_NODES_EXPERT || '800', 10),
+// Difficulty -> { nodes, temperature }.
+//  - nodes:       search depth/strength (more = stronger, slower).
+//  - temperature: how randomly lc0 samples among candidate moves. 0 = always the
+//                 best move (strongest); higher = weaker / more varied. This is
+//                 what makes the lower levels genuinely weaker — a neural net
+//                 plays strongly even at low node counts, so nodes alone don't
+//                 produce a real beginner→expert spread.
+// All values are overridable via env: LC0_NODES_<LEVEL>, LC0_TEMP_<LEVEL>.
+function levelConfig(name, defNodes, defTemp) {
+  const key = name.toUpperCase();
+  return {
+    nodes: parseInt(process.env[`LC0_NODES_${key}`] || String(defNodes), 10),
+    temperature: parseFloat(process.env[`LC0_TEMP_${key}`] || String(defTemp)),
+  };
+}
+const DIFFICULTY = {
+  beginner: levelConfig('beginner', 10, 1.2),
+  easy: levelConfig('easy', 25, 0.8),
+  medium: levelConfig('medium', 80, 0.4),
+  hard: levelConfig('hard', 300, 0.15),
+  expert: levelConfig('expert', 1000, 0.0),
 };
 
 let engine = null;
@@ -146,8 +160,9 @@ async function startEngine() {
 
 // Serialise getBestMove calls (single UCI process).
 let queue = Promise.resolve();
-function getBestMove(fen, nodes) {
+function getBestMove(fen, { nodes, temperature }) {
   const task = queue.then(async () => {
+    send(`setoption name Temperature value ${temperature}`);
     send('position fen ' + fen);
     const uci = await sendAndWait(
       `go nodes ${nodes}`,
@@ -199,10 +214,10 @@ app.post('/move', async (req, res) => {
     return res.status(400).json({ error: 'Invalid FEN position' });
   }
 
-  const nodes = NODES[difficulty] || NODES.medium;
+  const cfg = DIFFICULTY[difficulty] || DIFFICULTY.medium;
 
   try {
-    const uci = await getBestMove(fen, nodes);
+    const uci = await getBestMove(fen, cfg);
     if (!uci || uci === '(none)') {
       return res.status(200).json({ move: null, message: 'No legal moves', responseTime: Date.now() - start });
     }
@@ -224,7 +239,9 @@ app.post('/move', async (req, res) => {
       move: { uci, san, from, to, promotion },
       responseTime: Date.now() - start,
       engine: 'lc0',
-      nodes,
+      difficulty,
+      nodes: cfg.nodes,
+      temperature: cfg.temperature,
     });
   } catch (err) {
     log('move error:', err.message);

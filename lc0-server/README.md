@@ -50,9 +50,18 @@ POST /move
 |-----|---------|---------|
 | `PORT` | `3006` | HTTP port (Railway sets this automatically) |
 | `LC0_WEIGHTS_URL` | Maia-1900 net | Network downloaded at startup (see strength note) |
-| `LC0_NODES_BEGINNER…EXPERT` | `1 / 10 / 50 / 200 / 800` | Search nodes per difficulty |
+| `LC0_NODES_<LEVEL>` | `10 / 25 / 80 / 300 / 1000` | Search nodes per difficulty (beginner→expert) |
+| `LC0_TEMP_<LEVEL>` | `1.2 / 0.8 / 0.4 / 0.15 / 0` | Move-sampling temperature per difficulty |
 | `LC0_BACKEND` | auto | Force an lc0 backend (e.g. `blas`); leave unset to auto-detect |
 | `LC0_EXTRA_ARGS` | – | Extra lc0 CLI flags (space-separated) |
+
+### Difficulty model
+
+Each level maps to **nodes** (search strength) **and** a **temperature** (how
+randomly lc0 samples among candidate moves). Temperature matters because a neural
+net plays strongly even at 1 node, so node count alone does **not** create a real
+beginner→expert spread. `0` temperature = always the best move (strongest);
+higher = weaker / more varied. `expert` uses temperature `0`.
 
 ## ⚠️ Strength note (important)
 
@@ -61,10 +70,13 @@ doing thousands of nodes/sec — that is **not** achievable here.
 
 - The **default weights are Maia-1900** (a small, human-like net) purely because
   it has a stable download URL, so the service builds and runs out of the box.
-- For stronger play, set `LC0_WEIGHTS_URL` to a standard lc0 T-network `.pb.gz`
-  and raise `LC0_NODES_*`. A strong net plays well even at low node counts
-  (its policy head alone is strong) while staying fast on CPU.
-- Tune the `LC0_NODES_*` values to trade strength for move latency.
+  Maia is trained for ~1 node, so it barely scales with `nodes` — the
+  `temperature` knob is what differentiates the levels with this net.
+- For stronger top-end play, set `LC0_WEIGHTS_URL` to a standard lc0 T-network
+  `.pb.gz` and keep `expert` at temperature `0` with high `nodes`.
+- The default node/temperature values are sensible starting points but are
+  **not tuned against a specific net** — adjust `LC0_NODES_*` / `LC0_TEMP_*` to
+  taste (latency vs. strength) without rebuilding.
 
 ## Run locally
 
