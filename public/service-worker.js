@@ -1,9 +1,8 @@
 // Service Worker for Chess App PWA
-const CACHE_NAME = 'chess-app-v1';
+// Bump CACHE_NAME on any caching-behavior change to drop stale caches on activate.
+const CACHE_NAME = 'chess-app-v2';
 const urlsToCache = [
   '/',
-  '/static/css/main.css',
-  '/static/js/main.js',
   '/manifest.json',
   '/favicon.ico',
   '/logo192.png',
@@ -44,56 +43,63 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// Fetch event - serve from cache when offline
+// Fetch event
 self.addEventListener('fetch', event => {
   // Skip non-GET requests
   if (event.request.method !== 'GET') {
     return;
   }
 
+  const url = event.request.url;
+
   // Skip API requests (let them go to network)
-  if (event.request.url.includes('/api/') || 
-      event.request.url.includes('chess-production') ||
-      event.request.url.includes('googleapis') ||
-      event.request.url.includes('firebase')) {
+  if (url.includes('/api/') ||
+      url.includes('chess-production') ||
+      url.includes('googleapis') ||
+      url.includes('firebase')) {
     return;
   }
 
+  // Network-first for navigations (the HTML app shell): always try the network so
+  // a new deploy is picked up immediately; fall back to cache only when offline.
+  // (Cache-first here was serving a stale index.html that pointed at old JS, so
+  // deploys never reached returning users.)
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put('/', copy)).catch(() => {});
+          return response;
+        })
+        .catch(() => caches.match(event.request).then(r => r || caches.match('/')))
+    );
+    return;
+  }
+
+  // Cache-first for other same-origin assets. CRA static assets are
+  // content-hashed, so a new build produces new URLs — caching them is safe.
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // Cache hit - return response
         if (response) {
           return response;
         }
 
-        // Clone the request
-        const fetchRequest = event.request.clone();
-
-        return fetch(fetchRequest).then(response => {
-          // Check if valid response
+        return fetch(event.request.clone()).then(response => {
           if (!response || response.status !== 200 || response.type !== 'basic') {
             return response;
           }
 
-          // Clone the response
           const responseToCache = response.clone();
-
-          // Cache the fetched response for future use
           caches.open(CACHE_NAME)
             .then(cache => {
-              // Only cache same-origin resources
-              if (event.request.url.startsWith(self.location.origin)) {
+              if (url.startsWith(self.location.origin)) {
                 cache.put(event.request, responseToCache);
               }
             });
 
           return response;
-        }).catch(() => {
-          // Offline fallback for navigation requests
-          if (event.request.mode === 'navigate') {
-            return caches.match('/');
-          }
         });
       })
   );
