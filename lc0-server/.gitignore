@@ -1,0 +1,13 @@
+# Dependencies — the root .gitignore only covers /node_modules (root-anchored),
+# so without this `git add -A` sweeps ~650 vendored files into the repository.
+node_modules/
+
+# Runtime artefacts
+npm-debug.log*
+*.log
+
+# Engine weights are downloaded at container startup (see server.js) and must
+# never be committed. Mirrors .dockerignore.
+*.pb
+*.pb.gz
+weights*

@@ -540,6 +540,123 @@ describe('GameContext', () => {
     });
   });
 
+  describe('Regression: game-end and clock state', () => {
+    it('allows moves again after undoing out of a finished game', () => {
+      const { result } = renderHook(() => useGame(), { wrapper });
+
+      // Fool's mate: 1.f3 e5 2.g4 Qh4#
+      const moves: Array<[Square, Square]> = [
+        ['f2', 'f3'], ['e7', 'e5'], ['g2', 'g4'], ['d8', 'h4'],
+      ];
+      moves.forEach(([from, to]) => {
+        act(() => {
+          result.current.makeMove(from, to);
+        });
+      });
+
+      expect(result.current.gameState.gameResult).toContain('Checkmate');
+
+      act(() => {
+        result.current.undoMove();
+      });
+
+      // Undo clears gameResult in state, so the board looks playable again...
+      expect(result.current.gameState.gameResult).toBe('');
+
+      // ...and it must actually be playable. Black is to move after 2.g4.
+      let moveResult: boolean | undefined;
+      act(() => {
+        moveResult = result.current.makeMove('d7', 'd6');
+      });
+
+      expect(moveResult).toBe(true);
+      expect(result.current.gameState.history).toHaveLength(4);
+    });
+
+    it('allows a new game to be played after resigning and resetting', () => {
+      const { result } = renderHook(() => useGame(), { wrapper });
+
+      act(() => {
+        result.current.makeMove('e2', 'e4');
+      });
+
+      act(() => {
+        result.current.resign('w');
+      });
+
+      expect(result.current.gameState.gameResult).toContain('resignation');
+
+      act(() => {
+        result.current.resetGame();
+      });
+
+      let moveResult: boolean | undefined;
+      act(() => {
+        moveResult = result.current.makeMove('e2', 'e4');
+      });
+
+      expect(moveResult).toBe(true);
+    });
+
+    it('starts the clock on the first move when a time control is set', () => {
+      const { result } = renderHook(() => useGame(), { wrapper });
+
+      act(() => {
+        result.current.setTimeControl(5);
+      });
+
+      expect(result.current.gameState.activeColor).toBeNull();
+
+      act(() => {
+        result.current.makeMove('e2', 'e4');
+      });
+
+      // White has moved, so Black's clock must now be running.
+      expect(result.current.gameState.activeColor).toBe('b');
+      expect(result.current.gameState.startTime).not.toBeNull();
+    });
+
+    it('hands the clock to the other player on each subsequent move', () => {
+      const { result } = renderHook(() => useGame(), { wrapper });
+
+      act(() => {
+        result.current.setTimeControl(5);
+      });
+
+      act(() => {
+        result.current.makeMove('e2', 'e4');
+      });
+
+      act(() => {
+        result.current.makeMove('e7', 'e5');
+      });
+
+      expect(result.current.gameState.activeColor).toBe('w');
+      expect(result.current.gameState.startTime).not.toBeNull();
+    });
+
+    it('stops the clock when the game ends', () => {
+      const { result } = renderHook(() => useGame(), { wrapper });
+
+      act(() => {
+        result.current.setTimeControl(5);
+      });
+
+      const moves: Array<[Square, Square]> = [
+        ['f2', 'f3'], ['e7', 'e5'], ['g2', 'g4'], ['d8', 'h4'],
+      ];
+      moves.forEach(([from, to]) => {
+        act(() => {
+          result.current.makeMove(from, to);
+        });
+      });
+
+      expect(result.current.gameState.gameResult).toContain('Checkmate');
+      expect(result.current.gameState.activeColor).toBeNull();
+      expect(result.current.gameState.startTime).toBeNull();
+    });
+  });
+
   describe('Clear All Game Data', () => {
     it('should clear all game data and reset to initial state', () => {
       const { result } = renderHook(() => useGame(), { wrapper });

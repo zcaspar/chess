@@ -344,9 +344,15 @@ router.delete('/:id', authenticateToken, async (req: AuthenticatedRequest, res) 
  */
 router.get('/admin/recent', authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
-    // Restrict to known admin UIDs until a full role system is implemented
-    const ADMIN_UIDS = (process.env.ADMIN_UIDS || '').split(',').filter(Boolean);
-    if (ADMIN_UIDS.length > 0 && !ADMIN_UIDS.includes(req.user!.uid)) {
+    // Restrict to known admin UIDs until a full role system is implemented.
+    // This fails closed: an unset or empty ADMIN_UIDS means nobody is an admin,
+    // not everybody (the previous `ADMIN_UIDS.length > 0 &&` guard meant the
+    // endpoint was open to every signed-in user whenever the var was missing).
+    const ADMIN_UIDS = (process.env.ADMIN_UIDS || '')
+      .split(',')
+      .map((uid) => uid.trim())
+      .filter(Boolean);
+    if (!ADMIN_UIDS.includes(req.user!.uid)) {
       return res.status(403).json({ error: 'Admin access required' });
     }
     const limit = parseInt(req.query.limit as string) || 20;
@@ -373,16 +379,27 @@ router.get('/admin/recent', authenticateToken, async (req: AuthenticatedRequest,
 });
 
 /**
+ * Reject anything that is not an explicitly-development environment.
+ *
+ * Checked before auth so an unset NODE_ENV can never fall through to a
+ * schema-mutating handler, and so production answers 403 rather than 401.
+ */
+const requireDevelopment: express.RequestHandler = (req, res, next) => {
+  if (process.env.NODE_ENV !== 'development') {
+    res.status(403).json({
+      error: 'Table initialization is only allowed when NODE_ENV=development',
+    });
+    return;
+  }
+  next();
+};
+
+/**
  * POST /api/game-history/init-tables
  * Initialize database tables (development helper)
  */
-router.post('/init-tables', async (req, res) => {
+router.post('/init-tables', requireDevelopment, authenticateToken, async (req, res) => {
   try {
-    // Only allow in development
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(403).json({ error: 'Table initialization not allowed in production' });
-    }
-
     await GameHistoryModel.initializeTables();
     
     res.json({

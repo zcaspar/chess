@@ -31,6 +31,16 @@ CREATE INDEX IF NOT EXISTS idx_game_history_opponent_id ON game_history(opponent
 CREATE INDEX IF NOT EXISTS idx_game_history_game_result ON game_history(game_result);
 CREATE INDEX IF NOT EXISTS idx_game_history_player_created ON game_history(player_id, created_at DESC);
 
+-- One row per (player, game).
+-- The same finished game reaches the API more than once: the socket path and
+-- the HTTP path both save it, clients retry after a timeout, and StrictMode
+-- double-fires the state updater that triggers the save. This index is what
+-- makes the ON CONFLICT in GameHistoryModel.saveGame idempotent.
+-- NOTE: creating this will fail if duplicate rows already exist for a
+-- (player_id, game_id) pair — de-duplicate first on an existing database.
+CREATE UNIQUE INDEX IF NOT EXISTS game_history_player_game_unique
+    ON game_history(player_id, game_id);
+
 -- Create trigger to automatically update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -40,9 +50,13 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
-CREATE TRIGGER update_game_history_updated_at 
-    BEFORE UPDATE ON game_history 
-    FOR EACH ROW 
+-- Postgres has no CREATE OR REPLACE TRIGGER, so drop first: this file is
+-- re-executed on every boot that finds the tables missing, and a bare CREATE
+-- TRIGGER would fail with 42710 the second time.
+DROP TRIGGER IF EXISTS update_game_history_updated_at ON game_history;
+CREATE TRIGGER update_game_history_updated_at
+    BEFORE UPDATE ON game_history
+    FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Create users table if it doesn't exist (for reference)

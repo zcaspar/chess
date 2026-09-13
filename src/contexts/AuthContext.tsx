@@ -88,7 +88,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const result = await signInAnonymously(auth);
       
       // Create temporary guest profile
-      const guestUsername = `Guest_${Math.random().toString(36).substr(2, 6)}`;
+      const guestUsername = `Guest_${Math.random().toString(36).slice(2, 8)}`;
       await createUserProfile(result.user, guestUsername, true);
     } catch (err: any) {
       setError(err.message);

@@ -45,24 +45,97 @@ export interface SaveGameRequest {
   aiDifficulty?: string;
 }
 
+/**
+ * Split a SQL script into individual statements.
+ *
+ * A naive `split(';')` tears PL/pgSQL definitions apart, because the body of a
+ * $$-quoted function legitimately contains semicolons — the created function
+ * then arrives as two malformed fragments and the whole schema run aborts. This
+ * tracks the dollar-quote state and drops comment-only fragments (the schema
+ * ends with a commented-out ALTER TABLE whose trailing `;` would otherwise
+ * produce one).
+ */
+export function splitSqlStatements(sql: string): string[] {
+  const statements: string[] = [];
+  let current = '';
+  let inDollarQuote = false;
+  let i = 0;
+
+  while (i < sql.length) {
+    if (sql.startsWith('$$', i)) {
+      inDollarQuote = !inDollarQuote;
+      current += '$$';
+      i += 2;
+      continue;
+    }
+
+    const char = sql[i];
+    if (char === ';' && !inDollarQuote) {
+      statements.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+    i += 1;
+  }
+  statements.push(current);
+
+  return statements
+    .map((statement) => statement.trim())
+    .filter((statement) => {
+      if (!statement) return false;
+      // Keep only statements with at least one non-comment line.
+      return statement
+        .split('\n')
+        .some((line) => line.trim() && !line.trim().startsWith('--'));
+    });
+}
+
 export class GameHistoryModel {
   /**
    * Save a completed game to history
    */
   static async saveGame(gameData: SaveGameRequest): Promise<GameHistoryEntry> {
-    const insertQuery = `
-      INSERT INTO game_history (
+    const columns = `
         player_id, game_id, opponent_id, opponent_name, player_color,
         game_result, game_outcome, final_fen, pgn, move_count,
         game_duration, time_control, game_mode, ai_difficulty
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    `;
+    const placeholders = 'VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)';
+
+    // One row per (player_id, game_id). The same finished game legitimately
+    // reaches here more than once — the socket path and the HTTP path both
+    // save, a client retries after a timeout, StrictMode double-fires an
+    // updater — and each of those used to append a duplicate row.
+    const insertQuery = `
+      INSERT INTO game_history (${columns})
+      ${placeholders}
+      ON CONFLICT (player_id, game_id) DO UPDATE SET
+        opponent_id   = EXCLUDED.opponent_id,
+        opponent_name = EXCLUDED.opponent_name,
+        player_color  = EXCLUDED.player_color,
+        game_result   = EXCLUDED.game_result,
+        game_outcome  = EXCLUDED.game_outcome,
+        final_fen     = EXCLUDED.final_fen,
+        pgn           = EXCLUDED.pgn,
+        move_count    = EXCLUDED.move_count,
+        game_duration = EXCLUDED.game_duration,
+        time_control  = EXCLUDED.time_control,
+        game_mode     = EXCLUDED.game_mode,
+        ai_difficulty = EXCLUDED.ai_difficulty
+      RETURNING *
+    `;
+
+    // Used only when the database predates the unique index (see 42P10 below).
+    const plainInsertQuery = `
+      INSERT INTO game_history (${columns})
+      ${placeholders}
       RETURNING *
     `;
 
     // Ensure timeControl is a proper object for JSONB
     const timeControlValue = prepareForJsonb(gameData.timeControl);
-    
+
     const values = [
       gameData.playerId,
       gameData.gameId,
@@ -85,16 +158,16 @@ export class GameHistoryModel {
       return this.mapRowToGameHistory(result.rows[0]);
     } catch (error: any) {
       logger.error('Error saving game history:', error);
-      
+
       // Check if it's a table doesn't exist error
       if (error.code === '42P01') {
         logger.debug('🔄 Table does not exist, attempting to create it...');
-        
+
         try {
           // Try to create the table and retry the insert
           await this.initializeTables();
           logger.debug('✅ Tables created, retrying insert...');
-          
+
           const retryResult = await query(insertQuery, values);
           return this.mapRowToGameHistory(retryResult.rows[0]);
         } catch (retryError: any) {
@@ -102,7 +175,20 @@ export class GameHistoryModel {
           throw new Error(`Failed to initialize database tables: ${retryError.message}`);
         }
       }
-      
+
+      // 42P10: "there is no unique or exclusion constraint matching the ON
+      // CONFLICT specification" — a database from before the unique index was
+      // added. Fall back to a plain insert rather than losing every game; the
+      // index is created by db/schema.sql on the next deploy.
+      if (error.code === '42P10') {
+        logger.warn(
+          '⚠️  game_history lacks the (player_id, game_id) unique index; ' +
+          'saving without duplicate protection until the schema is applied.',
+        );
+        const fallbackResult = await query(plainInsertQuery, values);
+        return this.mapRowToGameHistory(fallbackResult.rows[0]);
+      }
+
       throw new Error(`Failed to save game to history: ${error.message}`);
     }
   }
@@ -248,6 +334,55 @@ export class GameHistoryModel {
   }
 
   /**
+   * Collapse duplicate rows for the same (player_id, game_id) pair.
+   *
+   * Runs only while the unique index is missing — once it exists duplicates are
+   * impossible — because otherwise an existing database that already contains
+   * duplicates can never have the index built, and the protection stays off
+   * forever. The oldest row of each pair is kept: the first write is the real
+   * record, later ones are retries of it.
+   *
+   * Uses a window function rather than a self-join so it is O(n log n); the
+   * naive `DELETE ... USING` form would be quadratic on a table with no index
+   * on those columns, which is exactly the situation this runs in.
+   *
+   * @returns the number of duplicate rows removed
+   */
+  private static async dedupeGameHistory(): Promise<number> {
+    // Nothing to do on a first run — checked up front so a brand-new database
+    // does not log a "relation does not exist" error on every boot.
+    const table = await query(`SELECT to_regclass('public.game_history') AS relation`);
+    if (!table.rows[0]?.relation) {
+      return 0;
+    }
+
+    // Duplicates are impossible once the index exists, and this is an O(n log n)
+    // scan we have no reason to repeat on every startup.
+    const index = await query(
+      `SELECT 1 FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND indexname = 'game_history_player_game_unique'`,
+    );
+    if (index.rows.length > 0) {
+      return 0;
+    }
+
+    const result = await query(`
+      DELETE FROM game_history
+      WHERE id IN (
+        SELECT id FROM (
+          SELECT id, ROW_NUMBER() OVER (
+            PARTITION BY player_id, game_id ORDER BY id
+          ) AS duplicate_rank
+          FROM game_history
+        ) ranked
+        WHERE ranked.duplicate_rank > 1
+      )
+    `);
+    return result.rowCount ?? 0;
+  }
+
+  /**
    * Initialize database tables (development helper)
    */
   static async initializeTables(): Promise<void> {
@@ -305,7 +440,13 @@ export class GameHistoryModel {
               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
               updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           );
-          
+
+          -- One row per (player, game); see db/schema.sql for the rationale.
+          CREATE UNIQUE INDEX IF NOT EXISTS game_history_player_game_unique
+              ON game_history(player_id, game_id);
+
+          CREATE INDEX IF NOT EXISTS idx_game_history_player_id ON game_history(player_id);
+
           -- Head-to-head records table
           CREATE TABLE IF NOT EXISTS head_to_head_records (
               id SERIAL PRIMARY KEY,
@@ -328,12 +469,30 @@ export class GameHistoryModel {
         `;
       }
       
+      // Collapse duplicates FIRST: the schema below adds the unique
+      // (player_id, game_id) index, and on a database that already holds
+      // duplicates that statement fails and the duplicate protection never
+      // lands. Doing it here means no manual migration is required.
+      try {
+        const removed = await this.dedupeGameHistory();
+        if (removed > 0) {
+          logger.warn(
+            `🧹 Removed ${removed} duplicate game_history row(s) before creating the unique index`,
+          );
+        }
+      } catch (dedupeError: any) {
+        logger.error(
+          `⚠️  Could not collapse duplicate game_history rows (${dedupeError.message}); ` +
+          'the unique index may not be created',
+        );
+      }
+
       // Combine schemas
       const fullSchema = schema + '\n' + h2hSchema;
       
-      // Split by semicolon and execute each statement
-      const statements = fullSchema.split(';').filter((stmt: string) => stmt.trim().length > 0);
-      
+      // Split into statements and execute each one.
+      const statements = splitSqlStatements(fullSchema);
+
       logger.debug(`🔄 Executing ${statements.length} SQL statements...`);
       
       for (let i = 0; i < statements.length; i++) {
@@ -352,6 +511,19 @@ export class GameHistoryModel {
               detail: statementError.detail,
               position: statementError.position
             });
+
+            // An index that cannot be built (most likely the unique
+            // (player_id, game_id) index on a table that already contains
+            // duplicates) costs performance and duplicate protection, not
+            // correctness. Log it loudly and keep going rather than leaving the
+            // server with no tables at all.
+            if (/^\s*CREATE\s+(UNIQUE\s+)?INDEX/i.test(statement)) {
+              logger.error(
+                `⚠️  Continuing without index: ${statement.substring(0, 80)}`,
+              );
+              continue;
+            }
+
             throw statementError;
           }
         }

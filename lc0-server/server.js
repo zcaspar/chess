@@ -191,18 +191,39 @@ async function startEngine() {
   log('Engine ready.');
 }
 
+const isBestmove = (line) =>
+  line.startsWith('bestmove ') ? line.split(/\s+/)[1] : undefined;
+
+/**
+ * Abandon an in-flight search cleanly.
+ *
+ * A timed-out `go` leaves lc0 still searching. Simply moving on is not safe:
+ * the next request sends `setoption`/`position` while the engine is busy, and
+ * the delayed `bestmove` from the abandoned search would be picked up by the
+ * NEXT request's listener — answering the wrong question with the wrong move.
+ * So send `stop` and drain the bestmove it emits before releasing the queue.
+ */
+async function abandonSearch() {
+  try {
+    await sendAndWait('stop', (line) => (line.startsWith('bestmove ') ? true : undefined), 5000);
+    log('drained abandoned search');
+  } catch (e) {
+    log('could not drain abandoned search:', e.message);
+  }
+}
+
 // Serialise getBestMove calls (single UCI process).
 let queue = Promise.resolve();
 function getBestMove(fen, { nodes, temperature }) {
   const task = queue.then(async () => {
     send(`setoption name Temperature value ${temperature}`);
     send('position fen ' + fen);
-    const uci = await sendAndWait(
-      `go nodes ${nodes}`,
-      (line) => (line.startsWith('bestmove ') ? line.split(/\s+/)[1] : undefined),
-      60000,
-    );
-    return uci;
+    try {
+      return await sendAndWait(`go nodes ${nodes}`, isBestmove, 60000);
+    } catch (err) {
+      await abandonSearch();
+      throw err;
+    }
   });
   // Keep the chain going even if this task rejects.
   queue = task.catch(() => {});
@@ -229,9 +250,19 @@ app.get('/', (req, res) => {
   res.json({ name: 'lc0-server', engineReady, endpoints: ['/health', 'POST /move'] });
 });
 
+// Optional shared secret between this engine and the backend that proxies to
+// it. Unset (the default) leaves /move open, which is how this service has
+// always run — set LC0_SHARED_SECRET here and on the backend to close it.
+// /health stays open so platform healthchecks keep working.
+const SHARED_SECRET = process.env.LC0_SHARED_SECRET || '';
+
 app.post('/move', async (req, res) => {
   const start = Date.now();
   const { fen, difficulty = 'medium' } = req.body || {};
+
+  if (SHARED_SECRET && req.get('x-lc0-secret') !== SHARED_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
 
   if (!fen) {
     return res.status(400).json({ error: 'FEN position is required' });

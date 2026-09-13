@@ -20,14 +20,28 @@ export function getAllowedOrigins(): string[] {
 }
 
 /**
+ * Turn a `*`-wildcard allow-list entry into an anchored regular expression.
+ *
+ * Every regex metacharacter other than `*` is escaped first, so a `.` in a
+ * hostname matches a literal dot rather than any character. Without that
+ * escaping `https://chess-pu71.vercel.app` would also accept
+ * `https://chess-pu71XvercelYapp`.
+ */
+function wildcardToRegExp(pattern: string): RegExp {
+  const escaped = pattern
+    .replace(/[.+?^${}()|[\]\\]/g, '\\$&') // everything except `*`
+    .replace(/\*/g, '.*'); // `*` is the only intentional wildcard
+  return new RegExp(`^${escaped}$`);
+}
+
+/**
  * Check an origin against the allow-list, supporting `*` wildcard patterns
  * (e.g. https://chess-pu71-*.vercel.app for Vercel preview deploys).
  */
 export function isOriginAllowed(origin: string, allowedOrigins: string[]): boolean {
   return allowedOrigins.some((allowed) => {
     if (allowed.includes('*')) {
-      const pattern = allowed.replace(/\*/g, '.*');
-      return new RegExp(`^${pattern}$`).test(origin);
+      return wildcardToRegExp(allowed).test(origin);
     }
     return allowed === origin;
   });

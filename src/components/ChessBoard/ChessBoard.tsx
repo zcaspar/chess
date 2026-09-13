@@ -64,6 +64,27 @@ const ChessBoard: React.FC = () => {
     }
   }, [gameState.gameResult]);
 
+  /**
+   * Local legality check for the online path.
+   *
+   * The server is authoritative and re-validates every move, but sending it a
+   * move that is plainly illegal locally — or a drag of the opponent's pieces —
+   * only earns an error round-trip and a board that snaps back.
+   */
+  const isLocallyPlayable = useCallback((from: Square, to: Square): boolean => {
+    if (!assignedColor) return false;
+
+    const myColor = assignedColor.charAt(0);
+    if (gameState.game.turn() !== myColor) return false;
+
+    const piece = gameState.game.get(from);
+    if (!piece || piece.color !== myColor) return false;
+
+    return gameState.game
+      .moves({ square: from, verbose: true })
+      .some((move) => move.to === to);
+  }, [assignedColor, gameState.game]);
+
   const getMoveOptions = useCallback((square: Square) => {
     const moves = gameState.game.moves({
       square,
@@ -139,8 +160,7 @@ const ChessBoard: React.FC = () => {
     let moveSuccessful = false;
     
     if (isOnlineGame && roomCode) {
-      // For online games, check if it's our turn
-      if (assignedColor && gameState.game.turn() === assignedColor.charAt(0)) {
+      if (isLocallyPlayable(moveFrom, square)) {
         socketMakeMove(moveFrom, square);
         moveSuccessful = true; // Optimistically assume success
       }
@@ -163,7 +183,7 @@ const ChessBoard: React.FC = () => {
         setOptionSquares({});
       }
     }
-  }, [gameState.gameResult, gameState.nukeModeActive, gameState.teleportModeActive, gameState.game, moveFrom, isOnlineGame, roomCode, assignedColor, socketMakeMove, makeMove, executeNuke, executeTeleport, getMoveOptions]);
+  }, [gameState.gameResult, gameState.nukeModeActive, gameState.teleportModeActive, gameState.game, moveFrom, isOnlineGame, roomCode, socketMakeMove, makeMove, executeNuke, executeTeleport, getMoveOptions, isLocallyPlayable]);
 
   const onSquareRightClick = useCallback((square: Square) => {
     const newSquares = rightClickedSquares.includes(square)
@@ -193,8 +213,7 @@ const ChessBoard: React.FC = () => {
     let moveSuccessful = false;
     
     if (isOnlineGame && roomCode) {
-      // For online games, check if it's our turn
-      if (assignedColor && gameState.game.turn() === assignedColor.charAt(0)) {
+      if (isLocallyPlayable(sourceSquare, targetSquare)) {
         socketMakeMove(sourceSquare, targetSquare);
         moveSuccessful = true; // Optimistically assume success
       }
@@ -206,7 +225,7 @@ const ChessBoard: React.FC = () => {
     setMoveFrom(null);
     setOptionSquares({});
     return moveSuccessful;
-  }, [gameState.gameResult, gameState.nukeModeActive, gameState.teleportModeActive, gameState.game, isOnlineGame, roomCode, assignedColor, socketMakeMove, makeMove]);
+  }, [gameState.gameResult, gameState.nukeModeActive, gameState.teleportModeActive, isOnlineGame, roomCode, socketMakeMove, makeMove, isLocallyPlayable]);
 
   const onDragBegin = useCallback((piece: string, sourceSquare: Square) => {
     // Don't allow drag if game has ended

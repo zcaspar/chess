@@ -80,6 +80,8 @@ export interface GameState {
   onlineGameRoom?: {
     opponentId?: string;
     opponentName?: string;
+    /** The colour this client was assigned by the server. */
+    myColor?: 'w' | 'b';
   } | null;
 }
 
@@ -144,7 +146,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     history: [],
     currentMoveIndex: -1,
     gameResult: '',
-    gameId: Math.random().toString(36).substr(2, 9),
+    gameId: Math.random().toString(36).slice(2, 11),
     statsUpdated: false,
     drawOffer: {
       offered: false,
@@ -204,10 +206,26 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     return color === 'w' ? colorAssignment.white : colorAssignment.black;
   };
 
+  // Which colour the signed-in user is taken to be playing.
+  //
+  // In an AI game it is whichever side the AI is not on. A local hot-seat game
+  // has no notion of "me" — both players share one device and one account — so
+  // the local player is recorded as White. That assumption is why a local game
+  // is only ever counted once, and it is applied consistently to both the saved
+  // history row and the profile statistics so the two agree.
+  const getLocalPlayerColor = useCallback(
+    (mode: GameState['gameMode'], aiColor: 'w' | 'b' | null): 'w' | 'b' =>
+      mode === 'human-vs-ai' && aiColor === 'w' ? 'b' : 'w',
+    [],
+  );
+
   // Track completed games to prevent double counting
   const completedGamesRef = useRef<Set<string>>(new Set());
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Latest state, readable from inside the 1s clock interval without making the
+  // interval a dependency of every state change.
+  const gameStateRef = useRef<GameState>(gameState);
   const aiRef = useRef<ChessAI>(new ChessAI('medium'));
   const isAiThinking = useRef<boolean>(false);
   const gameEndedRef = useRef<boolean>(false); // Track game end state to prevent race conditions
@@ -265,7 +283,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   }, []);
 
   // Function to save game to history
-  const saveGameToHistory = useCallback(async (result: string, winningColor?: 'w' | 'b', finalFen?: string, pgn?: string) => {
+  const saveGameToHistory = useCallback(async (
+    result: string,
+    winningColor?: 'w' | 'b',
+    finalFen?: string,
+    pgn?: string,
+    moveCountOverride?: number,
+  ) => {
     logger.debug('🎮 Attempting to save game to history:', { result, winningColor, hasUser: !!authContext?.user });
     
     if (!authContext?.user || !authContext?.profile) {
@@ -276,30 +300,22 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     try {
       const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3005';
       
-      // Determine game outcome for the current user
+      // An online game knows which colour the server assigned us; only local
+      // and AI games need the fallback convention.
+      const playerColor =
+        gameState.onlineGameRoom?.myColor ??
+        getLocalPlayerColor(gameState.gameMode, gameState.aiColor);
+
+      // Outcome is relative to the colour the signed-in player is recorded as
+      // playing. This used to hard-code 'win' for every human-vs-human game,
+      // so a local game you lost was filed as a win.
       let gameOutcome: 'win' | 'loss' | 'draw' = 'draw';
-      
-      if (result.includes('wins') && winningColor) {
-        if (gameState.gameMode === 'human-vs-ai') {
-          // For AI games, user wins if AI didn't win
-          const userWon = (gameState.aiColor === 'w' && winningColor === 'b') || 
-                          (gameState.aiColor === 'b' && winningColor === 'w');
-          gameOutcome = userWon ? 'win' : 'loss';
-        } else {
-          // For human vs human, we'll mark it as a win for now
-          // TODO: Could be enhanced to determine which player in the UI
-          gameOutcome = 'win';
-        }
-      } else if (result.includes('Draw') || result.includes('draw')) {
+      if (result.includes('Draw') || result.includes('draw')) {
         gameOutcome = 'draw';
+      } else if (result.includes('wins') && winningColor) {
+        gameOutcome = winningColor === playerColor ? 'win' : 'loss';
       }
-      
-      // Determine player color (assume human is always white for now, AI is black)
-      let playerColor: 'w' | 'b' = 'w';
-      if (gameState.gameMode === 'human-vs-ai' && gameState.aiColor === 'w') {
-        playerColor = 'b';
-      }
-      
+
       // Generate PGN if not provided
       let gamePgn = pgn;
       
@@ -438,9 +454,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         gameOutcome,
         finalFen: finalFen || gameState.game.fen(),
         pgn: gamePgn,
-        moveCount: Math.max(gameState.history.length, gameState.game.history().length, finalMoveCount),
-        gameDuration: gameState.timeControl ? 
-          Math.floor((gameState.timeControl.initial * 2 - gameState.whiteTime - gameState.blackTime) / 1000) : 
+        // Prefer the caller's count when given: this closure's `gameState` is
+        // from before the move that ended the game, so its history is one short.
+        moveCount: moveCountOverride ?? Math.max(gameState.history.length, gameState.game.history().length, finalMoveCount),
+        // Time controls and clock values are all in seconds, so this is too
+        // (it was previously divided by 1000, making every duration ~0).
+        gameDuration: gameState.timeControl ?
+          Math.max(0, Math.round(gameState.timeControl.initial * 2 - gameState.whiteTime - gameState.blackTime)) :
           undefined,
         timeControl: gameState.timeControl,
         gameMode: gameState.gameMode,
@@ -483,12 +503,19 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     } catch (error) {
       logger.error('❌ Error saving game to history:', error);
     }
-  }, [authContext, gameState]);
+  }, [authContext, gameState, getLocalPlayerColor]);
 
   // Function to update user statistics when game ends
   const updateUserStats = useCallback(async (result: string, winningColor?: 'w' | 'b') => {
     if (!authContext?.profile || !authContext?.updateStats) {
       return; // No authenticated user or auth not available
+    }
+
+    // Online results are scored server-side: GameSocketHandler.endGame writes
+    // users.stats directly. Applying the same result here as well counted every
+    // online game twice.
+    if (gameState.onlineGameRoom) {
+      return;
     }
 
     try {
@@ -503,23 +530,18 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         // Draw
         statUpdate.draws = currentStats.draws + 1;
         statUpdate.winStreak = 0; // Reset win streak on draw
-      } else if (result.includes('wins')) {
-        // For AI games, determine if user won or lost
-        if (gameState.gameMode === 'human-vs-ai' && winningColor) {
-          const userWon = (gameState.aiColor === 'w' && winningColor === 'b') || 
-                          (gameState.aiColor === 'b' && winningColor === 'w');
-          
-          if (userWon) {
-            statUpdate.wins = currentStats.wins + 1;
-            statUpdate.winStreak = currentStats.winStreak + 1;
-            statUpdate.bestWinStreak = Math.max(currentStats.bestWinStreak, currentStats.winStreak + 1);
-          } else {
-            statUpdate.losses = currentStats.losses + 1;
-            statUpdate.winStreak = 0;
-          }
+      } else if (result.includes('wins') && winningColor) {
+        // Same colour convention as saveGameToHistory, so the profile
+        // statistics and the saved history rows always agree.
+        const userWon = winningColor === getLocalPlayerColor(gameState.gameMode, gameState.aiColor);
+
+        if (userWon) {
+          statUpdate.wins = currentStats.wins + 1;
+          statUpdate.winStreak = currentStats.winStreak + 1;
+          statUpdate.bestWinStreak = Math.max(currentStats.bestWinStreak, currentStats.winStreak + 1);
         } else {
-          // For human vs human, we can't determine user win/loss easily, so we'll track it as a game played
-          // In the future, this could be enhanced with player identification
+          statUpdate.losses = currentStats.losses + 1;
+          statUpdate.winStreak = 0;
         }
       }
 
@@ -527,58 +549,76 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     } catch (error) {
       logger.error('❌ Error updating user stats:', error);
     }
-  }, [authContext, gameState.gameMode, gameState.aiColor]);
+  }, [authContext, gameState.gameMode, gameState.aiColor, gameState.onlineGameRoom, getLocalPlayerColor]);
 
   // Clock ticker — only checks for time expiration at 1s intervals.
   // Display updates are handled locally in ChessClock for performance
   // (avoids re-rendering the entire app 10x/second).
   useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
+  useEffect(() => {
     if (gameState.timeControl && gameState.activeColor && gameState.startTime && !gameState.gameResult) {
       intervalRef.current = setInterval(() => {
-        setGameState(prev => {
-          if (!prev.activeColor || prev.gameResult || !prev.startTime) {
-            return prev;
-          }
+        // Read the latest state from the ref rather than doing work inside a
+        // state updater: the updater must stay pure (see makeMove), and
+        // expiring on time has to write to the database and to user stats.
+        const current = gameStateRef.current;
+        if (!current.activeColor || current.gameResult || !current.startTime) {
+          return;
+        }
 
-          const elapsed = (Date.now() - prev.startTime) / 1000;
-          const timeKey = prev.activeColor === 'w' ? 'whiteTime' : 'blackTime';
-          const newTime = Math.max(0, prev[timeKey] - elapsed);
+        const elapsed = (Date.now() - current.startTime) / 1000;
+        const timeKey = current.activeColor === 'w' ? 'whiteTime' : 'blackTime';
+        const newTime = Math.max(0, current[timeKey] - elapsed);
 
-          // Only update state when time expires (not every tick)
-          if (newTime === 0) {
-            const losingColor = prev.activeColor!;
-            const winningColor = prev.activeColor === 'w' ? 'b' : 'w';
-            const loserPlayerKey = getPlayerKeyByColor(losingColor, prev.colorAssignment);
-            const winnerPlayerKey = getPlayerKeyByColor(winningColor, prev.colorAssignment);
-            const loserName = prev.players[loserPlayerKey];
-            const winnerName = prev.players[winnerPlayerKey];
-            const result = `${winnerName} wins on time! ${loserName} ran out of time.`;
-            logger.debug('⏰ TIME EXPIRED:', { losingColor, loserName, result });
-            const updatedStats = updateGameStats(result, prev.gameStats, prev.colorAssignment, prev.players, winningColor, prev.statsUpdated, prev.gameId);
+        // ChessClock computes the display time locally; nothing to do until
+        // the flag actually falls.
+        if (newTime > 0) {
+          return;
+        }
 
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current);
-              intervalRef.current = null;
-            }
+        const losingColor = current.activeColor;
+        const winningColor: 'w' | 'b' = losingColor === 'w' ? 'b' : 'w';
+        const loserPlayerKey = getPlayerKeyByColor(losingColor, current.colorAssignment);
+        const winnerPlayerKey = getPlayerKeyByColor(winningColor, current.colorAssignment);
+        const loserName = current.players[loserPlayerKey];
+        const winnerName = current.players[winnerPlayerKey];
+        const result = `${winnerName} wins on time! ${loserName} ran out of time.`;
 
-            updateUserStats(result, winningColor);
-            saveGameToHistory(result, winningColor);
-            gameEndedRef.current = true;
+        logger.debug('⏰ TIME EXPIRED:', { losingColor, loserName, result });
 
-            return {
-              ...prev,
-              [timeKey]: 0,
-              gameResult: result,
-              activeColor: null,
-              startTime: null,
-              gameStats: updatedStats,
-              statsUpdated: true,
-            };
-          }
+        const updatedStats = updateGameStats(
+          result,
+          current.gameStats,
+          current.colorAssignment,
+          current.players,
+          winningColor,
+          current.statsUpdated,
+          current.gameId,
+        );
 
-          // No state update needed — ChessClock computes display time locally
-          return prev;
-        });
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+
+        gameEndedRef.current = true;
+
+        setGameState(prev => ({
+          ...prev,
+          [timeKey]: 0,
+          gameResult: result,
+          activeColor: null,
+          startTime: null,
+          gameStats: updatedStats,
+          statsUpdated: true,
+        }));
+
+        // Side effects outside the updater, so StrictMode cannot double-fire them.
+        updateUserStats(result, winningColor);
+        saveGameToHistory(result, winningColor);
       }, 1000); // Check expiration every second
     } else {
       if (intervalRef.current) {
@@ -787,6 +827,32 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         }
       }
 
+      // Everything that leaves the process (stats, history POST) is computed
+      // and fired OUTSIDE the state updater below. React is free to invoke an
+      // updater more than once — StrictMode does exactly that in development —
+      // and anything with a side effect in there fires twice per game.
+      const updatedStats = result
+        ? updateGameStats(
+            result,
+            gameState.gameStats,
+            gameState.colorAssignment,
+            gameState.players,
+            winningColor,
+            gameState.statsUpdated,
+            gameState.gameId,
+          )
+        : gameState.gameStats;
+
+      if (result) {
+        logger.debug('🏁 Game ended in makeMove:', result, 'gameId:', gameState.gameId);
+        gameEndedRef.current = true;
+      }
+
+      // The clock belongs to the side that is about to move, and runs from the
+      // first move onwards. Requiring more than one move left Black's first turn
+      // completely untimed.
+      const clockRunning = Boolean(gameState.timeControl) && newHistory.length >= 1 && !result;
+
       setGameState(prev => {
         // Handle time: deduct elapsed from moving player, add increment
         let newWhiteTime = prev.whiteTime;
@@ -802,35 +868,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           }
         }
 
-        // Update game stats if game ended
-        const updatedStats = result ? updateGameStats(result, prev.gameStats, prev.colorAssignment, prev.players, winningColor, prev.statsUpdated, prev.gameId) : prev.gameStats;
-        
-        if (result) {
-          logger.debug('🏁 Game ended in makeMove:', result, 'gameId:', prev.gameId);
-          // Mark game as ended in ref
-          gameEndedRef.current = true;
-          
-          // Update user statistics for game completion
-          updateUserStats(result, winningColor);
-
-          // Save game to history. outcomeGame already holds the full move
-          // history (so its PGN is complete), reused here from the game-over check.
-          saveGameToHistory(result, winningColor, outcomeGame.fen(), outcomeGame.pgn());
-        }
-
         // Check if this move matches the current hint and clear it
-        const clearHintMove = prev.currentHint && 
-                             prev.currentHint.from === from && 
+        const clearHintMove = prev.currentHint &&
+                             prev.currentHint.from === from &&
                              prev.currentHint.to === to;
-                             
-        if (prev.currentHint) {
-          logger.debug('🎯 Move made with hint active:', {
-            hintMove: `${prev.currentHint.from}-${prev.currentHint.to}`,
-            actualMove: `${from}-${to}`,
-            matches: clearHintMove,
-            willClear: clearHintMove ? 'YES' : 'NO'
-          });
-        }
 
         return {
           ...prev,
@@ -841,14 +882,31 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           drawOffer: { offered: false, by: null }, // Clear draw offer on move
           whiteTime: newWhiteTime,
           blackTime: newBlackTime,
-          activeColor: result ? null : (prev.timeControl && newHistory.length > 1 ? (gameCopy.turn() === 'w' ? 'w' : 'b') : null),
-          startTime: result ? null : (prev.timeControl && newHistory.length > 1 ? Date.now() : null),
+          activeColor: clockRunning ? (gameCopy.turn() === 'w' ? 'w' : 'b') : null,
+          startTime: clockRunning ? Date.now() : null,
           // Clear hint if the suggested move was made
           currentHint: clearHintMove ? null : prev.currentHint,
           gameStats: updatedStats,
           statsUpdated: result ? true : prev.statsUpdated,
         };
       });
+
+      if (result) {
+        // Update user statistics for game completion
+        updateUserStats(result, winningColor);
+
+        // Save game to history. outcomeGame already holds the full move
+        // history (so its PGN is complete), reused here from the game-over
+        // check. newHistory.length is passed explicitly because this closure's
+        // `gameState` predates the move.
+        saveGameToHistory(
+          result,
+          winningColor,
+          outcomeGame.fen(),
+          outcomeGame.pgn(),
+          newHistory.length,
+        );
+      }
 
       return true;
     } catch {
@@ -861,17 +919,31 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
     const newIndex = gameState.currentMoveIndex - 1;
     const newGame = new Chess();
-    
-    // Replay moves up to newIndex
+    let replayed = -1;
+
+    // Replay moves up to newIndex. A synthetic variant move (nuke/teleport)
+    // cannot be replayed as a chess move, so stop at the first one rather than
+    // throwing out of the undo.
     for (let i = 0; i <= newIndex; i++) {
       const move = gameState.history[i];
-      newGame.move({ from: move.from, to: move.to, promotion: move.promotion });
+      try {
+        const result = newGame.move({ from: move.from, to: move.to, promotion: move.promotion });
+        if (!result) break;
+        replayed = i;
+      } catch {
+        break;
+      }
     }
+
+    // Undoing out of a finished game makes the game playable again, so the
+    // "no more moves" latch has to be released — otherwise the board looks
+    // live but every move is silently rejected.
+    gameEndedRef.current = false;
 
     setGameState({
       ...gameState,
       game: newGame,
-      currentMoveIndex: newIndex,
+      currentMoveIndex: replayed,
       gameResult: '', // Clear game result when undoing
       activeColor: null, // Pause clock when undoing
       startTime: null,
@@ -884,7 +956,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     const newIndex = gameState.currentMoveIndex + 1;
     const move = gameState.history[newIndex];
     const gameCopy = new Chess(gameState.game.fen());
-    gameCopy.move({ from: move.from, to: move.to, promotion: move.promotion });
+    try {
+      gameCopy.move({ from: move.from, to: move.to, promotion: move.promotion });
+    } catch {
+      // Synthetic variant move — nothing to redo.
+      return;
+    }
+
+    gameEndedRef.current = false;
 
     setGameState({
       ...gameState,
@@ -917,7 +996,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       history: [],
       currentMoveIndex: -1,
       gameResult: '',
-      gameId: Math.random().toString(36).substr(2, 9),
+      gameId: Math.random().toString(36).slice(2, 11),
       statsUpdated: false,
       drawOffer: { offered: false, by: null },
       timeControl: timeControl,
@@ -978,7 +1057,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       history: [],
       currentMoveIndex: -1,
       gameResult: '',
-      gameId: Math.random().toString(36).substr(2, 9),
+      gameId: Math.random().toString(36).slice(2, 11),
       statsUpdated: false,
       drawOffer: { offered: false, by: null },
       timeControl: null,
@@ -1210,29 +1289,31 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       } else if (data.result.includes('Black wins')) {
         winningColor = 'b';
       }
-      
+
+      const current = gameStateRef.current;
+      const finalFen = current.game.fen();
+      const pgn = data.pgn || current.game.pgn(); // Use PGN from socket if available
+      const resultText = `${data.result} (${data.reason})`;
+
       // Update game state to show game result
-      setGameState(prev => {
-        // Save game to history with PGN from socket
-        const finalFen = prev.game.fen();
-        const pgn = data.pgn || prev.game.pgn(); // Use PGN from socket if available
-        saveGameToHistory(`${data.result} (${data.reason})`, winningColor, finalFen, pgn);
-        
-        return {
-          ...prev,
-          gameResult: `${data.result} (${data.reason})`,
-          activeColor: null,
-        };
-      });
-      
+      setGameState(prev => ({
+        ...prev,
+        gameResult: resultText,
+        activeColor: null,
+        startTime: null,
+      }));
+
+      // Mark game as ended to prevent further moves
+      gameEndedRef.current = true;
+
       // Stop the timer
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      
-      // Mark game as ended to prevent further moves
-      gameEndedRef.current = true;
+
+      // Save outside the updater so it cannot fire twice under StrictMode.
+      saveGameToHistory(resultText, winningColor, finalFen, pgn, current.history.length);
     };
 
     const handleSocketDrawOffered = (event: Event) => {
@@ -1322,6 +1403,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const blackPlayerName = data.players?.black?.displayName || data.players?.black?.username || 'Player 2';
       logger.debug(`📛 Setting player names: White=${whitePlayerName}, Black=${blackPlayerName}`);
 
+      // Which colour did the server give us, and who is the opponent? Online
+      // games are scored by the server, and the saved row must record OUR
+      // colour rather than assuming White.
+      const myColor: 'w' | 'b' | undefined =
+        data.assignedColor === 'white' ? 'w' : data.assignedColor === 'black' ? 'b' : undefined;
+      const opponent = myColor
+        ? data.players?.[myColor === 'w' ? 'black' : 'white']
+        : undefined;
+
       setGameState(prev => ({
         ...prev,
         game: serverGame,
@@ -1332,6 +1422,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         blackTime: data.blackTime || (data.timeControl ? data.timeControl.initial : prev.blackTime),
         activeColor: data.gameState.turn,
         gameMode: 'human-vs-human', // Online games are always human vs human
+        onlineGameRoom: myColor
+          ? {
+              opponentId: opponent?.id,
+              opponentName: opponent?.displayName || opponent?.username,
+              myColor,
+            }
+          : prev.onlineGameRoom,
         // Set player names based on color assignment
         players: {
           player1: prev.colorAssignment.white === 'player1' ? whitePlayerName : blackPlayerName,
@@ -1432,7 +1529,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
 
     try {
-      const url = `${process.env.REACT_APP_BACKEND_URL}/api/analysis/hint`;
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3005';
+      const url = `${backendUrl}/api/analysis/hint`;
       logger.debug('💡 Requesting hint from:', url);
       logger.debug('💡 Request payload:', { fen: gameState.game.fen() });
       

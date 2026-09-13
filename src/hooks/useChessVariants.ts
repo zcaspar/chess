@@ -6,6 +6,33 @@ import { ALL_SQUARES } from '../utils/chessSquares';
 
 type SetGameState = React.Dispatch<React.SetStateAction<GameState>>;
 
+/** The square holding `color`'s king, or null if it is not on the board. */
+const findKing = (game: Chess, color: 'w' | 'b'): Square | null => {
+  for (const row of game.board()) {
+    for (const piece of row) {
+      if (piece && piece.type === 'k' && piece.color === color) {
+        return piece.square;
+      }
+    }
+  }
+  return null;
+};
+
+/**
+ * Would this position leave `mover`'s own king capturable?
+ *
+ * chess.js cannot answer this for the variant moves: nuke and teleport rewrite
+ * the position by hand (remove / put / patch the FEN) instead of playing a
+ * legal move, so nothing validates king safety. Without this check you can
+ * teleport your king next to the enemy queen, or nuke the only blocker between
+ * a rook and your own king, and the game simply carries on.
+ */
+const leavesOwnKingSafe = (game: Chess, mover: 'w' | 'b'): boolean => {
+  const king = findKing(game, mover);
+  if (!king) return false;
+  return !game.isAttacked(king, mover === 'w' ? 'b' : 'w');
+};
+
 export interface ChessVariants {
   canUseNuke: (color: 'w' | 'b') => boolean;
   activateNukeMode: (color: 'w' | 'b') => void;
@@ -34,13 +61,16 @@ export function useChessVariants(
     // Only available in human vs human mode
     if (gameState.gameMode !== 'human-vs-human') return false;
 
+    // Not once the game is over
+    if (gameState.gameResult) return false;
+
     // Only available in first 10 moves (20 half-moves)
     const moveCount = gameState.game.history().length;
     if (moveCount >= 20) return false;
 
     // Check if this color hasn't used their nuke yet
     return color === 'w' ? gameState.nukeAvailable.white : gameState.nukeAvailable.black;
-  }, [ainaraModeEnabled, gameState.gameMode, gameState.game, gameState.nukeAvailable]);
+  }, [ainaraModeEnabled, gameState.gameMode, gameState.gameResult, gameState.game, gameState.nukeAvailable]);
 
   const activateNukeMode = useCallback((color: 'w' | 'b') => {
     if (!canUseNuke(color)) return;
@@ -90,6 +120,9 @@ export function useChessVariants(
     fenParts[4] = '0'; // Reset half-move clock (capturing move)
     const finalGame = new Chess(fenParts.join(' '));
 
+    // A nuke may not expose your own king — see leavesOwnKingSafe.
+    if (!leavesOwnKingSafe(finalGame, activeNukeColor)) return false;
+
     // Create a special nuke move entry (synthetic, not a real chess.js Move)
     const nukeMove = {
       san: `💣x${targetPiece.type.toUpperCase()}${targetSquare}`,
@@ -123,13 +156,16 @@ export function useChessVariants(
     // Only available in human vs human mode
     if (gameState.gameMode !== 'human-vs-human') return false;
 
+    // Not once the game is over
+    if (gameState.gameResult) return false;
+
     // Only available in first 10 moves (20 half-moves)
     const moveCount = gameState.game.history().length;
     if (moveCount >= 20) return false;
 
     // Check if this color hasn't used their teleport yet
     return color === 'w' ? gameState.teleportAvailable.white : gameState.teleportAvailable.black;
-  }, [ainaraModeEnabled, gameState.gameMode, gameState.game, gameState.teleportAvailable]);
+  }, [ainaraModeEnabled, gameState.gameMode, gameState.gameResult, gameState.game, gameState.teleportAvailable]);
 
   const activateTeleportMode = useCallback((color: 'w' | 'b') => {
     if (!canUseTeleport(color)) return;
@@ -183,6 +219,9 @@ export function useChessVariants(
     }
     fenParts[4] = (parseInt(fenParts[4]) + 1).toString(); // Increment half-move clock (non-capturing)
     const finalGame = new Chess(fenParts.join(' '));
+
+    // Teleporting must not expose your own king — see leavesOwnKingSafe.
+    if (!leavesOwnKingSafe(finalGame, activeTeleportColor)) return false;
 
     // Create a special teleport move entry (synthetic, not a real chess.js Move)
     const teleportMove = {

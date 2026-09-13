@@ -5,6 +5,22 @@ import { logger } from '../utils/logger';
 const router = express.Router();
 
 /**
+ * Headers for a call to the LC0 engine service.
+ *
+ * The engine can be locked down with LC0_SHARED_SECRET; when the same variable
+ * is set here the proxied request carries it. Unset on both sides keeps the
+ * existing open behaviour, so this can be rolled out one service at a time.
+ */
+const lc0Headers = (): Record<string, string> => {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const secret = process.env.LC0_SHARED_SECRET;
+  if (secret) {
+    headers['x-lc0-secret'] = secret;
+  }
+  return headers;
+};
+
+/**
  * POST /api/analysis/position
  * Analyze a chess position using LC0 engine
  */
@@ -32,9 +48,7 @@ router.post('/position', authenticateToken, async (req: AuthenticatedRequest, re
       
       const analysisResponse = await fetch(`${LC0_SERVER_URL}/move`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: lc0Headers(),
         body: JSON.stringify({
           fen,
           difficulty: 'expert' // Use expert level for analysis
@@ -104,10 +118,10 @@ router.post('/position', authenticateToken, async (req: AuthenticatedRequest, re
  * Get a hint (best move) for the current position - for learning purposes
  * Simplified version of position analysis focused on getting the best move
  */
-router.post('/hint', async (req, res) => {
+router.post('/hint', authenticateToken, async (req, res) => {
   try {
     const { fen } = req.body;
-    
+
     logger.debug('💡 Hint request received:', { fen });
     
     if (!fen) {
@@ -129,9 +143,7 @@ router.post('/hint', async (req, res) => {
       
       const hintResponse = await fetch(`${LC0_SERVER_URL}/move`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: lc0Headers(),
         body: JSON.stringify({
           fen,
           difficulty: 'expert' // Use expert level for hints
@@ -195,7 +207,7 @@ router.post('/hint', async (req, res) => {
  * the app origin), so AI moves are routed through this backend endpoint
  * server-to-server, exactly like /hint and /position.
  */
-router.post('/best-move', async (req, res) => {
+router.post('/best-move', authenticateToken, async (req, res) => {
   try {
     const { fen, difficulty = 'medium' } = req.body;
 
@@ -216,9 +228,7 @@ router.post('/best-move', async (req, res) => {
 
       const moveResponse = await fetch(`${LC0_SERVER_URL}/move`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: lc0Headers(),
         body: JSON.stringify({ fen, difficulty }),
         signal: controller.signal
       });

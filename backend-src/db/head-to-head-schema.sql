@@ -30,6 +30,10 @@ CREATE INDEX IF NOT EXISTS idx_h2h_player2 ON head_to_head_records(player2_id);
 CREATE INDEX IF NOT EXISTS idx_h2h_last_game ON head_to_head_records(last_game_at DESC);
 
 -- Create trigger to automatically update updated_at
+-- Postgres has no CREATE OR REPLACE TRIGGER, so drop first: this file is
+-- re-executed whenever table initialization runs, and a bare CREATE TRIGGER
+-- would fail with 42710 the second time.
+DROP TRIGGER IF EXISTS update_h2h_updated_at ON head_to_head_records;
 CREATE TRIGGER update_h2h_updated_at 
     BEFORE UPDATE ON head_to_head_records 
     FOR EACH ROW 

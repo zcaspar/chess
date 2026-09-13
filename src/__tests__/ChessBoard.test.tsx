@@ -386,6 +386,97 @@ describe('ChessBoard', () => {
     });
   });
 
+  describe('Online drag-and-drop', () => {
+    const renderOnlineBoard = (
+      socketOverrides: Record<string, unknown> = {},
+      gameOverrides: Record<string, unknown> = {},
+    ) => {
+      const mockSocketMakeMove = jest.fn();
+      mockUseGame.mockReturnValue(createMockGameContext(gameOverrides as any));
+      mockUseSocket.mockReturnValue({
+        ...defaultSocketValue,
+        roomCode: 'ABCD',
+        assignedColor: 'white',
+        makeMove: mockSocketMakeMove,
+        ...socketOverrides,
+      });
+      mockUseOnlineGame.mockReturnValue({ isOnlineGame: true });
+      renderBoard();
+      return mockSocketMakeMove;
+    };
+
+    it('sends a legal drop to the server when it is our turn', () => {
+      const mockSocketMakeMove = renderOnlineBoard();
+
+      let result: boolean | undefined;
+      act(() => {
+        result = (global as any).mockChessboardCallbacks.onPieceDrop('e2', 'e4');
+      });
+
+      expect(mockSocketMakeMove).toHaveBeenCalledWith('e2', 'e4');
+      expect(result).toBe(true);
+    });
+
+    it('rejects a drop made when it is not our turn', () => {
+      const game = new Chess();
+      game.move('e4'); // Black to move; we are White.
+
+      const mockSocketMakeMove = renderOnlineBoard(
+        {},
+        { gameState: createMockGameState({ game }) },
+      );
+
+      let result: boolean | undefined;
+      act(() => {
+        result = (global as any).mockChessboardCallbacks.onPieceDrop('d2', 'd4');
+      });
+
+      expect(mockSocketMakeMove).not.toHaveBeenCalled();
+      expect(result).toBe(false);
+    });
+
+    it('does not send an illegal move to the server', () => {
+      // e2-e5 is not a legal pawn move. The online branch currently skips move
+      // validation entirely and optimistically reports success.
+      const mockSocketMakeMove = renderOnlineBoard();
+
+      let result: boolean | undefined;
+      act(() => {
+        result = (global as any).mockChessboardCallbacks.onPieceDrop('e2', 'e5');
+      });
+
+      expect(mockSocketMakeMove).not.toHaveBeenCalled();
+      expect(result).toBe(false);
+    });
+
+    it('does not send a drop that moves an opponent piece', () => {
+      const mockSocketMakeMove = renderOnlineBoard();
+
+      let result: boolean | undefined;
+      act(() => {
+        result = (global as any).mockChessboardCallbacks.onPieceDrop('e7', 'e5');
+      });
+
+      expect(mockSocketMakeMove).not.toHaveBeenCalled();
+      expect(result).toBe(false);
+    });
+
+    it('rejects any drop once the game has ended', () => {
+      const mockSocketMakeMove = renderOnlineBoard(
+        {},
+        { gameState: createMockGameState({ gameResult: 'White wins by resignation!' }) },
+      );
+
+      let result: boolean | undefined;
+      act(() => {
+        result = (global as any).mockChessboardCallbacks.onPieceDrop('e2', 'e4');
+      });
+
+      expect(mockSocketMakeMove).not.toHaveBeenCalled();
+      expect(result).toBe(false);
+    });
+  });
+
   describe('Visual Highlights', () => {
     it('should highlight last move', () => {
       // Build a real game with one move so history contains a genuine Move object.

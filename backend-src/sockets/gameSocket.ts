@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { Chess } from 'chess.js';
 import { query } from '../config/database';
 import { verifyToken } from '../middleware/auth';
+import { isDemoAuthEnabled, isFirebaseConfigError } from '../utils/demoAuth';
 import { RoomPersistence } from '../utils/roomPersistence';
 import { logger } from '../utils/logger';
 
@@ -121,15 +122,12 @@ export class GameSocketHandler {
         socket.emit('authenticated', { success: true });
       } catch (error) {
         logger.error(`Socket ${socket.id} authentication failed:`, error);
-        
-        // Check if this is a Firebase Admin configuration issue
+
+        // Check if this is a Firebase Admin configuration issue. The demo
+        // fallback is an explicit opt-in (ALLOW_DEMO_AUTH) rather than a
+        // side effect of NODE_ENV being unset — see middleware/auth.ts.
         const errorMessage = (error as Error)?.message || '';
-        if (process.env.NODE_ENV !== 'production' && (
-            errorMessage.includes('auth/invalid-project-id') ||
-            errorMessage.includes('no-app') ||
-            errorMessage.includes('app/invalid-credential') ||
-            errorMessage.includes('Firebase Admin SDK') ||
-            errorMessage.includes('project'))) {
+        if (isDemoAuthEnabled() && isFirebaseConfigError(errorMessage)) {
           logger.warn(`Firebase Admin not configured, using demo auth for socket ${socket.id}`);
           // Create a mock user for development/demo purposes
           socket.data.userId = 'demo-user-' + Date.now() + '-' + socket.id;
@@ -749,7 +747,12 @@ export class GameSocketHandler {
         // Check for timeout
         if (displayWhiteTime <= 0 || displayBlackTime <= 0) {
           const winner = displayWhiteTime <= 0 ? 'black' : 'white';
-          this.endGame(roomCode, winner, 'timeout');
+          // Not awaited (this runs inside a 1s interval for every room), so make
+          // sure a failure surfaces in the logs instead of becoming an
+          // unhandled rejection.
+          void this.endGame(roomCode, winner, 'timeout').catch((error) => {
+            logger.error(`Failed to end timed-out game in room ${roomCode}:`, error);
+          });
           continue;
         }
 
@@ -774,7 +777,27 @@ export class GameSocketHandler {
 
   private async endGame(roomCode: string, result: 'white' | 'black' | 'draw', reason: string) {
     const room = this.rooms.get(roomCode);
-    if (!room || !room.gameId) return;
+    if (!room) return;
+
+    // Announce the result BEFORE touching the database. room.gameId is undefined
+    // whenever the createRoom insert failed, and the write below can fail at any
+    // time — in both cases the players still need to be told the game is over,
+    // otherwise both clients sit on a board that is actually finished.
+    this.io.to(roomCode).emit('gameEnded', {
+      result,
+      reason,
+      pgn: room.game.pgn(),
+    });
+
+    // Clean up the room once the players have had time to read the result.
+    setTimeout(() => {
+      this.rooms.delete(roomCode);
+    }, 300000); // 5 minutes
+
+    if (!room.gameId) {
+      logger.warn(`Room ${roomCode} ended without a database record; result not persisted`);
+      return;
+    }
 
     try {
     // Update database
@@ -830,21 +853,10 @@ export class GameSocketHandler {
       }
     }
 
-    // Notify all players
-    this.io.to(roomCode).emit('gameEnded', {
-      result,
-      reason,
-      pgn: room.game.pgn(),
-    });
-
-    // Clean up room after a delay
-    setTimeout(() => {
-      this.rooms.delete(roomCode);
-    }, 300000); // 5 minutes
     } catch (error) {
-      logger.error(`Error ending game in room ${roomCode}:`, error);
-      // Still notify players even if DB update failed
-      this.io.to(roomCode).emit('gameEnded', { result, reason });
+      // The result was already announced above, so a failed write costs
+      // history, not the game itself.
+      logger.error(`Error persisting the end of game in room ${roomCode}:`, error);
     }
   }
 }

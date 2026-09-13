@@ -1,6 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { auth } from '../config/firebase-admin';
 import { logger } from '../utils/logger';
+import { isDemoAuthEnabled, isFirebaseConfigError } from '../utils/demoAuth';
+
+// Re-exported so callers can reach the demo-auth rules from the auth module.
+export { isDemoAuthEnabled, isFirebaseConfigError };
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -48,13 +52,10 @@ export const verifyFirebaseToken = async (
       next();
     } catch (error) {
       logger.error('Token verification error:', error);
-      
+
       // Check if this is a Firebase Admin configuration issue
       const errorMessage = (error as Error)?.message || '';
-      if (process.env.NODE_ENV !== 'production' && (
-          errorMessage.includes('auth/invalid-project-id') ||
-          errorMessage.includes('no-app') ||
-          errorMessage.includes('app/invalid-credential'))) {
+      if (isDemoAuthEnabled() && isFirebaseConfigError(errorMessage)) {
         logger.warn('Firebase Admin not properly configured, using mock auth for development');
         // Create a mock user for development/demo purposes
         req.user = {

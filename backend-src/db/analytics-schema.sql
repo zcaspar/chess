@@ -160,21 +160,37 @@ CREATE INDEX IF NOT EXISTS idx_insights_cache_key ON insights_cache(player_id, c
 CREATE INDEX IF NOT EXISTS idx_insights_cache_expires ON insights_cache(expires_at);
 
 -- Create triggers for updated_at columns
+-- Postgres has no CREATE OR REPLACE TRIGGER, so drop first: this file is
+-- re-executed whenever table initialization runs, and a bare CREATE TRIGGER
+-- would fail with 42710 the second time.
+DROP TRIGGER IF EXISTS update_game_statistics_updated_at ON game_statistics;
 CREATE TRIGGER update_game_statistics_updated_at 
     BEFORE UPDATE ON game_statistics 
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
+-- Postgres has no CREATE OR REPLACE TRIGGER, so drop first: this file is
+-- re-executed whenever table initialization runs, and a bare CREATE TRIGGER
+-- would fail with 42710 the second time.
+DROP TRIGGER IF EXISTS update_player_performance_updated_at ON player_performance;
 CREATE TRIGGER update_player_performance_updated_at 
     BEFORE UPDATE ON player_performance 
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
+-- Postgres has no CREATE OR REPLACE TRIGGER, so drop first: this file is
+-- re-executed whenever table initialization runs, and a bare CREATE TRIGGER
+-- would fail with 42710 the second time.
+DROP TRIGGER IF EXISTS update_opening_statistics_updated_at ON opening_statistics;
 CREATE TRIGGER update_opening_statistics_updated_at 
     BEFORE UPDATE ON opening_statistics 
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
+-- Postgres has no CREATE OR REPLACE TRIGGER, so drop first: this file is
+-- re-executed whenever table initialization runs, and a bare CREATE TRIGGER
+-- would fail with 42710 the second time.
+DROP TRIGGER IF EXISTS update_insights_cache_updated_at ON insights_cache;
 CREATE TRIGGER update_insights_cache_updated_at 
     BEFORE UPDATE ON insights_cache 
     FOR EACH ROW 

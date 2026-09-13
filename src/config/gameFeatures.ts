@@ -20,7 +20,12 @@ export const GAME_FEATURES = {
   CAPTURED_PIECES: true,    // Visual captured pieces display
   GAME_END_MODAL: true,     // Game over overlay modal
   OPENING_EXPLORER: true,   // Opening name detection banner
-  PREMOVES: true,           // Pre-move system for online play
+  // Off while the board's drop handler rejects moves made out of turn (see
+  // ChessBoard.isLocallyPlayable). react-chessboard only files a drop as a
+  // premove when onPieceDrop accepts it or the position is mid-animation, so
+  // the two behaviours are mutually exclusive: turning this back on requires
+  // letting an off-turn drop through to onPieceDrop without emitting it.
+  PREMOVES: false,
   PUZZLE_TRAINING: true,    // Tactical puzzle solving
 } as const;
 
@@ -117,6 +122,6 @@ export const FEATURE_CONFIG = {
     name: 'Pre-moves',
     icon: '⚡',
     color: 'red',
-    description: 'Queue moves during opponent turn in online play',
+    description: 'Queue moves during opponent turn in online play (not yet wired)',
   },
 } as const;

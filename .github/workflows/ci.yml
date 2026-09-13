@@ -7,6 +7,55 @@ on:
     branches: [ master, main, develop ]
 
 jobs:
+  backend:
+    name: Backend Tests & Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend-src
+
+    # A throwaway Postgres so the migration tests actually execute db/*.sql
+    # against a real server. Mocked unit tests only prove the code asks for the
+    # right thing; the schema is only ever proved correct by being run.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: chess
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+        cache: 'npm'
+        cache-dependency-path: backend-src/package-lock.json
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build (also copies db/*.sql into dist/ via scripts/copy-assets.js)
+      run: npm run build
+
+    # TEST_DATABASE_URL enables __tests__/migration.integration.test.ts; without
+    # it that file skips itself, so `npm test` stays safe to run anywhere.
+    - name: Run tests
+      run: npm test
+      env:
+        TEST_DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/chess
+
   test:
     name: Run Tests
     runs-on: ubuntu-latest
@@ -28,12 +77,15 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
-    - name: Run linting
-      run: npm run lint || true
-      continue-on-error: true
-
     - name: Run type checking
-      run: npm run typecheck || npx tsc --noEmit
+      run: npm run typecheck
+
+    # Pre-existing lint errors remain in the test suite (testing-library rules
+    # in Timer*/ChessClock/ChessBoard tests, which this change did not touch).
+    # Deliberately non-blocking so the real checks above and below can fail the
+    # build; clear those errors and drop continue-on-error to make it enforcing.
+    - name: Run linting (non-blocking)
+      run: npm run lint
       continue-on-error: true
 
     - name: Run unit tests
