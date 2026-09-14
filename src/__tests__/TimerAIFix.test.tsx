@@ -40,13 +40,12 @@ jest.mock('react-chessboard', () => ({
 
 // Mock the ChessAI so the AI move effect resolves without hitting the network.
 jest.mock('../utils/chessAI', () => ({
-  ChessAI: jest.fn().mockImplementation(() => ({
-    getBestMove: jest.fn().mockResolvedValue({ from: 'd2', to: 'd4', piece: 'p' }),
-    setDifficulty: jest.fn(),
-    getDifficulty: jest.fn().mockReturnValue('medium'),
-    getEngineType: jest.fn().mockReturnValue('lc0'),
-    initializeLc0: jest.fn().mockResolvedValue(undefined),
-  })),
+  ChessAI: jest.fn().mockImplementation(() =>
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    require('../test-utils/mockChessAI').createMockChessAI({
+      getBestMove: jest.fn().mockResolvedValue({ from: 'd2', to: 'd4', piece: 'p' }),
+    }),
+  ),
 }));
 
 // Prevent any accidental network calls from hitting the real backend.

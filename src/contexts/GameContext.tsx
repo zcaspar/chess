@@ -48,6 +48,13 @@ export interface GameState {
   gameMode: 'human-vs-human' | 'human-vs-ai' | 'ai-vs-ai';
   aiColor: 'w' | 'b' | null; // Which color the AI is playing (for human-vs-ai)
   aiDifficulty: DifficultyLevel;
+  /**
+   * Engine behind the computer's most recent move, or null before it has moved.
+   * 'fallback' means LC0 was unreachable and the far weaker offline evaluator
+   * played instead — surfaced in the UI so the drop in strength is visible
+   * rather than looking like the computer simply playing badly.
+   */
+  lastAiEngine: 'lc0' | 'fallback' | null;
   // AI vs AI specific settings
   whiteAiDifficulty?: DifficultyLevel;
   blackAiDifficulty?: DifficultyLevel;
@@ -172,6 +179,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     gameMode: 'human-vs-human',
     aiColor: null,
     aiDifficulty: 'medium',
+    lastAiEngine: null,
     // Hint system defaults
     hintAvailable: {
       white: true,
@@ -684,7 +692,16 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           await aiRef.current.setDifficulty(difficultyToUse);
 
           const aiMove = await aiRef.current.getBestMove(gameState.game);
-          logger.debug('🤖 AI found move:', aiMove, 'for gameId:', gameState.gameId);
+          const moveSource = aiRef.current.getLastMoveSource();
+          logger.debug('🤖 AI found move:', aiMove, 'via', moveSource, 'for gameId:', gameState.gameId);
+
+          // Record which engine answered so the UI can flag a drop to the
+          // offline fallback instead of letting it pass as weak LC0 play.
+          if (aiMove) {
+            setGameState(prev =>
+              prev.lastAiEngine === moveSource ? prev : { ...prev, lastAiEngine: moveSource },
+            );
+          }
           
           // Check again after AI thinking - game might have ended or changed during thinking
           if (aiMove && !gameState.gameResult && !gameEndedRef.current && aiMoveGameId.current === currentGameId) {
@@ -1010,6 +1027,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       gameMode: gameMode,
       aiColor: aiColor,
       aiDifficulty: aiDifficulty,
+      lastAiEngine: null,
       // Reset hint system
       hintAvailable: {
         white: true,
@@ -1080,6 +1098,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       gameMode: 'human-vs-human',
       aiColor: null,
       aiDifficulty: 'medium',
+      lastAiEngine: null,
       // Reset hint system
       hintAvailable: { white: true, black: true },
       currentHint: null,

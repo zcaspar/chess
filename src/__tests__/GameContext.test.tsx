@@ -5,6 +5,7 @@ import { GameProvider, useGame } from '../contexts/GameContext';
 import { Chess, Square } from 'chess.js';
 import { AuthProvider } from '../contexts/AuthContext';
 import { ChessAI } from '../utils/chessAI';
+import { createMockChessAI } from '../test-utils/mockChessAI';
 
 // Mock dependencies
 jest.mock('../utils/chessAI');
@@ -416,12 +417,12 @@ describe('GameContext', () => {
       const mockInitializeLc0 = jest.fn().mockResolvedValue(undefined);
       const mockGetBestMove = jest.fn().mockResolvedValue({ from: 'e7', to: 'e5' });
       
-      (ChessAI as jest.MockedClass<typeof ChessAI>).mockImplementation(() => ({
-        initializeLc0: mockInitializeLc0,
-        getBestMove: mockGetBestMove,
-        setDifficulty: jest.fn(),
-        getEngineType: jest.fn().mockReturnValue('lc0'),
-      } as any));
+      (ChessAI as jest.MockedClass<typeof ChessAI>).mockImplementation(() =>
+        createMockChessAI({
+          initializeLc0: mockInitializeLc0,
+          getBestMove: mockGetBestMove,
+        }),
+      );
 
       const { result } = renderHook(() => useGame(), { wrapper });
 
@@ -439,12 +440,12 @@ describe('GameContext', () => {
       const mockSetDifficulty = jest.fn();
       const mockInitializeLc0 = jest.fn().mockResolvedValue(undefined);
       
-      (ChessAI as jest.MockedClass<typeof ChessAI>).mockImplementation(() => ({
-        setDifficulty: mockSetDifficulty,
-        initializeLc0: mockInitializeLc0,
-        getEngineType: jest.fn().mockReturnValue('lc0'),
-        getBestMove: jest.fn(),
-      } as any));
+      (ChessAI as jest.MockedClass<typeof ChessAI>).mockImplementation(() =>
+        createMockChessAI({
+          setDifficulty: mockSetDifficulty,
+          initializeLc0: mockInitializeLc0,
+        }),
+      );
 
       const { result } = renderHook(() => useGame(), { wrapper });
 
@@ -463,12 +464,12 @@ describe('GameContext', () => {
     it('should make AI moves automatically', async () => {
       const mockGetBestMove = jest.fn().mockResolvedValue({ from: 'e7', to: 'e5' });
       
-      (ChessAI as jest.MockedClass<typeof ChessAI>).mockImplementation(() => ({
-        initializeLc0: jest.fn().mockResolvedValue(undefined),
-        getBestMove: mockGetBestMove,
-        setDifficulty: jest.fn(),
-        getEngineType: jest.fn().mockReturnValue('builtin'),
-      } as any));
+      (ChessAI as jest.MockedClass<typeof ChessAI>).mockImplementation(() =>
+        createMockChessAI({
+          getBestMove: mockGetBestMove,
+          getEngineType: jest.fn().mockReturnValue('builtin'),
+        }),
+      );
 
       const { result } = renderHook(() => useGame(), { wrapper });
 

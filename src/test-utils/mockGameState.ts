@@ -33,6 +33,7 @@ export const createMockGameState = (overrides: Partial<GameState> = {}): GameSta
   gameMode: 'human-vs-human',
   aiColor: null,
   aiDifficulty: 'medium',
+  lastAiEngine: null,
   hintAvailable: { white: true, black: true },
   currentHint: null,
   nukeAvailable: { white: true, black: true },

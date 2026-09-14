@@ -19,6 +19,12 @@ const GameStatus: React.FC = () => {
     ? gameState.onlineGameRoom.opponentName 
     : null;
 
+  // The computer fell back to the offline evaluator, which is far weaker than
+  // LC0. Say so: otherwise this reads as the computer suddenly playing badly.
+  const usingFallbackEngine =
+    gameState.lastAiEngine === 'fallback' &&
+    (gameState.gameMode === 'human-vs-ai' || gameState.gameMode === 'ai-vs-ai');
+
   // Replace player names in game result
   const displayResult = gameResult
     .replace('White', getPlayerByColor('w'))
@@ -27,6 +33,20 @@ const GameStatus: React.FC = () => {
   return (
     <div className="bg-white rounded-lg shadow-md p-4">
       <h3 className="font-bold text-lg mb-2">Game Status</h3>
+
+      {usingFallbackEngine && (
+        <div
+          role="status"
+          className="mb-3 bg-amber-50 border border-amber-300 text-amber-800 px-3 py-2 rounded text-sm"
+        >
+          <span className="font-semibold">⚠️ Offline engine</span>
+          <p className="mt-1">
+            The chess engine is unreachable, so the computer is playing with the
+            built-in backup — much weaker than usual. Its next move will use the
+            full engine again if it reconnects.
+          </p>
+        </div>
+      )}
       
       {gameResult ? (
         <div className="text-center">

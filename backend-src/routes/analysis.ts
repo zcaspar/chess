@@ -12,6 +12,18 @@ const router = express.Router();
  * is set here the proxied request carries it. Unset on both sides keeps the
  * existing open behaviour, so this can be rolled out one service at a time.
  */
+/**
+ * How long to wait on the engine service.
+ *
+ * LC0 is CPU-only here and an expert move on an unseen position takes ~30s,
+ * so the previous 30s (moves) and 15s (hints) budgets cut off legitimate
+ * answers — the hint endpoint in particular could barely ever succeed. The
+ * engine caps its own search at 60s; these sit above that so a failure means
+ * the engine failed, not that the proxy gave up first.
+ */
+const LC0_MOVE_TIMEOUT_MS = 75000;
+const LC0_HINT_TIMEOUT_MS = 75000;
+
 const lc0Headers = (): Record<string, string> => {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const secret = process.env.LC0_SHARED_SECRET;
@@ -45,7 +57,7 @@ router.post('/position', lc0AnalysisRateLimit, authenticateToken, async (req: Au
     try {
       // Call LC0 server for best move analysis
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), LC0_MOVE_TIMEOUT_MS);
       
       const analysisResponse = await fetch(`${LC0_SERVER_URL}/move`, {
         method: 'POST',
@@ -146,7 +158,7 @@ router.post('/hint', lc0RateLimit, async (req, res) => {
     try {
       // Call LC0 server for best move
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // Shorter timeout for hints
+      const timeoutId = setTimeout(() => controller.abort(), LC0_HINT_TIMEOUT_MS);
       
       const hintResponse = await fetch(`${LC0_SERVER_URL}/move`, {
         method: 'POST',
@@ -232,7 +244,7 @@ router.post('/best-move', lc0RateLimit, async (req, res) => {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), LC0_MOVE_TIMEOUT_MS);
 
       const moveResponse = await fetch(`${LC0_SERVER_URL}/move`, {
         method: 'POST',

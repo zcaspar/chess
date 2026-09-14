@@ -72,13 +72,28 @@ const NODE_BUDGET = 40000;
  * Simple Chess AI for frontend use
  * For advanced AI features, use the backend API
  */
+/** Which engine actually produced the most recent move. */
+export type MoveSource = 'lc0' | 'fallback';
+
 export class SimpleChessAI {
   private difficulty: DifficultyLevel;
   private settings: AISettings;
+  private lastMoveSource: MoveSource = 'lc0';
 
   constructor(difficulty: DifficultyLevel = 'medium') {
     this.difficulty = difficulty;
     this.settings = DIFFICULTY_SETTINGS[difficulty];
+  }
+
+  /**
+   * Engine behind the last move returned by getBestMove().
+   *
+   * The fallback is far weaker than LC0, so a silent switch reads as "the
+   * computer suddenly got bad" rather than "the engine is unreachable". The UI
+   * uses this to say so out loud.
+   */
+  getLastMoveSource(): MoveSource {
+    return this.lastMoveSource;
   }
 
   async getBestMove(game: Chess): Promise<Move | null> {
@@ -90,6 +105,7 @@ export class SimpleChessAI {
       const backendMove = await backendAI.getBestMove(game.fen(), this.difficulty);
       if (backendMove) {
         logger.debug(`🎯 Using backend AI for ${this.difficulty} difficulty`);
+        this.lastMoveSource = 'lc0';
         return backendMove;
       }
     } catch (error) {
@@ -98,6 +114,7 @@ export class SimpleChessAI {
 
     // Fallback to frontend AI
     logger.debug(`🎲 Using frontend AI for ${this.difficulty} difficulty`);
+    this.lastMoveSource = 'fallback';
 
     // For beginner level, just pick a random move
     if (this.difficulty === 'beginner') {

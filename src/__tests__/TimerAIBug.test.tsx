@@ -56,13 +56,12 @@ const mockGetBestMove = jest.fn().mockImplementation(async () => {
 });
 
 jest.mock('../utils/chessAI', () => ({
-  ChessAI: jest.fn().mockImplementation(() => ({
-    getBestMove: mockGetBestMove,
-    setDifficulty: jest.fn(),
-    getDifficulty: jest.fn().mockReturnValue('medium'),
-    getEngineType: jest.fn().mockReturnValue('lc0'),
-    initializeLc0: jest.fn().mockResolvedValue(undefined),
-  })),
+  ChessAI: jest.fn().mockImplementation(() =>
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    require('../test-utils/mockChessAI').createMockChessAI({
+      getBestMove: mockGetBestMove,
+    }),
+  ),
 }));
 
 // Test component that provides timer access

@@ -3,6 +3,13 @@ import { logger } from './logger';
 
 export type DifficultyLevel = 'beginner' | 'easy' | 'medium' | 'hard' | 'expert';
 
+/**
+ * How long to wait for an engine move before giving up and falling back.
+ * Must stay above the engine's own search ceiling — see the note in
+ * getBestMove.
+ */
+const LC0_REQUEST_TIMEOUT_MS = 90000;
+
 // Removed unused BackendAIMove interface - moves come as Move objects from chess.js
 
 export class BackendAI {
@@ -18,8 +25,15 @@ export class BackendAI {
   async getBestMove(fen: string, difficulty: DifficultyLevel = 'medium'): Promise<Move | null> {
     // Abort if the backend/LC0 takes too long (e.g. a Railway cold start that
     // never recovers) so the UI falls back instead of hanging indefinitely.
+    //
+    // Generous on purpose. LC0 runs CPU-only, and an expert move on a position
+    // it has not seen measured ~29s against the old 30s budget — so ordinary
+    // variance tipped requests over the edge and the board quietly played a
+    // weak fallback move instead. The engine's own search cap is 60s, so this
+    // sits above it: a request now fails because the engine gave up, not
+    // because the client lost patience a moment too early.
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), LC0_REQUEST_TIMEOUT_MS);
     try {
       logger.debug(`🧠 Requesting LC0 move via backend (${difficulty})`);
 
