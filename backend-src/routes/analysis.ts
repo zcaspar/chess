@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
+import { lc0RateLimit, lc0AnalysisRateLimit } from '../middleware/rateLimit';
 import { logger } from '../utils/logger';
 
 const router = express.Router();
@@ -24,7 +25,7 @@ const lc0Headers = (): Record<string, string> => {
  * POST /api/analysis/position
  * Analyze a chess position using LC0 engine
  */
-router.post('/position', authenticateToken, async (req: AuthenticatedRequest, res) => {
+router.post('/position', lc0AnalysisRateLimit, authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
     const { fen, depth = 15 } = req.body;
     
@@ -118,7 +119,13 @@ router.post('/position', authenticateToken, async (req: AuthenticatedRequest, re
  * Get a hint (best move) for the current position - for learning purposes
  * Simplified version of position analysis focused on getting the best move
  */
-router.post('/hint', authenticateToken, async (req, res) => {
+/**
+ * Deliberately unauthenticated: playing the computer and asking for a hint are
+ * available without signing in, so a token requirement here locks out ordinary
+ * visitors. The GPU service is protected by the per-IP rate limit instead (and,
+ * between services, by LC0_SHARED_SECRET).
+ */
+router.post('/hint', lc0RateLimit, async (req, res) => {
   try {
     const { fen } = req.body;
 
@@ -207,7 +214,8 @@ router.post('/hint', authenticateToken, async (req, res) => {
  * the app origin), so AI moves are routed through this backend endpoint
  * server-to-server, exactly like /hint and /position.
  */
-router.post('/best-move', authenticateToken, async (req, res) => {
+// Unauthenticated for the same reason as /hint above.
+router.post('/best-move', lc0RateLimit, async (req, res) => {
   try {
     const { fen, difficulty = 'medium' } = req.body;
 

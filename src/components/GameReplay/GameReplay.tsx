@@ -4,7 +4,7 @@ import { Chessboard } from 'react-chessboard';
 import { useAuth } from '../../hooks/useAuth';
 import { logger } from '../../utils/logger';
 
-interface GameHistoryEntry {
+export interface GameHistoryEntry {
   id: number;
   gameId: string;
   opponentName: string;

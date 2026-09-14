@@ -45,16 +45,17 @@ describe('LC0 proxy endpoints', () => {
   });
 
   describe('POST /api/analysis/hint', () => {
-    it('requires a token', async () => {
-      // /hint proxies straight to the LC0 GPU service. Without auth anyone on
-      // the internet can burn that capacity.
+    it('serves a signed-out visitor', async () => {
+      // Playing the computer and asking for a hint do not require signing in,
+      // so this endpoint must answer an anonymous request. Requiring a token
+      // here once broke the AI opponent for every visitor.
       const res = await request(app).post('/api/analysis/hint').send({ fen: START_FEN });
 
-      expect(res.status).toBe(401);
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(res.status).toBe(200);
+      expect(fetchMock).toHaveBeenCalled();
     });
 
-    it('rejects an invalid token', async () => {
+    it('serves a request carrying an unusable token rather than rejecting it', async () => {
       mockVerifyIdToken.mockRejectedValue(new Error('Decoding Firebase ID token failed'));
 
       const res = await request(app)
@@ -62,8 +63,7 @@ describe('LC0 proxy endpoints', () => {
         .set('Authorization', 'Bearer garbage')
         .send({ fen: START_FEN });
 
-      expect(res.status).toBe(401);
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(res.status).toBe(200);
     });
 
     it('still serves an authenticated request', async () => {
@@ -89,16 +89,19 @@ describe('LC0 proxy endpoints', () => {
   });
 
   describe('POST /api/analysis/best-move', () => {
-    it('requires a token', async () => {
+    it('serves a signed-out visitor', async () => {
+      // This is the endpoint the AI opponent calls for every one of its moves.
+      // If it demands a token the board silently falls back to the weak local
+      // evaluator, which looks like "the engine is broken" rather than an error.
       const res = await request(app)
         .post('/api/analysis/best-move')
         .send({ fen: START_FEN, difficulty: 'expert' });
 
-      expect(res.status).toBe(401);
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(res.status).toBe(200);
+      expect(res.body.move).toMatchObject({ from: 'e2', to: 'e4' });
     });
 
-    it('rejects an invalid token', async () => {
+    it('serves a request carrying an unusable token rather than rejecting it', async () => {
       mockVerifyIdToken.mockRejectedValue(new Error('Decoding Firebase ID token failed'));
 
       const res = await request(app)
@@ -106,8 +109,7 @@ describe('LC0 proxy endpoints', () => {
         .set('Authorization', 'Bearer garbage')
         .send({ fen: START_FEN });
 
-      expect(res.status).toBe(401);
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(res.status).toBe(200);
     });
 
     it('proxies an authenticated request and returns the move', async () => {

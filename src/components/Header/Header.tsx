@@ -9,7 +9,7 @@ interface HeaderProps {
   onShowHistory?: () => void;
   onShowStats?: () => void;
   onShowPuzzles?: () => void;
-  currentView?: 'game' | 'history' | 'stats' | 'puzzles';
+  currentView?: 'game' | 'history' | 'stats' | 'puzzles' | 'review';
 }
 
 export const Header: React.FC<HeaderProps> = ({ onShowHistory, onShowStats, onShowPuzzles, currentView = 'game' }) => {

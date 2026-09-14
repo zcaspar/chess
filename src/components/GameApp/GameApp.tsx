@@ -12,7 +12,12 @@ import GameEndModal from '../GameEndModal/GameEndModal';
 import OpeningBanner from '../OpeningBanner/OpeningBanner';
 import { useAuth } from '../../hooks/useAuth';
 
-export const GameApp: React.FC = () => {
+interface GameAppProps {
+  /** Open the review screen for the game that just finished. */
+  onReview?: () => void;
+}
+
+export const GameApp: React.FC<GameAppProps> = ({ onReview }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<'game' | 'moves' | null>(null);
   const { profile } = useAuth();
@@ -127,7 +132,7 @@ export const GameApp: React.FC = () => {
       )}
 
       {/* Game End Modal */}
-      <GameEndModal />
+      <GameEndModal onReview={onReview} />
     </div>
   );
 };

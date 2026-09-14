@@ -2,7 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useGame } from '../../contexts/GameContext';
 import { isFeatureEnabled } from '../../config/gameFeatures';
 
-const GameEndModal: React.FC = () => {
+interface GameEndModalProps {
+  /** Open the review screen for the game that just finished. */
+  onReview?: () => void;
+}
+
+const GameEndModal: React.FC<GameEndModalProps> = ({ onReview }) => {
   const { gameState, resetGame, getPlayerByColor } = useGame();
   const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -62,6 +67,16 @@ const GameEndModal: React.FC = () => {
     setDismissed(true);
   };
 
+  const handleReview = () => {
+    setDismissed(true);
+    onReview?.();
+  };
+
+  // Nothing to review before a move has been played, and no point offering the
+  // button at all when no handler was supplied — it previously just closed the
+  // modal, which read as "the button is broken".
+  const canReview = !!onReview && gameState.history.length > 0;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -107,10 +122,10 @@ const GameEndModal: React.FC = () => {
         {/* Buttons */}
         <div className="flex gap-3">
           <button
-            onClick={handleDismiss}
+            onClick={canReview ? handleReview : handleDismiss}
             className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
           >
-            Review
+            {canReview ? 'Review' : 'Close'}
           </button>
           <button
             onClick={handleNewGame}

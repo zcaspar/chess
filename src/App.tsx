@@ -5,12 +5,13 @@ import { SocketProvider } from './contexts/SocketContext';
 import { Header } from './components/Header';
 import { GameApp } from './components/GameApp';
 import GameHistoryManager from './components/GameHistoryManager/GameHistoryManager';
+import GameReviewScreen from './components/GameReview/GameReviewScreen';
 import StatisticalDashboard from './components/StatisticalDashboard';
 import PuzzleTrainer from './components/PuzzleTraining/PuzzleTrainer';
 import { isFeatureEnabled } from './config/gameFeatures';
 import './App.css';
 
-type AppView = 'game' | 'history' | 'stats' | 'puzzles';
+type AppView = 'game' | 'history' | 'stats' | 'puzzles' | 'review';
 
 function App() {
   const [currentView, setCurrentView] = useState<AppView>('game');
@@ -19,6 +20,7 @@ function App() {
   const showGame = () => setCurrentView('game');
   const showStats = () => setCurrentView('stats');
   const showPuzzles = () => setCurrentView('puzzles');
+  const showReview = () => setCurrentView('review');
 
   return (
     <AuthProvider>
@@ -27,7 +29,8 @@ function App() {
           <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
             <Header onShowHistory={showGameHistory} onShowStats={showStats} onShowPuzzles={showPuzzles} currentView={currentView} />
             <main className="pb-8">
-              {currentView === 'game' && <GameApp />}
+              {currentView === 'game' && <GameApp onReview={showReview} />}
+              {currentView === 'review' && <GameReviewScreen onClose={showGame} />}
               {currentView === 'history' && <GameHistoryManager onClose={showGame} />}
               {currentView === 'stats' && (
                 <div className="container mx-auto px-4 py-8">

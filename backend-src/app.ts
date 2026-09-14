@@ -59,6 +59,14 @@ export async function initializeEngines() {
 export function createApp(): express.Express {
   const app = express();
 
+  // Railway terminates TLS and forwards, so req.ip is the proxy's address
+  // unless we trust exactly that one hop. The rate limiter keys on req.ip, and
+  // without this every visitor shares a single bucket. A hop count rather than
+  // `true`: blanket trust lets a client spoof X-Forwarded-For and slip the
+  // limit. Override with TRUST_PROXY_HOPS if another proxy is added in front.
+  const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS);
+  app.set('trust proxy', Number.isFinite(trustProxyHops) && trustProxyHops >= 0 ? trustProxyHops : 1);
+
   // Allowed CORS origins, shared by Socket.IO and Express (see config/cors.ts)
   const allowedOrigins = getAllowedOrigins();
 
