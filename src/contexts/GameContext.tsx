@@ -6,6 +6,13 @@ import { isFeatureEnabled } from '../config/gameFeatures';
 import { useChessVariants } from '../hooks/useChessVariants';
 import { logger } from '../utils/logger';
 
+/**
+ * Pause between moves in AI vs AI so the game is watchable rather than a blur.
+ * Only noticeable when the engine answers fast (a cached position); a real
+ * search already takes far longer than this.
+ */
+const AI_VS_AI_MOVE_DELAY_MS = 1000;
+
 interface TimeControl {
   initial: number; // Initial time in seconds
   increment: number; // Increment per move in seconds
@@ -238,6 +245,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   const isAiThinking = useRef<boolean>(false);
   const gameEndedRef = useRef<boolean>(false); // Track game end state to prevent race conditions
   const aiMoveGameId = useRef<string>(''); // Track which game the AI is thinking for
+  // Monotonic id for AI runs; only the newest run may apply its move.
+  const aiRunIdRef = useRef<number>(0);
+  // Bumped when an AI run ends without moving, to re-trigger the AI effect.
+  // Nothing on the board changed in that case, so no other dependency would.
+  const [aiRetry, setAiRetry] = useState(0);
 
   // Helper function to update game stats based on result
   const updateGameStats = useCallback((result: string, currentStats: GameStats, colorAssignment: ColorAssignment, players: PlayerInfo, winningColor?: 'w' | 'b', statsAlreadyUpdated: boolean = false, gameId?: string): GameStats => {
@@ -643,9 +655,19 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   }, [gameState.activeColor, gameState.startTime, gameState.gameResult, gameState.timeControl, updateGameStats, updateUserStats, saveGameToHistory]);
 
   // AI move effect (handles both human-vs-ai and ai-vs-ai)
+  //
+  // An engine move is computed against one specific position and can take ~30s
+  // to come back. By then the board may have moved on — the player undid a move,
+  // the game ended, a new game started, or (in AI vs AI) a previous flow already
+  // moved. Applying such a move replayed the game from an older point, which
+  // looked like the board resetting itself and playing different moves.
+  //
+  // So every run records the position it is thinking about and a monotonic id,
+  // and both must still be current before the move is allowed to land.
   useEffect(() => {
+    const fenAtStart = gameState.game.fen();
     const currentTurn = gameState.game.turn();
-    const shouldAIMove = 
+    const shouldAIMove =
       ((gameState.gameMode === 'human-vs-ai' &&
         gameState.aiColor !== null &&
         gameState.aiColor === currentTurn) ||
@@ -657,90 +679,113 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     logger.debug('🤖 AI effect triggered:', {
       gameMode: gameState.gameMode,
       aiColor: gameState.aiColor,
-      currentTurn: currentTurn,
+      currentTurn,
       gameResult: gameState.gameResult,
       isAiThinking: isAiThinking.current,
       shouldAIMove,
-      gameId: gameState.gameId
+      gameId: gameState.gameId,
     });
 
-    if (shouldAIMove) {
-      isAiThinking.current = true;
-      const currentGameId = gameState.gameId;
-      aiMoveGameId.current = currentGameId;
-      logger.debug('🤖 AI starting to think for gameId:', currentGameId);
+    if (!shouldAIMove) return;
 
-      const makeAIMove = async () => {
-        try {
-          // Double-check game hasn't ended and we're still on the same game
-          if (gameState.gameResult || gameEndedRef.current || aiMoveGameId.current !== currentGameId) {
-            logger.debug('🤖 AI cancelled - game ended or game changed');
-            isAiThinking.current = false;
-            return;
-          }
-          
-          // Determine which difficulty to use (per-side for AI vs AI)
-          let difficultyToUse = gameState.aiDifficulty;
-          if (gameState.gameMode === 'ai-vs-ai') {
-            difficultyToUse = currentTurn === 'w' ?
-              (gameState.whiteAiDifficulty || 'medium') :
-              (gameState.blackAiDifficulty || 'medium');
-          }
+    isAiThinking.current = true;
+    const currentGameId = gameState.gameId;
+    const runId = ++aiRunIdRef.current;
+    aiMoveGameId.current = currentGameId;
+    logger.debug('🤖 AI starting to think for gameId:', currentGameId, 'at', fenAtStart);
 
-          // Always sync the engine to this move's difficulty so it can never
-          // drift from gameState.aiDifficulty (e.g. after restore/reset/remount).
-          await aiRef.current.setDifficulty(difficultyToUse);
+    /**
+     * Whether this run still speaks for the board. Read from the ref rather
+     * than the closure: `gameState` here is a snapshot from before the wait.
+     */
+    const isStale = (): string | null => {
+      if (runId !== aiRunIdRef.current) return 'superseded by a newer AI run';
+      const live = gameStateRef.current;
+      if (live.gameId !== currentGameId) return 'a different game is in progress';
+      if (live.gameResult || gameEndedRef.current) return 'the game has ended';
+      if (live.game.fen() !== fenAtStart) return 'the position has changed';
+      return null;
+    };
 
-          const aiMove = await aiRef.current.getBestMove(gameState.game);
-          const moveSource = aiRef.current.getLastMoveSource();
-          logger.debug('🤖 AI found move:', aiMove, 'via', moveSource, 'for gameId:', gameState.gameId);
-
-          // Record which engine answered so the UI can flag a drop to the
-          // offline fallback instead of letting it pass as weak LC0 play.
-          if (aiMove) {
-            setGameState(prev =>
-              prev.lastAiEngine === moveSource ? prev : { ...prev, lastAiEngine: moveSource },
-            );
-          }
-          
-          // Check again after AI thinking - game might have ended or changed during thinking
-          if (aiMove && !gameState.gameResult && !gameEndedRef.current && aiMoveGameId.current === currentGameId) {
-            // Validate the move is still legal on current board
-            const testGame = new Chess(gameState.game.fen());
-            const testMove = testGame.move({ from: aiMove.from as Square, to: aiMove.to as Square, promotion: aiMove.promotion });
-            
-            if (testMove) {
-              logger.debug('🤖 Applying valid AI move:', aiMove.san || `${aiMove.from}-${aiMove.to}`);
-              logger.debug('🤖 Board before AI move:', gameState.game.fen());
-              // Use the makeMove function which properly updates the game state
-              // Add delay for AI vs AI games to make them watchable
-              if (gameState.gameMode === 'ai-vs-ai') {
-                await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
-              }
-              
-              const moveResult = makeMove(aiMove.from as Square, aiMove.to as Square, aiMove.promotion);
-              if (!moveResult) {
-                logger.debug('🤖 AI move rejected - game has ended');
-              } else {
-                logger.debug('🤖 AI move applied successfully, board should update');
-              }
-            } else {
-              logger.debug(`🤖 AI move ${aiMove.from}-${aiMove.to} is no longer valid on current board`);
-            }
-          } else {
-            logger.debug('🤖 AI move cancelled - game ended or no move found');
-          }
-        } catch (error) {
-          logger.error('AI move error:', error);
-        } finally {
-          isAiThinking.current = false;
+    const makeAIMove = async () => {
+      let applied = false;
+      try {
+        const staleBefore = isStale();
+        if (staleBefore) {
+          logger.debug('🤖 AI cancelled before thinking —', staleBefore);
+          return;
         }
-      };
 
-      makeAIMove();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps  
-  }, [gameState.game.fen(), gameState.gameMode, gameState.aiColor, gameState.gameResult, gameState.gameId]);
+        // Determine which difficulty to use (per-side for AI vs AI)
+        let difficultyToUse = gameState.aiDifficulty;
+        if (gameState.gameMode === 'ai-vs-ai') {
+          difficultyToUse = currentTurn === 'w'
+            ? (gameState.whiteAiDifficulty || 'medium')
+            : (gameState.blackAiDifficulty || 'medium');
+        }
+
+        // Always sync the engine to this move's difficulty so it can never
+        // drift from gameState.aiDifficulty (e.g. after restore/reset/remount).
+        await aiRef.current.setDifficulty(difficultyToUse);
+
+        const aiMove = await aiRef.current.getBestMove(new Chess(fenAtStart));
+        const moveSource = aiRef.current.getLastMoveSource();
+        logger.debug('🤖 AI found move:', aiMove, 'via', moveSource);
+
+        // Record which engine answered so the UI can flag a drop to the
+        // offline fallback instead of letting it pass as weak LC0 play.
+        if (aiMove) {
+          setGameState(prev =>
+            prev.lastAiEngine === moveSource ? prev : { ...prev, lastAiEngine: moveSource },
+          );
+        }
+
+        if (!aiMove) {
+          logger.debug('🤖 AI returned no move');
+          return;
+        }
+
+        // AI vs AI is meant to be watchable, so pace it — but only when the
+        // engine answered quickly enough that the game would otherwise blur.
+        if (gameState.gameMode === 'ai-vs-ai') {
+          await new Promise(resolve => setTimeout(resolve, AI_VS_AI_MOVE_DELAY_MS));
+        }
+
+        const staleAfter = isStale();
+        if (staleAfter) {
+          logger.debug(`🤖 Discarding AI move ${aiMove.from}-${aiMove.to} — ${staleAfter}`);
+          return;
+        }
+
+        logger.debug('🤖 Applying AI move:', aiMove.san || `${aiMove.from}-${aiMove.to}`);
+        applied = makeMove(aiMove.from as Square, aiMove.to as Square, aiMove.promotion);
+        if (!applied) {
+          logger.debug('🤖 AI move rejected by makeMove');
+        }
+      } catch (error) {
+        logger.error('AI move error:', error);
+      } finally {
+        isAiThinking.current = false;
+        // Nothing changed on the board, so no dependency of this effect changed
+        // either and it will not re-run on its own. Nudge it, or the computer
+        // simply stops playing after a discarded move.
+        if (!applied) {
+          setAiRetry(n => n + 1);
+        }
+      }
+    };
+
+    makeAIMove();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    gameState.game.fen(),
+    gameState.gameMode,
+    gameState.aiColor,
+    gameState.gameResult,
+    gameState.gameId,
+    gameState.aiGamePaused,
+    aiRetry,
+  ]);
 
   const setTimeControl = useCallback((minutes: number | null, increment: number = 0) => {
     if (minutes === null) {
@@ -787,16 +832,27 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   }, []);
 
   const makeMove = useCallback((from: Square, to: Square, promotion: string = 'q'): boolean => {
-    logger.debug('🎯 makeMove called:', from, to, 'gameId:', gameState.gameId);
+    // Work from the latest committed state, not from the `gameState` this
+    // callback closed over.
+    //
+    // A caller can hold an old makeMove for a long time — the AI awaits LC0 for
+    // ~30s and then calls the one it captured before it started thinking. Basing
+    // the new position and history on that stale snapshot replayed the game from
+    // an older point, which looked like the board resetting itself and playing
+    // different moves. Deriving from the live state makes a late call either a
+    // normal move from the current position or an illegal one that is rejected.
+    const current = gameStateRef.current;
+
+    logger.debug('🎯 makeMove called:', from, to, 'gameId:', current.gameId);
     
     // Prevent moves if game has already ended (check both state and ref)
-    if (gameState.gameResult || gameEndedRef.current) {
-      logger.debug('❌ Move blocked - game has ended:', gameState.gameResult || 'via ref');
+    if (current.gameResult || gameEndedRef.current) {
+      logger.debug('❌ Move blocked - game has ended:', current.gameResult || 'via ref');
       return false;
     }
     
     try {
-      const gameCopy = new Chess(gameState.game.fen());
+      const gameCopy = new Chess(current.game.fen());
       const move = gameCopy.move({ from, to, promotion });
       
       if (!move) {
@@ -805,7 +861,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       }
 
       // If we're not at the end of history, remove future moves
-      const newHistory = gameState.history.slice(0, gameState.currentMoveIndex + 1);
+      const newHistory = current.history.slice(0, current.currentMoveIndex + 1);
       newHistory.push(move);
 
       // Build a position WITH full move history so draw-by-repetition is
@@ -828,8 +884,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       if (outcomeGame.isGameOver()) {
         if (outcomeGame.isCheckmate()) {
           winningColor = outcomeGame.turn() === 'w' ? 'b' : 'w';
-          const winnerPlayerKey = getPlayerKeyByColor(winningColor, gameState.colorAssignment);
-          const winnerName = gameState.players[winnerPlayerKey];
+          const winnerPlayerKey = getPlayerKeyByColor(winningColor, current.colorAssignment);
+          const winnerName = current.players[winnerPlayerKey];
           result = `Checkmate! ${winnerName} wins!`;
         } else if (outcomeGame.isDraw()) {
           if (outcomeGame.isStalemate()) {
@@ -851,24 +907,24 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const updatedStats = result
         ? updateGameStats(
             result,
-            gameState.gameStats,
-            gameState.colorAssignment,
-            gameState.players,
+            current.gameStats,
+            current.colorAssignment,
+            current.players,
             winningColor,
-            gameState.statsUpdated,
-            gameState.gameId,
+            current.statsUpdated,
+            current.gameId,
           )
-        : gameState.gameStats;
+        : current.gameStats;
 
       if (result) {
-        logger.debug('🏁 Game ended in makeMove:', result, 'gameId:', gameState.gameId);
+        logger.debug('🏁 Game ended in makeMove:', result, 'gameId:', current.gameId);
         gameEndedRef.current = true;
       }
 
       // The clock belongs to the side that is about to move, and runs from the
       // first move onwards. Requiring more than one move left Black's first turn
       // completely untimed.
-      const clockRunning = Boolean(gameState.timeControl) && newHistory.length >= 1 && !result;
+      const clockRunning = Boolean(current.timeControl) && newHistory.length >= 1 && !result;
 
       setGameState(prev => {
         // Handle time: deduct elapsed from moving player, add increment
@@ -929,7 +985,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     } catch {
       return false;
     }
-  }, [gameState, updateGameStats, updateUserStats, saveGameToHistory]);
+  }, [updateGameStats, updateUserStats, saveGameToHistory]);
 
   const undoMove = useCallback(() => {
     if (gameState.currentMoveIndex < 0) return;
