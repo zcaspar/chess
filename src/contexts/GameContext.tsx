@@ -654,6 +654,12 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     };
   }, [gameState.activeColor, gameState.startTime, gameState.gameResult, gameState.timeControl, updateGameStats, updateUserStats, saveGameToHistory]);
 
+  // The board position, as a plain value. The AI effect keys off this rather
+  // than calling game.fen() inside its dependency array — a call expression
+  // there cannot be statically checked by the lint rule, and CI builds promote
+  // that warning to an error.
+  const currentFen = gameState.game.fen();
+
   // AI move effect (handles both human-vs-ai and ai-vs-ai)
   //
   // An engine move is computed against one specific position and can take ~30s
@@ -665,7 +671,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   // So every run records the position it is thinking about and a monotonic id,
   // and both must still be current before the move is allowed to land.
   useEffect(() => {
-    const fenAtStart = gameState.game.fen();
+    const fenAtStart = currentFen;
     const currentTurn = gameState.game.turn();
     const shouldAIMove =
       ((gameState.gameMode === 'human-vs-ai' &&
@@ -778,7 +784,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     makeAIMove();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    gameState.game.fen(),
+    currentFen,
     gameState.gameMode,
     gameState.aiColor,
     gameState.gameResult,

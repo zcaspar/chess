@@ -48,3 +48,4 @@ cypress.env.json
 
 # LC0 binary
 lc0/lc0
+.vercel

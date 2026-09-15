@@ -89,12 +89,24 @@ describe('Performance Tests', () => {
       // Each higher difficulty should not be dramatically slower
       console.log('Performance progression:', results);
 
-      // Beginner returns a random move without the evaluation loop, so it should
-      // never be dramatically slower than the others. Sub-millisecond timings are
-      // noisy, so allow a small tolerance rather than a strict less-than.
-      expect(results[0].time).toBeLessThanOrEqual(results[1].time + 50);
-      // Medium should not be dramatically slower than beginner.
-      expect(results[2].time).toBeLessThan(results[0].time * 5 + 50);
+      const [beginner, easy, medium] = results;
+
+      // Beginner returns a random move without searching at all, so it should
+      // never be slower than a level that does search. Sub-millisecond timings
+      // are noisy, so allow a small tolerance rather than a strict less-than.
+      expect(beginner.time).toBeLessThanOrEqual(easy.time + 50);
+
+      // Deeper search costs more, but the point of this test is that the cost
+      // stays bounded. Compare the two levels that actually search against each
+      // other, and hold every level to an absolute ceiling.
+      //
+      // Deliberately NOT `beginner.time * 5`: beginner does no search and lands
+      // at a fraction of a millisecond, so any multiple of it is really an
+      // arbitrary wall-clock threshold that a slightly slower machine trips.
+      expect(medium.time).toBeLessThan(Math.max(easy.time * 10, 100) + 250);
+
+      // And no level may be slow enough to be felt as a stall.
+      results.forEach(({ time }) => expect(time).toBeLessThan(2000));
     });
 
     test('AI handles multiple rapid moves efficiently', async () => {
