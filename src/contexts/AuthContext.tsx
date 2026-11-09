@@ -47,7 +47,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setError(null);
       setLoading(true);
       const result = await createUserWithEmailAndPassword(auth, email, password);
-      
+
       // Update Firebase profile
       await updateFirebaseProfile(result.user, { displayName: username });
       
@@ -161,7 +161,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(true);
       
       // This would require additional Firebase setup for account linking
-      // For now, we'll implement a simpler approach: create new account and transfer data
+      // For now, we'll implement a simpler approach: create new account and transfer data.
+      // The guest's own ID token is the proof that this caller owns the guest
+      // profile; it must be fetched before signing in as the new account.
+      const guestToken = await user.getIdToken();
       const result = await createUserWithEmailAndPassword(auth, email, password);
       
       // Transfer guest data to new account (backend handles this)
@@ -171,9 +174,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${await result.user.getIdToken()}`,
         },
-        body: JSON.stringify({
-          guestUid: user.uid,
-        }),
+        body: JSON.stringify({ guestToken }),
       });
 
       await loadUserProfile(result.user);

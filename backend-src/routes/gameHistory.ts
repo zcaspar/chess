@@ -1,6 +1,5 @@
 import express from 'express';
 import { GameHistoryModel, SaveGameRequest } from '../models/GameHistory';
-import { HeadToHeadModel } from '../models/HeadToHead';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
 
@@ -48,6 +47,12 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
       });
     }
 
+    // `online-…` ids are minted by the server for games it refereed; a client
+    // must not be able to upsert over one of those rows.
+    if (typeof gameId !== 'string' || gameId.length > 255 || gameId.startsWith('online-')) {
+      return res.status(400).json({ error: 'Invalid gameId' });
+    }
+
     // Validate enums
     if (!['w', 'b'].includes(playerColor)) {
       return res.status(400).json({ error: 'Invalid playerColor. Must be "w" or "b"' });
@@ -78,32 +83,18 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
       aiDifficulty
     };
 
-    const savedGame = await GameHistoryModel.saveGame(gameData);
-    
-    // Update head-to-head record if it's a human vs human game
-    if (gameMode === 'human-vs-human' && opponentId && opponentId !== 'ai') {
-      try {
-        // Determine winner ID
-        let winnerId: string | null = null;
-        if (gameOutcome === 'win') {
-          winnerId = req.user!.uid;
-        } else if (gameOutcome === 'loss') {
-          winnerId = opponentId;
-        }
-        // If draw, winnerId remains null
-        
-        await HeadToHeadModel.updateRecord(
-          req.user!.uid,
-          opponentId,
-          winnerId,
-          gameId
-        );
-      } catch (h2hError) {
-        // Don't fail the request if head-to-head update fails
-        logger.error('Failed to update head-to-head record:', h2hError);
-      }
+    // Online games are recorded by the server itself when the game ends
+    // (GameSocketHandler.endGame), from the position it validated move by
+    // move. Anything arriving here was played on the client's own device, so
+    // it must not be able to name another account as the opponent: that used
+    // to let any signed-in user write wins against an arbitrary player into
+    // the shared head-to-head table.
+    if (gameData.opponentId !== 'ai') {
+      gameData.opponentId = undefined;
     }
-    
+
+    const savedGame = await GameHistoryModel.saveGame(gameData);
+
     res.status(201).json({
       success: true,
       message: 'Game saved to history successfully',

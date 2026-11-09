@@ -207,4 +207,28 @@ describe('POST /api/game-history', () => {
       expect.objectContaining({ playerId: 'real-user' }),
     );
   });
+
+  it('does not let a client name another account as the opponent', async () => {
+    const res = await request(app)
+      .post('/api/game-history')
+      .set('Authorization', 'Bearer good-token')
+      .send({ ...validGame, gameMode: 'human-vs-human', opponentId: 'victim-uid', gameOutcome: 'win' });
+
+    expect(res.status).toBeLessThan(400);
+    expect(mockSaveGame).toHaveBeenCalledWith(expect.objectContaining({ opponentId: undefined }));
+    // The shared head-to-head table is written only by the server-refereed path.
+    const { query } = jest.requireMock('../config/database');
+    const h2hWrites = query.mock.calls.filter(([sql]: [string]) => /head_to_head/i.test(String(sql)));
+    expect(h2hWrites).toHaveLength(0);
+  });
+
+  it('refuses to overwrite a game the server recorded itself', async () => {
+    const res = await request(app)
+      .post('/api/game-history')
+      .set('Authorization', 'Bearer good-token')
+      .send({ ...validGame, gameId: 'online-ABC123-1700000000000', gameOutcome: 'win' });
+
+    expect(res.status).toBe(400);
+    expect(mockSaveGame).not.toHaveBeenCalled();
+  });
 });

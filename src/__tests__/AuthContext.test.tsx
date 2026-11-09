@@ -436,6 +436,7 @@ describe('AuthContext', () => {
         uid: 'guest-uid',
         isAnonymous: true,
         email: null,
+        getIdToken: jest.fn(() => Promise.resolve('guest-token')),
       };
 
       // Setup as guest user
@@ -443,7 +444,7 @@ describe('AuthContext', () => {
         callback(guestUser);
         return jest.fn();
       });
-      
+
       (fetch as jest.MockedFunction<typeof fetch>)
         .mockResolvedValueOnce({
           ok: true,
@@ -480,9 +481,9 @@ describe('AuthContext', () => {
         `${process.env.REACT_APP_BACKEND_URL}/api/users/upgrade-guest`,
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({
-            guestUid: 'guest-uid',
-          }),
+          // Proof of ownership is the guest's own ID token, not its bare UID
+          // (which let any signed-in user claim any guest profile).
+          body: JSON.stringify({ guestToken: 'guest-token' }),
         })
       );
     });

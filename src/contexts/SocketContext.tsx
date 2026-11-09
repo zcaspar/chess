@@ -1,7 +1,15 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../hooks/useAuth';
 import { logger } from '../utils/logger';
+
+interface OnlinePlayer {
+  id: string;
+  username: string;
+  displayName?: string;
+  /** False while that player's connection is down; their seat is held. */
+  connected?: boolean;
+}
 
 interface SocketContextType {
   socket: Socket | null;
@@ -9,8 +17,8 @@ interface SocketContextType {
   roomCode: string | null;
   assignedColor: 'white' | 'black' | 'spectator' | null;
   players: {
-    white: { id: string; username: string; displayName?: string } | null;
-    black: { id: string; username: string; displayName?: string } | null;
+    white: OnlinePlayer | null;
+    black: OnlinePlayer | null;
   };
   gameState: {
     fen: string;
@@ -51,9 +59,17 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [assignedColor, setAssignedColor] = useState<'white' | 'black' | 'spectator' | null>(null);
   const [players, setPlayers] = useState<{
-    white: { id: string; username: string; displayName?: string } | null;
-    black: { id: string; username: string; displayName?: string } | null;
+    white: OnlinePlayer | null;
+    black: OnlinePlayer | null;
   }>({ white: null, black: null });
+
+  // The socket handlers below are registered once per sign-in, so they read
+  // the current room and display name through refs rather than stale closures.
+  const roomCodeRef = useRef<string | null>(null);
+  const displayNameRef = useRef<string>('Player');
+  useEffect(() => {
+    roomCodeRef.current = roomCode;
+  }, [roomCode]);
   
   const [gameState, setGameState] = useState<{
     fen: string;
@@ -66,6 +82,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   } | null>(null);
   
   const { user, profile } = useAuth();
+  displayNameRef.current = profile?.displayName || profile?.username || user?.displayName || 'Player';
 
   useEffect(() => {
     if (!user) return;
@@ -79,28 +96,44 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       forceNew: true,
       timeout: 20000,
       reconnection: true,
-      reconnectionAttempts: 5,
+      // Keep trying: a phone that was backgrounded for a minute used to exhaust
+      // five attempts and strand the player outside their own game.
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
     });
 
     // Connect and authenticate
     const connectSocket = async () => {
       try {
-        const token = await user.getIdToken();
-        
         socketInstance.connect();
-        
-        socketInstance.on('connect', () => {
+
+        socketInstance.on('connect', async () => {
           logger.debug('Socket connected');
           setIsConnected(true);
-          
-          // Authenticate with Firebase token
-          socketInstance.emit('authenticate', token);
+
+          // Authenticate with a fresh Firebase token on EVERY connection. ID
+          // tokens expire after an hour, so re-sending the one fetched at
+          // sign-in made every later reconnect fail authentication.
+          try {
+            socketInstance.emit('authenticate', await user.getIdToken());
+          } catch (tokenError) {
+            logger.error('Could not get an auth token for the socket:', tokenError);
+          }
         });
 
         socketInstance.on('authenticated', (data) => {
           if (data.success) {
             logger.debug('Socket authenticated successfully');
+            // After a dropped connection the server still holds our seat, but
+            // this is a new socket: ask for the room again to get the seat and
+            // the current position back.
+            if (roomCodeRef.current) {
+              socketInstance.emit('joinRoom', {
+                roomCode: roomCodeRef.current,
+                displayName: displayNameRef.current,
+              });
+            }
           } else {
             logger.error('Socket authentication failed:', data.error);
             socketInstance.disconnect();
@@ -161,9 +194,24 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           window.dispatchEvent(new CustomEvent('socketGameStarted', { detail: data }));
         });
 
+        const markConnection = (data: { color?: string; seatReleased?: boolean }, connected: boolean) => {
+          if (data?.color !== 'white' && data?.color !== 'black') return;
+          const color: 'white' | 'black' = data.color;
+          setPlayers(prev => {
+            const seat = prev[color];
+            if (!seat) return prev;
+            return { ...prev, [color]: data.seatReleased ? null : { ...seat, connected } };
+          });
+        };
+
         socketInstance.on('playerDisconnected', (data) => {
           logger.debug('Player disconnected:', data);
-          // TODO: Show reconnection timer
+          markConnection(data, false);
+        });
+
+        socketInstance.on('playerLeft', (data) => {
+          logger.debug('Player left:', data);
+          markConnection(data, false);
         });
 
         socketInstance.on('error', (data) => {
@@ -174,6 +222,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             setRoomCode(null);
             setAssignedColor(null);
             setPlayers({ white: null, black: null });
+            setGameState(null);
+            window.dispatchEvent(new CustomEvent('socketRoomLeft'));
           }
           
           // Broadcast error to components via custom event
@@ -354,7 +404,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       setRoomCode(null);
       setAssignedColor(null);
       setPlayers({ white: null, black: null });
-      
+      setGameState(null);
+      window.dispatchEvent(new CustomEvent('socketRoomLeft'));
+
       logger.debug('Left room:', roomCode);
     }
   };

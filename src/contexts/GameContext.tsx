@@ -317,14 +317,20 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       return; // No authenticated user
     }
 
+    // Online games are recorded by the server (GameSocketHandler.endGame) for
+    // both players, from the moves it validated. Saving from here as well
+    // would add a second, client-authored row for the same game.
+    if (gameState.onlineGameRoom) {
+      logger.debug('🌐 Online game - history is recorded by the server');
+      return;
+    }
+
     try {
       const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3005';
       
-      // An online game knows which colour the server assigned us; only local
-      // and AI games need the fallback convention.
-      const playerColor =
-        gameState.onlineGameRoom?.myColor ??
-        getLocalPlayerColor(gameState.gameMode, gameState.aiColor);
+      // Only local and AI games are saved from the client, so the colour comes
+      // from the local convention.
+      const playerColor = getLocalPlayerColor(gameState.gameMode, gameState.aiColor);
 
       // Outcome is relative to the colour the signed-in player is recorded as
       // playing. This used to hard-code 'win' for every human-vs-human game,
@@ -457,12 +463,6 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         const opponentPlayerKey = playerColor === 'w' ? 'black' : 'white';
         const opponentKey = gameState.colorAssignment[opponentPlayerKey];
         opponentName = gameState.players[opponentKey];
-        
-        // Get opponent ID from online game room if available
-        if (gameState.onlineGameRoom) {
-          opponentId = gameState.onlineGameRoom.opponentId;
-          opponentName = gameState.onlineGameRoom.opponentName || opponentName;
-        }
       }
       
       const gameHistoryData = {
@@ -1363,23 +1363,20 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const data = event.detail;
       logger.debug('🌐 Socket game ended received:', data);
       
-      // Parse the result to determine winning color
-      let winningColor: 'w' | 'b' | undefined;
-      if (data.result.includes('White wins')) {
-        winningColor = 'w';
-      } else if (data.result.includes('Black wins')) {
-        winningColor = 'b';
-      }
-
-      const current = gameStateRef.current;
-      const finalFen = current.game.fen();
-      const pgn = data.pgn || current.game.pgn(); // Use PGN from socket if available
-      const resultText = `${data.result} (${data.reason})`;
+      // The server sends result as 'white' | 'black' | 'draw' plus a readable
+      // resultText. (This used to look for the phrase "White wins" in the bare
+      // result code, never found it, and filed every online game as a draw.)
+      const outcome =
+        data.result === 'white' ? 'White wins' : data.result === 'black' ? 'Black wins' : 'Draw';
+      const resultText: string = data.resultText || `${outcome} (${data.reason})`;
 
       // Update game state to show game result
       setGameState(prev => ({
         ...prev,
         gameResult: resultText,
+        drawOffer: { offered: false, by: null },
+        whiteTime: typeof data.whiteTime === 'number' ? data.whiteTime : prev.whiteTime,
+        blackTime: typeof data.blackTime === 'number' ? data.blackTime : prev.blackTime,
         activeColor: null,
         startTime: null,
       }));
@@ -1393,8 +1390,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         intervalRef.current = null;
       }
 
-      // Save outside the updater so it cannot fire twice under StrictMode.
-      saveGameToHistory(resultText, winningColor, finalFen, pgn, current.history.length);
+      // Nothing is saved from here: the server records an online game's
+      // history, statistics and head-to-head itself, from the game it refereed.
     };
 
     const handleSocketDrawOffered = (event: Event) => {
@@ -1501,7 +1498,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         timeControl: data.timeControl || prev.timeControl,
         whiteTime: data.whiteTime || (data.timeControl ? data.timeControl.initial : prev.whiteTime),
         blackTime: data.blackTime || (data.timeControl ? data.timeControl.initial : prev.blackTime),
-        activeColor: data.gameState.turn,
+        activeColor: data.gameResult ? null : data.gameState.turn,
+        // The server is the source of truth for whether this game is over and
+        // whether a draw offer is open (this also runs when we rejoin after a
+        // dropped connection).
+        gameResult: data.gameResult || '',
+        drawOffer: data.drawOfferBy
+          ? { offered: true, by: data.drawOfferBy }
+          : { offered: false, by: null },
         gameMode: 'human-vs-human', // Online games are always human vs human
         onlineGameRoom: myColor
           ? {
@@ -1516,6 +1520,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           player2: prev.colorAssignment.white === 'player2' ? whitePlayerName : blackPlayerName,
         },
       }));
+
+      gameEndedRef.current = !!data.gameResult;
 
       logger.debug('✅ Game state synchronized with server');
     };
@@ -1539,7 +1545,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       }));
     };
 
+    // Leaving the room turns this back into a local board: without this the
+    // next local game still counted as "online" and was never saved or scored.
+    const handleSocketRoomLeft = () => {
+      setGameState(prev => (prev.onlineGameRoom ? { ...prev, onlineGameRoom: undefined } : prev));
+    };
+
     // Add event listeners
+    window.addEventListener('socketRoomLeft', handleSocketRoomLeft);
     window.addEventListener('socketMoveMade', handleSocketMoveMade as EventListener);
     window.addEventListener('socketGameEnded', handleSocketGameEnded as EventListener);
     window.addEventListener('socketDrawOffered', handleSocketDrawOffered as EventListener);
@@ -1552,6 +1565,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
     return () => {
       // Clean up event listeners
+      window.removeEventListener('socketRoomLeft', handleSocketRoomLeft);
       window.removeEventListener('socketMoveMade', handleSocketMoveMade as EventListener);
       window.removeEventListener('socketGameEnded', handleSocketGameEnded as EventListener);
       window.removeEventListener('socketDrawOffered', handleSocketDrawOffered as EventListener);
