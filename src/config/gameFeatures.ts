@@ -8,7 +8,7 @@
 export const GAME_FEATURES = {
   // Ainara mode features (special powers)
   AINARA_MODE: true,     // Enable Ainara mode (includes all special powers)
-  HINTS: true,           // LC0-powered best move suggestions
+  HINTS: true,           // Engine best-move suggestions (Stockfish in the browser)
   NUCLEAR_CHESS: true,   // Nuke opponent pieces (not King/Queen)
   TELEPORTATION: true,   // Teleport your pieces randomly
 

@@ -25,6 +25,12 @@ const GameStatus: React.FC = () => {
     gameState.lastAiEngine === 'fallback' &&
     (gameState.gameMode === 'human-vs-ai' || gameState.gameMode === 'ai-vs-ai');
 
+  // LC0 was unreachable and the engine in the browser stepped in. Still a
+  // proper opponent, so this is information rather than a warning.
+  const usingLocalEngine =
+    gameState.lastAiEngine === 'stockfish' &&
+    (gameState.gameMode === 'human-vs-ai' || gameState.gameMode === 'ai-vs-ai');
+
   // Replace player names in game result
   const displayResult = gameResult
     .replace('White', getPlayerByColor('w'))
@@ -33,6 +39,20 @@ const GameStatus: React.FC = () => {
   return (
     <div className="bg-white rounded-lg shadow-md p-4">
       <h3 className="font-bold text-lg mb-2">Game Status</h3>
+
+      {usingLocalEngine && (
+        <div
+          role="status"
+          className="mb-3 bg-blue-50 border border-blue-200 text-blue-800 px-3 py-2 rounded text-sm"
+        >
+          <span className="font-semibold">Playing on this device</span>
+          <p className="mt-1">
+            The online engine could not be reached, so the computer is using
+            Stockfish in your browser. It will switch back if the connection
+            returns.
+          </p>
+        </div>
+      )}
 
       {usingFallbackEngine && (
         <div
