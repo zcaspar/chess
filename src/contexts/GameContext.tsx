@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { isFeatureEnabled } from '../config/gameFeatures';
 import { useChessVariants } from '../hooks/useChessVariants';
 import { logger } from '../utils/logger';
+import { loadSavedGame, persistGame } from '../utils/gamePersistence';
 
 /**
  * Pause between moves in AI vs AI so the game is watchable rather than a blur.
@@ -141,6 +142,11 @@ export interface GameContextType {
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
+const withSavedGame = (fresh: GameState): GameState => {
+  const saved = loadSavedGame();
+  return saved ? { ...fresh, ...saved } : fresh;
+};
+
 export const useGame = () => {
   const context = useContext(GameContext);
   if (!context) {
@@ -154,8 +160,9 @@ interface GameProviderProps {
 }
 
 export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
-  // Initialize state first
-  const [gameState, setGameState] = useState<GameState>({
+  // Initialize state first. A game that was in progress when the page was last
+  // closed is picked up again (see utils/gamePersistence).
+  const [gameState, setGameState] = useState<GameState>(() => withSavedGame({
     game: new Chess(),
     history: [],
     currentMoveIndex: -1,
@@ -211,7 +218,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       white: false,
       black: false,
     },
-  });
+  }));
+
+  // Keep the stored copy in step with the board (and forget it once the game
+  // is finished, reset, or handed over to an online room).
+  useEffect(() => {
+    persistGame(gameState);
+  }, [gameState]);
 
   // Get auth context for user stats updates
   const authContext = useAuth();
@@ -816,25 +829,39 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
   }, []);
 
+  // Start the clock, or resume it after a pause, for the side to move.
+  // (It used to hand the clock to White whoever's turn it was.)
   const startClock = useCallback(() => {
     setGameState(prev => {
-      if (prev.timeControl && !prev.activeColor) {
-        return {
-          ...prev,
-          activeColor: 'w',
-          startTime: Date.now(),
-        };
+      if (!prev.timeControl || prev.gameResult || prev.startTime) {
+        return prev;
       }
-      return prev;
+      return {
+        ...prev,
+        activeColor: prev.game.turn(),
+        startTime: Date.now(),
+      };
     });
   }, []);
 
+  // Pause the clock, keeping the time already used. Pausing used to drop the
+  // elapsed time on the floor, so every pause handed the thinking time back.
   const pauseClock = useCallback(() => {
-    setGameState(prev => ({
-      ...prev,
-      activeColor: null,
-      startTime: null,
-    }));
+    setGameState(prev => {
+      if (!prev.activeColor || !prev.startTime) {
+        return prev.activeColor || prev.startTime
+          ? { ...prev, activeColor: null, startTime: null }
+          : prev;
+      }
+      const elapsed = (Date.now() - prev.startTime) / 1000;
+      const timeKey = prev.activeColor === 'w' ? 'whiteTime' : 'blackTime';
+      return {
+        ...prev,
+        [timeKey]: Math.max(0, prev[timeKey] - elapsed),
+        activeColor: null,
+        startTime: null,
+      };
+    });
   }, []);
 
   const makeMove = useCallback((from: Square, to: Square, promotion: string = 'q'): boolean => {
@@ -1345,17 +1372,58 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   useEffect(() => {
     const handleSocketMoveMade = (event: CustomEvent) => {
       const data = event.detail;
-      logger.debug('🌐 Socket move made received - updating timers only:', data);
-      
-      // Only update timer information here
-      // The actual move is handled by useOnlineGame hook calling makeMove
+      logger.debug('🌐 Socket move made received:', data);
+
+      // Apply the server's move here, in the provider, so it lands whichever
+      // screen is showing. This used to live in a hook mounted only by the
+      // board: open History or Stats mid-game and the opponent's moves were
+      // dropped, leaving this client on a different position from the server.
+      const current = gameStateRef.current;
+      let inStep = false;
+      if (data.move && current.currentMoveIndex === current.history.length - 1) {
+        try {
+          const probe = new Chess(current.game.fen());
+          probe.move({ from: data.move.from, to: data.move.to, promotion: data.move.promotion });
+          inStep = probe.fen() === data.fen;
+        } catch {
+          inStep = false;
+        }
+      }
+
+      const applied = inStep && makeMove(data.move.from as Square, data.move.to as Square, data.move.promotion);
+      if (!applied) {
+        // Out of step with the server (a missed move, two moves arriving
+        // together, a local edit): take the server's game wholesale.
+        logger.warn('🌐 Local board out of step with the server - resyncing');
+        let serverGame: Chess;
+        let serverHistory: Move[] | null = null;
+        try {
+          serverGame = new Chess();
+          serverGame.loadPgn(data.pgn);
+          if (serverGame.fen() !== data.fen) throw new Error('PGN does not reach the reported position');
+          serverHistory = serverGame.history({ verbose: true });
+        } catch {
+          serverGame = new Chess(data.fen);
+        }
+        setGameState(prev => {
+          const history = serverHistory ?? prev.history;
+          return {
+            ...prev,
+            game: serverGame,
+            history,
+            currentMoveIndex: history.length - 1,
+            drawOffer: { offered: false, by: null },
+          };
+        });
+      }
+
+      // The server's clocks are the real ones.
       setGameState(prev => ({
         ...prev,
         whiteTime: data.whiteTime,
         blackTime: data.blackTime,
-        // Only start timer for next player if this is not the first move
-        activeColor: prev.history.length > 0 ? data.turn : null,
-        startTime: prev.history.length > 0 ? Date.now() : null,
+        activeColor: prev.gameResult ? null : data.turn,
+        startTime: prev.gameResult ? null : Date.now(),
       }));
     };
 
@@ -1507,13 +1575,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           ? { offered: true, by: data.drawOfferBy }
           : { offered: false, by: null },
         gameMode: 'human-vs-human', // Online games are always human vs human
-        onlineGameRoom: myColor
-          ? {
-              opponentId: opponent?.id,
-              opponentName: opponent?.displayName || opponent?.username,
-              myColor,
-            }
-          : prev.onlineGameRoom,
+        // Set for spectators too (with no colour): it is what marks this board
+        // as the server's game rather than a local one to save and score.
+        onlineGameRoom: {
+          opponentId: opponent?.id,
+          opponentName: opponent?.displayName || opponent?.username,
+          myColor,
+        },
         // Set player names based on color assignment
         players: {
           player1: prev.colorAssignment.white === 'player1' ? whitePlayerName : blackPlayerName,
@@ -1576,7 +1644,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       window.removeEventListener('socketRoomJoined', handleSocketRoomJoined as EventListener);
       window.removeEventListener('socketGameStarted', handleSocketGameStarted as EventListener);
     };
-  }, [saveGameToHistory]);
+  }, [saveGameToHistory, makeMove]);
 
   const canUndo = gameState.currentMoveIndex >= 0;
   const canRedo = gameState.currentMoveIndex < gameState.history.length - 1;
