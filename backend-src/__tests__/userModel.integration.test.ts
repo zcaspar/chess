@@ -146,3 +146,8 @@ describeOrSkip('UserModel (live Postgres)', () => {
     expect(await UserModel.delete('u1')).toBe(false);
   });
 });
+
+// Makes this file a module. Without it the top-level constants above are
+// globals shared with the other integration test files, and ts-jest reports
+// them as redeclared whenever two of those files are compiled by one worker.
+export {};
