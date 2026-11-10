@@ -6,6 +6,7 @@ import { isFeatureEnabled } from '../config/gameFeatures';
 import { useChessVariants } from '../hooks/useChessVariants';
 import { logger } from '../utils/logger';
 import { loadSavedGame, persistGame } from '../utils/gamePersistence';
+import { getLocalEngineHint } from '../engine/localOpponent';
 
 /**
  * Pause between moves in AI vs AI so the game is watchable rather than a blur.
@@ -58,11 +59,12 @@ export interface GameState {
   aiDifficulty: DifficultyLevel;
   /**
    * Engine behind the computer's most recent move, or null before it has moved.
-   * 'fallback' means LC0 was unreachable and the far weaker offline evaluator
+   * 'stockfish' means LC0 was unreachable and the in-browser engine played.
+   * 'fallback' means neither was available and the far weaker offline evaluator
    * played instead — surfaced in the UI so the drop in strength is visible
    * rather than looking like the computer simply playing badly.
    */
-  lastAiEngine: 'lc0' | 'fallback' | null;
+  lastAiEngine: 'lc0' | 'stockfish' | 'fallback' | null;
   // AI vs AI specific settings
   whiteAiDifficulty?: DifficultyLevel;
   blackAiDifficulty?: DifficultyLevel;
@@ -1691,64 +1693,59 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       return false;
     }
 
+    const fen = gameState.game.fen();
+    const showHint = (move: { from: string; to: string; promotion?: string }) => {
+      setGameState(prev => ({
+        ...prev,
+        hintAvailable: {
+          white: currentPlayer === 'w' ? false : prev.hintAvailable.white,
+          black: currentPlayer === 'b' ? false : prev.hintAvailable.black,
+        },
+        currentHint: {
+          from: move.from as Square,
+          to: move.to as Square,
+          promotion: move.promotion,
+        },
+      }));
+    };
+
+    // The engine in the browser answers in a fraction of a second, works for
+    // guests and offline, and costs the server nothing.
+    const localHint = await getLocalEngineHint(fen);
+    if (localHint) {
+      // The board may have moved on while the engine was thinking.
+      if (gameStateRef.current.game.fen() !== fen) return false;
+      showHint(localHint);
+      return true;
+    }
+
+    // No local engine (a browser without Web Workers / WebAssembly): ask the
+    // LC0 server through the backend, as hints always have.
     try {
       const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3005';
-      const url = `${backendUrl}/api/analysis/hint`;
-      logger.debug('💡 Requesting hint from:', url);
-      logger.debug('💡 Request payload:', { fen: gameState.game.fen() });
-      
-      const response = await fetch(url, {
+      const response = await fetch(`${backendUrl}/api/analysis/hint`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          fen: gameState.game.fen(),
-        }),
+        body: JSON.stringify({ fen }),
       });
 
-      logger.debug('💡 Response status:', response.status, response.statusText);
-
       if (!response.ok) {
-        const errorText = await response.text();
-        logger.error('Failed to get hint from server:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
-        });
+        logger.error('Failed to get hint from server:', response.status, response.statusText);
         return false;
       }
 
       const data = await response.json();
-      logger.debug('💡 Response data:', data);
-      
-      if (data.success && data.bestMove) {
-        logger.debug('💡 Setting hint:', data.bestMove);
-        const currentPlayer = gameState.game.turn();
-        setGameState(prev => ({
-          ...prev,
-          hintAvailable: {
-            white: currentPlayer === 'w' ? false : prev.hintAvailable.white,
-            black: currentPlayer === 'b' ? false : prev.hintAvailable.black,
-          },
-          currentHint: {
-            from: data.bestMove.from,
-            to: data.bestMove.to,
-            promotion: data.bestMove.promotion,
-          },
-        }));
+      if (data.success && data.bestMove && gameStateRef.current.game.fen() === fen) {
+        showHint(data.bestMove);
         return true;
-      } else {
-        logger.warn('💡 Invalid response format or no best move:', data);
-        return false;
       }
+      logger.warn('💡 Invalid response format or no best move:', data);
     } catch (error) {
       logger.error('Error requesting hint:', error);
-      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        logger.error('💡 This is likely a CORS or network connectivity issue');
-      }
     }
-    
+
     return false;
   }, [gameState.hintAvailable, gameState.gameResult, gameState.gameMode, gameState.game]);
 
