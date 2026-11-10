@@ -1,3 +1,5 @@
+import type { RatingSummary } from '../utils/rating';
+
 // Remove Firebase client SDK dependency for backend compilation
 export interface FirebaseUser {
   uid: string;
@@ -19,6 +21,8 @@ export interface UserProfile {
   isGuest: boolean;
   preferences: UserPreferences;
   stats: UserStats;
+  /** Online rating; set only by the server. Absent on profiles from an older backend. */
+  rating?: RatingSummary;
   createdAt: string;
   updatedAt: string;
   lastLogin: string;
