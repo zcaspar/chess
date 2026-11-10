@@ -21,6 +21,9 @@ interface Seat {
   username: string;
   displayName?: string;
   socketId: string;
+  /** Rating shown next to the player; null for someone who cannot play rated. */
+  rating?: number | null;
+  ratingProvisional?: boolean;
 }
 
 type GameResult = 'white' | 'black' | 'draw';
@@ -214,7 +217,28 @@ export class GameSocketHandler {
       username: seat.username,
       displayName: seat.displayName,
       connected: seat.socketId !== '',
+      rating: seat.rating ?? null,
+      ratingProvisional: seat.ratingProvisional ?? false,
     };
+  }
+
+  /** Fill in a seat's rating from the player's profile. Never fails a join. */
+  private async loadSeatRating(seat: Seat): Promise<void> {
+    try {
+      const rating = await UserModel.getRatingSummary(seat.id);
+      seat.rating = rating ? rating.value : null;
+      seat.ratingProvisional = rating ? rating.provisional : false;
+    } catch (error) {
+      logger.warn('Could not load a rating for a joining player:', error);
+      seat.rating = null;
+    }
+  }
+
+  /** A game is rated when both players have a rating to play for. */
+  private isRated(room: GameRoom): boolean {
+    return (
+      typeof room.whitePlayer?.rating === 'number' && typeof room.blackPlayer?.rating === 'number'
+    );
   }
 
   /** The colour this connection is playing in the room, if any. */
@@ -242,6 +266,7 @@ export class GameSocketHandler {
       ...this.currentClocks(room),
       drawOfferBy: room.drawOfferBy,
       gameResult: room.gameResult,
+      rated: this.isRated(room),
     };
   }
 
@@ -345,6 +370,8 @@ export class GameSocketHandler {
           displayName: cleanDisplayName(data?.displayName) || socket.data.username,
           socketId: socket.id,
         };
+
+        await this.loadSeatRating(creatorData);
 
         // Randomly assign creator to white or black
         const assignedColor = randomInt(2) === 0 ? 'white' : 'black';
@@ -464,13 +491,23 @@ export class GameSocketHandler {
         } else if (!roomToJoin.whitePlayer) {
           roomToJoin.whitePlayer = playerData;
           assignedColor = 'white';
+          await this.loadSeatRating(playerData);
         } else if (!roomToJoin.blackPlayer) {
           roomToJoin.blackPlayer = playerData;
           assignedColor = 'black';
+          await this.loadSeatRating(playerData);
         } else {
           // Room is full, user becomes spectator
           roomToJoin.spectators.add(socket.id);
         }
+        // A room restored after a restart has seats without ratings; fill them
+        // in when their owners come back.
+        for (const seat of [roomToJoin.whitePlayer, roomToJoin.blackPlayer]) {
+          if (seat && seat.rating === undefined && seat.id === userId) {
+            await this.loadSeatRating(seat);
+          }
+        }
+
         logger.debug(`Socket ${socket.id} joined room ${roomCode} as ${assignedColor}${isReturningPlayer ? ' (returning)' : ''}`);
 
         socket.join(roomCode);
@@ -518,6 +555,7 @@ export class GameSocketHandler {
           this.io.to(roomCode).emit('gameStarted', {
             white: this.publicPlayer(roomToJoin.whitePlayer),
             black: this.publicPlayer(roomToJoin.blackPlayer),
+            rated: this.isRated(roomToJoin),
           });
         }
 
@@ -1021,6 +1059,26 @@ export class GameSocketHandler {
       await HeadToHeadModel.updateRecord(white.id, black.id, winnerId, historyGameId);
     } catch (error) {
       logger.error(`Error updating head-to-head for room ${roomCode}:`, error);
+    }
+
+    // Ratings last, and only from here: a rating changes when the server has
+    // refereed a game to its end, never because a client says so.
+    try {
+      const rated = await UserModel.applyRatedGame({
+        whiteUid: white.id,
+        blackUid: black.id,
+        result,
+        gameId: historyGameId,
+      });
+      if (rated) {
+        white.rating = rated.white.after;
+        white.ratingProvisional = rated.white.provisional;
+        black.rating = rated.black.after;
+        black.ratingProvisional = rated.black.provisional;
+        this.io.to(roomCode).emit('ratingsUpdated', rated);
+      }
+    } catch (error) {
+      logger.error(`Error updating ratings for room ${roomCode}:`, error);
     }
   }
 }

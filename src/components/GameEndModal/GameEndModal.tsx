@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useGame } from '../../contexts/GameContext';
 import { isFeatureEnabled } from '../../config/gameFeatures';
+import { formatRating, formatRatingChange, RatingChange } from '../../utils/rating';
 
 interface GameEndModalProps {
   /** Open the review screen for the game that just finished. */
   onReview?: () => void;
+  /** What this game did to the local player's rating, for a rated online game. */
+  ratingChange?: RatingChange | null;
 }
 
-const GameEndModal: React.FC<GameEndModalProps> = ({ onReview }) => {
+const GameEndModal: React.FC<GameEndModalProps> = ({ onReview, ratingChange }) => {
   const { gameState, resetGame, getPlayerByColor } = useGame();
   const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -102,6 +105,25 @@ const GameEndModal: React.FC<GameEndModalProps> = ({ onReview }) => {
 
         {/* Result */}
         <p className="text-gray-600 dark:text-gray-300 mb-4">{displayResult}</p>
+
+        {/* Rating change (rated online games only) */}
+        {ratingChange && (
+          <p className="mb-4 text-sm text-gray-700 dark:text-gray-200" data-testid="rating-change">
+            Rating{' '}
+            <span className="font-semibold">{formatRating(ratingChange.after, ratingChange.provisional)}</span>{' '}
+            <span
+              className={`font-semibold ${
+                ratingChange.change > 0
+                  ? 'text-green-600'
+                  : ratingChange.change < 0
+                    ? 'text-red-600'
+                    : 'text-gray-500'
+              }`}
+            >
+              ({formatRatingChange(ratingChange.change)})
+            </span>
+          </p>
+        )}
 
         {/* Stats */}
         <div className="flex justify-center gap-6 mb-6 text-sm text-gray-500 dark:text-gray-400">

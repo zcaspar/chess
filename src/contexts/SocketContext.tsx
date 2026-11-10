@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, ReactNod
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../hooks/useAuth';
 import { logger } from '../utils/logger';
+import type { RatingChange } from '../utils/rating';
 
 interface OnlinePlayer {
   id: string;
@@ -9,6 +10,15 @@ interface OnlinePlayer {
   displayName?: string;
   /** False while that player's connection is down; their seat is held. */
   connected?: boolean;
+  /** Null for a player who cannot play rated games (a guest). */
+  rating?: number | null;
+  ratingProvisional?: boolean;
+}
+
+/** What the game that just finished did to each player's rating. */
+export interface RatingChanges {
+  white: RatingChange;
+  black: RatingChange;
 }
 
 interface SocketContextType {
@@ -35,6 +45,10 @@ interface SocketContextType {
      */
     clockSyncedAt: number | null;
   } | null;
+  /** Whether the game in this room counts for rating. */
+  rated: boolean;
+  /** Set when a rated game ends; null before that and in casual games. */
+  ratingChanges: RatingChanges | null;
   createRoom: (timeControl?: { initial: number; increment: number }) => void;
   joinRoom: (roomCode: string) => void;
   makeMove: (from: string, to: string, promotion?: string) => void;
@@ -92,6 +106,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
   // The socket handlers below are registered once per sign-in, so they read
   // the current room and display name through refs rather than stale closures.
+  const [rated, setRated] = useState(false);
+  const [ratingChanges, setRatingChanges] = useState<RatingChanges | null>(null);
+  const playersRef = useRef(players);
+  playersRef.current = players;
+
   // Seeded from sessionStorage so a page reload mid-game walks straight back
   // into the room (the server has kept the seat).
   const roomCodeRef = useRef<string | null>(readStoredRoomCode());
@@ -200,6 +219,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           rejoiningRef.current = false;
           setAssignedColor(data.assignedColor);
           setPlayers(data.players);
+          setRated(data.rated === true);
+          setRatingChanges(null);
           
           // Initialize game state
           setGameState({
@@ -233,6 +254,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             white: data.white,
             black: data.black,
           });
+          setRated(data.rated === true);
           // Broadcast to GameContext to update player names
           window.dispatchEvent(new CustomEvent('socketGameStarted', { detail: data }));
         });
@@ -349,6 +371,24 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           window.dispatchEvent(new CustomEvent('socketGameEnded', { detail: data }));
         });
 
+        socketInstance.on('ratingsUpdated', (data: RatingChanges) => {
+          logger.debug('Ratings updated:', data);
+          if (!data?.white || !data?.black) return;
+          setRatingChanges(data);
+          const seats = playersRef.current;
+          setPlayers(prev => ({
+            white: prev.white ? { ...prev.white, rating: data.white.after, ratingProvisional: data.white.provisional } : prev.white,
+            black: prev.black ? { ...prev.black, rating: data.black.after, ratingProvisional: data.black.provisional } : prev.black,
+          }));
+          // Let the signed-in player's profile pick up their new rating.
+          window.dispatchEvent(new CustomEvent('socketRatingsUpdated', {
+            detail: [
+              { playerId: seats.white?.id, ...data.white },
+              { playerId: seats.black?.id, ...data.black },
+            ],
+          }));
+        });
+
         socketInstance.on('drawOffered', (data: { by: 'w' | 'b' }) => {
           logger.debug('Draw offered by:', data?.by);
           // Broadcast to GameContext or other components via custom event
@@ -460,6 +500,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       setAssignedColor(null);
       setPlayers({ white: null, black: null });
       setGameState(null);
+      setRated(false);
+      setRatingChanges(null);
       rememberRoom(null);
       window.dispatchEvent(new CustomEvent('socketRoomLeft'));
 
@@ -474,6 +516,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     assignedColor,
     players,
     gameState,
+    rated,
+    ratingChanges,
     createRoom,
     joinRoom,
     makeMove,

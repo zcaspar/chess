@@ -6,8 +6,9 @@
 // The Maps survive only as a non-production fallback for running the backend
 // with no database at all.
 
-import { query } from '../config/database';
+import { pool, query } from '../config/database';
 import { logger } from '../utils/logger';
+import { DEFAULT_RATING, Rating, isProvisional, rateGame, sanitizeRating } from '../utils/glicko2';
 
 export interface UserProfile {
   id: string;
@@ -19,6 +20,8 @@ export interface UserProfile {
   isGuest: boolean;
   preferences: UserPreferences;
   stats: UserStats;
+  /** Online rating. Only the server changes it, when a rated game ends. */
+  rating: RatingSummary;
   createdAt: string;
   updatedAt: string;
   lastLogin: string;
@@ -57,6 +60,104 @@ export interface UserUpdates {
 
 export type GameOutcome = 'win' | 'loss' | 'draw';
 
+/** A rating as shown to people: whole numbers, and whether it is settled yet. */
+export interface RatingSummary {
+  value: number;
+  deviation: number;
+  /** True until enough games have been played for the rating to mean much. */
+  provisional: boolean;
+  /** Rated games played. */
+  games: number;
+}
+
+export interface RatingChange {
+  before: number;
+  after: number;
+  /** after - before. */
+  change: number;
+  provisional: boolean;
+}
+
+export interface RatedGameOutcome {
+  white: RatingChange;
+  black: RatingChange;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  name: string;
+  rating: number;
+  provisional: boolean;
+  games: number;
+}
+
+export interface RatingHistoryEntry {
+  gameId: string;
+  outcome: GameOutcome;
+  opponentRating: number;
+  ratingBefore: number;
+  ratingAfter: number;
+  createdAt: string;
+}
+
+/** Rated games needed before a player appears on the leaderboard. */
+const LEADERBOARD_MIN_GAMES = 5;
+
+const toSummary = (rating: Rating, games: number): RatingSummary => ({
+  value: Math.round(rating.rating),
+  deviation: Math.round(rating.deviation),
+  provisional: isProvisional(rating),
+  games,
+});
+
+const toChange = (before: Rating, after: Rating): RatingChange => ({
+  before: Math.round(before.rating),
+  after: Math.round(after.rating),
+  change: Math.round(after.rating) - Math.round(before.rating),
+  provisional: isProvisional(after),
+});
+
+const ratingOfRow = (row: any): Rating =>
+  sanitizeRating({
+    rating: row.rating === null || row.rating === undefined ? undefined : Number(row.rating),
+    deviation:
+      row.rating_deviation === null || row.rating_deviation === undefined
+        ? undefined
+        : Number(row.rating_deviation),
+    volatility:
+      row.rating_volatility === null || row.rating_volatility === undefined
+        ? undefined
+        : Number(row.rating_volatility),
+  });
+
+const outcomeFor = (result: 'white' | 'black' | 'draw', color: 'white' | 'black'): GameOutcome =>
+  result === 'draw' ? 'draw' : result === color ? 'win' : 'loss';
+
+// Ratings live in their own columns rather than in the `stats` JSON: they are
+// read for every seat in every online game, sorted for the leaderboard, and
+// must never be writable through the profile endpoint.
+const RATING_SCHEMA_SQL = [
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS rating DOUBLE PRECISION NOT NULL DEFAULT 1500',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_deviation DOUBLE PRECISION NOT NULL DEFAULT 350',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_volatility DOUBLE PRECISION NOT NULL DEFAULT 0.06',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS rated_games INTEGER NOT NULL DEFAULT 0',
+  `CREATE TABLE IF NOT EXISTS rating_history (
+      id SERIAL PRIMARY KEY,
+      firebase_uid VARCHAR(255) NOT NULL,
+      game_id VARCHAR(255) NOT NULL,
+      opponent_uid VARCHAR(255) NOT NULL,
+      opponent_rating DOUBLE PRECISION NOT NULL,
+      outcome VARCHAR(10) NOT NULL CHECK (outcome IN ('win', 'loss', 'draw')),
+      rating_before DOUBLE PRECISION NOT NULL,
+      rating_after DOUBLE PRECISION NOT NULL,
+      deviation_after DOUBLE PRECISION NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT rating_history_player_game_unique UNIQUE (firebase_uid, game_id)
+  )`,
+  'CREATE INDEX IF NOT EXISTS idx_rating_history_player ON rating_history(firebase_uid, created_at DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_users_rating ON users(rating DESC)',
+];
+
 const DEFAULT_PREFERENCES: UserPreferences = {
   boardTheme: 'classic',
   pieceStyle: 'classic',
@@ -70,7 +171,7 @@ const DEFAULT_STATS: UserStats = {
   wins: 0,
   losses: 0,
   draws: 0,
-  rating: 1200,
+  rating: DEFAULT_RATING.rating,
   gamesPlayed: 0,
   totalPlayTime: 0,
   winStreak: 0,
@@ -106,7 +207,9 @@ const rowToProfile = (row: any): UserProfile => ({
   avatarUrl: row.avatar_url || undefined,
   isGuest: !!row.is_guest,
   preferences: { ...DEFAULT_PREFERENCES, ...(row.preferences || {}) },
-  stats: { ...DEFAULT_STATS, ...(row.stats || {}) },
+  // `stats.rating` is what older clients display; keep it equal to the real one.
+  stats: { ...DEFAULT_STATS, ...(row.stats || {}), rating: Math.round(ratingOfRow(row).rating) },
+  rating: toSummary(ratingOfRow(row), Number(row.rated_games) || 0),
   createdAt: toIso(row.created_at),
   updatedAt: toIso(row.updated_at),
   lastLogin: toIso(row.last_login),
@@ -129,6 +232,8 @@ const applyOutcome = (stats: UserStats, outcome: GameOutcome): UserStats => {
 // --- Non-production fallback -------------------------------------------------
 
 const memoryUsers: Map<string, UserProfile> = new Map();
+const memoryRatings: Map<string, Rating> = new Map();
+const memoryRatingHistory: Map<string, RatingHistoryEntry[]> = new Map();
 
 type Backend = 'postgres' | 'memory';
 let backendPromise: Promise<Backend> | null = null;
@@ -139,6 +244,9 @@ const resolveBackend = async (): Promise<Backend> => {
     // database/init.sql declared email NOT NULL, but guests have no email and
     // an empty string would collide on the UNIQUE constraint. Idempotent.
     await query('ALTER TABLE users ALTER COLUMN email DROP NOT NULL');
+    for (const statement of RATING_SCHEMA_SQL) {
+      await query(statement);
+    }
     return 'postgres';
   } catch (error) {
     if (process.env.NODE_ENV === 'production') {
@@ -222,7 +330,8 @@ export class UserModel {
         displayName: userData.displayName,
         isGuest: userData.isGuest || false,
         preferences: { ...DEFAULT_PREFERENCES },
-        stats: { ...DEFAULT_STATS },
+        stats: { ...DEFAULT_STATS, rating: DEFAULT_RATING.rating },
+        rating: toSummary(DEFAULT_RATING, 0),
         createdAt: now,
         updatedAt: now,
         lastLogin: now,
@@ -273,7 +382,7 @@ export class UserModel {
         displayName: updates.displayName ?? user.displayName,
         avatarUrl: updates.avatarUrl ?? user.avatarUrl,
         preferences: { ...user.preferences, ...(updates.preferences || {}) },
-        stats: { ...user.stats, ...(updates.stats || {}) },
+        stats: { ...user.stats, ...(updates.stats || {}), rating: user.rating.value },
         updatedAt: new Date().toISOString(),
       };
       memoryUsers.set(firebaseUid, updated);
@@ -354,6 +463,8 @@ export class UserModel {
 
   static async delete(firebaseUid: string): Promise<boolean> {
     if ((await getBackend()) === 'memory') {
+      memoryRatings.delete(firebaseUid);
+      memoryRatingHistory.delete(firebaseUid);
       return memoryUsers.delete(firebaseUid);
     }
     const result = await query('DELETE FROM users WHERE firebase_uid = $1', [firebaseUid]);
@@ -380,9 +491,209 @@ export class UserModel {
     return { totalUsers: row.total || 0, guestUsers: row.guests || 0, activeUsers: row.active || 0 };
   }
 
+  /**
+   * A player's rating, or null when they cannot play rated games: no profile
+   * yet, or a guest account (which can be thrown away and recreated at will).
+   */
+  static async getRatingSummary(firebaseUid: string): Promise<RatingSummary | null> {
+    const profile = await UserModel.findByFirebaseUid(firebaseUid);
+    return profile && !profile.isGuest ? profile.rating : null;
+  }
+
+  /**
+   * Rate one finished online game. Both ratings are read, recalculated and
+   * written inside a single transaction with the rows locked, so two games
+   * finishing at once cannot overwrite each other's result.
+   *
+   * Returns null — and changes nothing — when the game is not rated: a player
+   * has no profile, is a guest, or the game was already rated.
+   */
+  static async applyRatedGame(game: {
+    whiteUid: string;
+    blackUid: string;
+    result: 'white' | 'black' | 'draw';
+    gameId: string;
+  }): Promise<RatedGameOutcome | null> {
+    const { whiteUid, blackUid, result, gameId } = game;
+    if (!whiteUid || !blackUid || whiteUid === blackUid) return null;
+
+    if ((await getBackend()) === 'memory') {
+      const white = memoryUsers.get(whiteUid);
+      const black = memoryUsers.get(blackUid);
+      if (!white || !black || white.isGuest || black.isGuest) return null;
+      if ((memoryRatingHistory.get(whiteUid) || []).some((entry) => entry.gameId === gameId)) return null;
+
+      const whiteBefore = memoryRatings.get(whiteUid) || DEFAULT_RATING;
+      const blackBefore = memoryRatings.get(blackUid) || DEFAULT_RATING;
+      const after = rateGame(whiteBefore, blackBefore, result);
+      const record = (
+        profile: UserProfile,
+        color: 'white' | 'black',
+        before: Rating,
+        next: Rating,
+        opponent: Rating,
+      ) => {
+        const games = profile.rating.games + 1;
+        memoryRatings.set(profile.firebaseUid, next);
+        memoryUsers.set(profile.firebaseUid, {
+          ...profile,
+          rating: toSummary(next, games),
+          stats: { ...profile.stats, rating: Math.round(next.rating) },
+        });
+        const history = memoryRatingHistory.get(profile.firebaseUid) || [];
+        history.unshift({
+          gameId,
+          outcome: outcomeFor(result, color),
+          opponentRating: Math.round(opponent.rating),
+          ratingBefore: Math.round(before.rating),
+          ratingAfter: Math.round(next.rating),
+          createdAt: new Date().toISOString(),
+        });
+        memoryRatingHistory.set(profile.firebaseUid, history);
+      };
+      record(white, 'white', whiteBefore, after.white, blackBefore);
+      // Re-read: the white update replaced the stored profile object.
+      record(memoryUsers.get(blackUid) as UserProfile, 'black', blackBefore, after.black, whiteBefore);
+      return { white: toChange(whiteBefore, after.white), black: toChange(blackBefore, after.black) };
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Lock both rows, always in the same order, so two games sharing a
+      // player cannot deadlock.
+      const locked = await client.query(
+        `SELECT firebase_uid, is_guest, rating, rating_deviation, rating_volatility
+           FROM users
+          WHERE firebase_uid = ANY($1::text[])
+          ORDER BY firebase_uid
+            FOR UPDATE`,
+        [[whiteUid, blackUid]],
+      );
+      const whiteRow = locked.rows.find((row: any) => row.firebase_uid === whiteUid);
+      const blackRow = locked.rows.find((row: any) => row.firebase_uid === blackUid);
+      if (!whiteRow || !blackRow || whiteRow.is_guest || blackRow.is_guest) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const already = await client.query('SELECT 1 FROM rating_history WHERE game_id = $1 LIMIT 1', [gameId]);
+      if (already.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const whiteBefore = ratingOfRow(whiteRow);
+      const blackBefore = ratingOfRow(blackRow);
+      const after = rateGame(whiteBefore, blackBefore, result);
+
+      const write = async (
+        uid: string,
+        opponentUid: string,
+        color: 'white' | 'black',
+        before: Rating,
+        next: Rating,
+        opponent: Rating,
+      ) => {
+        await client.query(
+          `UPDATE users SET
+             rating = $2,
+             rating_deviation = $3,
+             rating_volatility = $4,
+             rated_games = rated_games + 1,
+             stats = jsonb_set(COALESCE(stats, '{}'::jsonb), '{rating}', to_jsonb($5::int)),
+             updated_at = CURRENT_TIMESTAMP
+           WHERE firebase_uid = $1`,
+          [uid, next.rating, next.deviation, next.volatility, Math.round(next.rating)],
+        );
+        await client.query(
+          `INSERT INTO rating_history
+             (firebase_uid, game_id, opponent_uid, opponent_rating, outcome, rating_before, rating_after, deviation_after)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [uid, gameId, opponentUid, opponent.rating, outcomeFor(result, color), before.rating, next.rating, next.deviation],
+        );
+      };
+      await write(whiteUid, blackUid, 'white', whiteBefore, after.white, blackBefore);
+      await write(blackUid, whiteUid, 'black', blackBefore, after.black, whiteBefore);
+
+      await client.query('COMMIT');
+      return { white: toChange(whiteBefore, after.white), black: toChange(blackBefore, after.black) };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** The highest-rated players who have played enough games to be ranked. */
+  static async getLeaderboard(limit = 50): Promise<LeaderboardEntry[]> {
+    const size = Math.max(1, Math.min(100, Math.floor(limit) || 50));
+
+    if ((await getBackend()) === 'memory') {
+      return Array.from(memoryUsers.values())
+        .filter((user) => !user.isGuest && user.rating.games >= LEADERBOARD_MIN_GAMES)
+        .sort((a, b) => b.rating.value - a.rating.value)
+        .slice(0, size)
+        .map((user, index) => ({
+          rank: index + 1,
+          name: user.displayName || user.username,
+          rating: user.rating.value,
+          provisional: user.rating.provisional,
+          games: user.rating.games,
+        }));
+    }
+
+    const result = await query(
+      `SELECT username, display_name, rating, rating_deviation, rating_volatility, rated_games
+         FROM users
+        WHERE is_guest IS NOT TRUE AND rated_games >= $1
+        ORDER BY rating DESC, rated_games DESC
+        LIMIT $2`,
+      [LEADERBOARD_MIN_GAMES, size],
+    );
+    // Names only: no email addresses and no account ids leave the server here.
+    return result.rows.map((row: any, index: number) => ({
+      rank: index + 1,
+      name: row.display_name || row.username,
+      rating: Math.round(ratingOfRow(row).rating),
+      provisional: isProvisional(ratingOfRow(row)),
+      games: Number(row.rated_games) || 0,
+    }));
+  }
+
+  /** A player's most recent rated games, newest first. */
+  static async getRatingHistory(firebaseUid: string, limit = 50): Promise<RatingHistoryEntry[]> {
+    const size = Math.max(1, Math.min(200, Math.floor(limit) || 50));
+
+    if ((await getBackend()) === 'memory') {
+      return (memoryRatingHistory.get(firebaseUid) || []).slice(0, size);
+    }
+
+    const result = await query(
+      `SELECT game_id, outcome, opponent_rating, rating_before, rating_after, created_at
+         FROM rating_history
+        WHERE firebase_uid = $1
+        ORDER BY created_at DESC, id DESC
+        LIMIT $2`,
+      [firebaseUid, size],
+    );
+    return result.rows.map((row: any) => ({
+      gameId: row.game_id,
+      outcome: row.outcome,
+      opponentRating: Math.round(Number(row.opponent_rating)),
+      ratingBefore: Math.round(Number(row.rating_before)),
+      ratingAfter: Math.round(Number(row.rating_after)),
+      createdAt: toIso(row.created_at),
+    }));
+  }
+
   /** Test helper: forget the cached backend choice and any in-memory users. */
   static resetForTests(): void {
     backendPromise = null;
     memoryUsers.clear();
+    memoryRatings.clear();
+    memoryRatingHistory.clear();
   }
 }

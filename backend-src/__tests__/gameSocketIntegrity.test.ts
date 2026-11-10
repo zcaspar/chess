@@ -31,8 +31,14 @@ jest.mock('../middleware/auth', () => ({
 }));
 
 const mockRecordGameResult = jest.fn();
+const mockGetRatingSummary = jest.fn();
+const mockApplyRatedGame = jest.fn();
 jest.mock('../models/User', () => ({
-  UserModel: { recordGameResult: (...a: unknown[]) => mockRecordGameResult(...a) },
+  UserModel: {
+    recordGameResult: (...a: unknown[]) => mockRecordGameResult(...a),
+    getRatingSummary: (...a: unknown[]) => mockGetRatingSummary(...a),
+    applyRatedGame: (...a: unknown[]) => mockApplyRatedGame(...a),
+  },
 }));
 
 const mockSaveGame = jest.fn();
@@ -94,6 +100,9 @@ describe('multiplayer integrity', () => {
     jest.useFakeTimers();
     mockQuery.mockReset().mockResolvedValue({ rows: [{ id: 1 }] });
     mockRecordGameResult.mockReset().mockResolvedValue(true);
+    // By default nobody has a rating (guests): games are casual.
+    mockGetRatingSummary.mockReset().mockResolvedValue(null);
+    mockApplyRatedGame.mockReset().mockResolvedValue(null);
     mockSaveGame.mockReset().mockResolvedValue({});
     mockUpdateRecord.mockReset().mockResolvedValue(undefined);
     const made = makeIo();
@@ -165,8 +174,9 @@ describe('multiplayer integrity', () => {
       expect(serialised).not.toContain('socket-b');
       expect(serialised).not.toContain('@');
       const started = roomEmits.find((e) => e.event === 'gameStarted')!.payload;
-      expect(Object.keys(started.white).sort()).toEqual(['connected', 'displayName', 'id', 'username']);
-      expect(Object.keys(started.black).sort()).toEqual(['connected', 'displayName', 'id', 'username']);
+      const publicFields = ['connected', 'displayName', 'id', 'rating', 'ratingProvisional', 'username'];
+      expect(Object.keys(started.white).sort()).toEqual(publicFields);
+      expect(Object.keys(started.black).sort()).toEqual(publicFields);
     });
 
     it('does not use the email address as the name shown to opponents', async () => {
@@ -393,6 +403,104 @@ describe('multiplayer integrity', () => {
       await expect(white.handlers.get('resign')!()).resolves.toBeUndefined();
 
       expect(gameEnded()).toHaveLength(1);
+    });
+  });
+
+  describe('ratings', () => {
+    const rated = (uid: string) =>
+      uid === 'uid-a'
+        ? { value: 1612, deviation: 80, provisional: false, games: 40 }
+        : { value: 1500, deviation: 350, provisional: true, games: 0 };
+
+    const playFoolsMate = async (white: any, black: any) => {
+      await white.handlers.get('makeMove')!({ from: 'f2', to: 'f3' });
+      await black.handlers.get('makeMove')!({ from: 'e7', to: 'e5' });
+      await white.handlers.get('makeMove')!({ from: 'g2', to: 'g4' });
+      await black.handlers.get('makeMove')!({ from: 'd8', to: 'h4' });
+    };
+
+    it('shows each player\'s rating to the room and marks the game as rated', async () => {
+      mockGetRatingSummary.mockImplementation(async (uid: string) => rated(uid));
+
+      await startGame();
+
+      const started = roomEmits.find((e) => e.event === 'gameStarted')!.payload;
+      expect(started.rated).toBe(true);
+      const byId: Record<string, any> = {};
+      [started.white, started.black].forEach((player: any) => {
+        byId[player.id] = player;
+      });
+      expect(byId['uid-a']).toMatchObject({ rating: 1612, ratingProvisional: false });
+      expect(byId['uid-b']).toMatchObject({ rating: 1500, ratingProvisional: true });
+    });
+
+    it('plays a casual game when a player has no rating', async () => {
+      mockGetRatingSummary.mockImplementation(async (uid: string) => (uid === 'uid-a' ? rated(uid) : null));
+
+      await startGame();
+
+      expect(roomEmits.find((e) => e.event === 'gameStarted')!.payload.rated).toBe(false);
+    });
+
+    it('rates the finished game once and tells both players the change', async () => {
+      mockGetRatingSummary.mockImplementation(async (uid: string) => rated(uid));
+      const outcome = {
+        white: { before: 1612, after: 1598, change: -14, provisional: false },
+        black: { before: 1500, after: 1688, change: 188, provisional: true },
+      };
+      mockApplyRatedGame.mockResolvedValue(outcome);
+      const { room, white, black } = await startGame();
+
+      await playFoolsMate(white, black);
+
+      expect(mockApplyRatedGame).toHaveBeenCalledTimes(1);
+      expect(mockApplyRatedGame).toHaveBeenCalledWith({
+        whiteUid: room.whitePlayer.id,
+        blackUid: room.blackPlayer.id,
+        result: 'black',
+        gameId: mockSaveGame.mock.calls[0][0].gameId,
+      });
+      const updates = roomEmits.filter((e) => e.event === 'ratingsUpdated');
+      expect(updates).toHaveLength(1);
+      expect(updates[0].payload).toEqual(outcome);
+      // The seats carry the new ratings, e.g. for someone who rejoins.
+      expect(room.whitePlayer.rating).toBe(1598);
+      expect(room.blackPlayer.rating).toBe(1688);
+    });
+
+    it('announces nothing when the game was not rated', async () => {
+      const { white, black } = await startGame();
+
+      await playFoolsMate(white, black);
+
+      expect(roomEmits.filter((e) => e.event === 'ratingsUpdated')).toHaveLength(0);
+    });
+
+    it('does not rate a game nobody actually played', async () => {
+      mockGetRatingSummary.mockImplementation(async (uid: string) => rated(uid));
+      const { white } = await startGame();
+
+      await white.handlers.get('resign')!();
+
+      expect(mockApplyRatedGame).not.toHaveBeenCalled();
+    });
+
+    it('still ends the game when the rating update fails', async () => {
+      mockApplyRatedGame.mockRejectedValue(new Error('db down'));
+      const { white, black } = await startGame();
+
+      await playFoolsMate(white, black);
+
+      expect(gameEnded()).toHaveLength(1);
+    });
+
+    it('lets a player in even if their rating cannot be read', async () => {
+      mockGetRatingSummary.mockRejectedValue(new Error('db down'));
+
+      const { room } = await startGame();
+
+      expect(room.whitePlayer).not.toBeNull();
+      expect(room.blackPlayer).not.toBeNull();
     });
   });
 

@@ -27,6 +27,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
 
 
+  // A rated online game just finished: the server has already changed the
+  // rating, so show the new number without waiting for a profile reload.
+  useEffect(() => {
+    const onRatingsUpdated = (event: Event) => {
+      const entries = (event as CustomEvent).detail as Array<{
+        playerId?: string;
+        after: number;
+        provisional: boolean;
+      }>;
+      if (!Array.isArray(entries)) return;
+      setProfile(prev => {
+        if (!prev) return prev;
+        const mine = entries.find((entry) => entry.playerId === prev.id);
+        if (!mine) return prev;
+        return {
+          ...prev,
+          stats: { ...prev.stats, rating: mine.after },
+          rating: {
+            value: mine.after,
+            deviation: prev.rating?.deviation ?? 0,
+            provisional: mine.provisional,
+            games: (prev.rating?.games ?? 0) + 1,
+          },
+        };
+      });
+    };
+    window.addEventListener('socketRatingsUpdated', onRatingsUpdated);
+    return () => window.removeEventListener('socketRatingsUpdated', onRatingsUpdated);
+  }, []);
+
   // Authentication methods
   const signInWithEmail = async (email: string, password: string): Promise<void> => {
     try {

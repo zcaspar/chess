@@ -259,6 +259,32 @@ router.post('/upgrade-guest', verifyFirebaseToken, async (req: AuthenticatedRequ
   }
 });
 
+// GET /api/users/leaderboard - Top rated players (public: names and ratings only)
+router.get('/leaderboard', async (req, res): Promise<void> => {
+  try {
+    const limit = Number(req.query.limit) || 50;
+    res.json({ players: await UserModel.getLeaderboard(limit) });
+  } catch (error) {
+    logger.error('Error fetching leaderboard:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/users/rating-history - The caller's own recent rated games
+router.get('/rating-history', verifyFirebaseToken, async (req: AuthenticatedRequest, res): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    const limit = Number(req.query.limit) || 50;
+    res.json({ history: await UserModel.getRatingHistory(req.user.uid, limit) });
+  } catch (error) {
+    logger.error('Error fetching rating history:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/users/stats - Get user statistics (development endpoint)
 router.get('/stats', async (req, res) => {
   try {

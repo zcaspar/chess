@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatRating } from '../../utils/rating';
 import { useAuth } from '../../hooks/useAuth';
 import { useGame } from '../../contexts/GameContext';
 import { AuthModal, UserProfile } from '../Auth';
@@ -126,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({ onShowHistory, onShowStats, onSh
                       </div>
                       {profile && (
                         <div className="text-gray-500 dark:text-gray-400">
-                          Rating: {profile.stats.rating}
+                          Rating: {formatRating(profile.rating?.value ?? profile.stats.rating, profile.rating?.provisional)}
                         </div>
                       )}
                     </div>
@@ -181,7 +182,7 @@ export const Header: React.FC<HeaderProps> = ({ onShowHistory, onShowStats, onSh
                   </div>
                   {profile && (
                     <div className="text-gray-500 dark:text-gray-400">
-                      Rating: {profile.stats.rating}
+                      Rating: {formatRating(profile.rating?.value ?? profile.stats.rating, profile.rating?.provisional)}
                     </div>
                   )}
                 </div>

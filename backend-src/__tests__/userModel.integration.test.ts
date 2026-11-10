@@ -42,7 +42,7 @@ describeOrSkip('UserModel (live Postgres)', () => {
 
   it('creates the table on first use and round-trips a profile', async () => {
     const created = await UserModel.create({ firebaseUid: 'u1', username: 'alice', email: 'a@example.com' });
-    expect(created).toMatchObject({ id: 'u1', username: 'alice', isGuest: false, stats: { rating: 1200 } });
+    expect(created).toMatchObject({ id: 'u1', username: 'alice', isGuest: false, stats: { rating: 1500 } });
 
     UserModel.resetForTests(); // nothing may depend on process memory
     const found = await UserModel.findByFirebaseUid('u1');
@@ -107,7 +107,7 @@ describeOrSkip('UserModel (live Postgres)', () => {
       username: 'alice',
       displayName: 'Alice',
       preferences: { boardOrientation: 'black', boardTheme: 'classic' },
-      stats: { wins: 2, rating: 1200, losses: 0 },
+      stats: { wins: 2, rating: 1500, losses: 0 },
     });
     await expect(UserModel.update('nobody', { displayName: 'x' })).rejects.toThrow('User not found');
   });
@@ -126,7 +126,7 @@ describeOrSkip('UserModel (live Postgres)', () => {
       losses: 1,
       winStreak: 0,
       bestWinStreak: 2,
-      rating: 1200,
+      rating: 1500,
     });
     expect(await UserModel.recordGameResult('nobody', 'win')).toBe(false);
   });

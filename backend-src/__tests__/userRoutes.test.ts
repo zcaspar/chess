@@ -15,7 +15,7 @@ type Row = Record<string, any>;
 let rows: Row[] = [];
 const mockQuery = jest.fn(async (sql: string, params: any[] = []) => {
   const text = sql.replace(/\s+/g, ' ').trim();
-  if (text.startsWith('CREATE TABLE') || text.startsWith('ALTER TABLE')) {
+  if (text.startsWith('CREATE TABLE') || text.startsWith('ALTER TABLE') || text.startsWith('CREATE INDEX')) {
     return { rows: [], rowCount: 0 };
   }
   if (text.startsWith('SELECT * FROM users WHERE firebase_uid')) {
@@ -114,7 +114,12 @@ describe('user profiles', () => {
     const fetched = await request(app).get('/api/users/profile').set(auth);
 
     expect(fetched.status).toBe(200);
-    expect(fetched.body).toMatchObject({ id: 'alice', username: 'alice', stats: { rating: 1200, wins: 0 } });
+    expect(fetched.body).toMatchObject({
+      id: 'alice',
+      username: 'alice',
+      stats: { rating: 1500, wins: 0 },
+      rating: { value: 1500, provisional: true, games: 0 },
+    });
   });
 
   it('takes the email from the verified token, never from the request body', async () => {
@@ -159,8 +164,9 @@ describe('user profiles', () => {
       expect(rows[0].email).toBe('alice@example.com');
       expect(rows[0].is_guest).toBe(false);
       expect(rows[0].firebase_uid).toBe('alice');
-      expect(rows[0].stats.rating).toBe(1200);
+      expect(rows[0].stats.rating).toBe(1500);
       expect(rows[0].stats.wins).toBe(3);
+      expect(res.body.rating).toMatchObject({ value: 1500, games: 0 });
     });
 
     it('merges preferences instead of replacing them', async () => {

@@ -1,8 +1,37 @@
 import React from 'react';
 import { useSocket } from '../../contexts/SocketContext';
+import { formatRating, formatRatingChange } from '../../utils/rating';
 
 export const OnlineGameStatus: React.FC = () => {
-  const { isConnected, roomCode, assignedColor, players } = useSocket();
+  const { isConnected, roomCode, assignedColor, players, rated, ratingChanges } = useSocket();
+
+  const bothSeated = !!players.white && !!players.black;
+
+  const playerLine = (color: 'white' | 'black') => {
+    const player = players[color];
+    if (!player) return <span>Waiting...</span>;
+    const change = ratingChanges?.[color];
+    return (
+      <span>
+        {player.displayName || player.username}
+        {typeof player.rating === 'number' && (
+          <span className="ml-2 text-gray-300" data-testid={`rating-${color}`}>
+            {formatRating(player.rating, player.ratingProvisional)}
+          </span>
+        )}
+        {change && (
+          <span
+            className={`ml-1 font-semibold ${
+              change.change > 0 ? 'text-green-400' : change.change < 0 ? 'text-red-400' : 'text-gray-300'
+            }`}
+            data-testid={`rating-change-${color}`}
+          >
+            {formatRatingChange(change.change)}
+          </span>
+        )}
+      </span>
+    );
+  };
 
   if (!isConnected || !roomCode) {
     return null;
@@ -24,6 +53,18 @@ export const OnlineGameStatus: React.FC = () => {
       <div className="flex justify-between items-center mb-2">
         <h3 className="text-lg font-bold">Online Game</h3>
         <div className="flex items-center gap-2">
+          {bothSeated && (
+            <span
+              className={`text-sm px-2 py-1 rounded ${rated ? 'bg-purple-600' : 'bg-gray-600'}`}
+              title={
+                rated
+                  ? 'This game counts for both players\' ratings'
+                  : 'Casual: ratings do not change. Both players need to be signed in with an account for a rated game.'
+              }
+            >
+              {rated ? 'Rated' : 'Casual'}
+            </span>
+          )}
           <span className="text-sm bg-green-600 px-2 py-1 rounded">
             Connected
           </span>
@@ -58,11 +99,11 @@ export const OnlineGameStatus: React.FC = () => {
           <div className="text-sm">
             <div className="flex justify-between">
               <span>White:</span>
-              <span>{players.white?.displayName || players.white?.username || 'Waiting...'}</span>
+              {playerLine('white')}
             </div>
             <div className="flex justify-between">
               <span>Black:</span>
-              <span>{players.black?.displayName || players.black?.username || 'Waiting...'}</span>
+              {playerLine('black')}
             </div>
           </div>
         </div>
