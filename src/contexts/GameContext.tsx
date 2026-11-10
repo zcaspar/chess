@@ -1720,18 +1720,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
 
     // No local engine (a browser without Web Workers / WebAssembly): ask the
-    // server. That endpoint needs a signed-in user; the old code sent no token
-    // at all, so it was refused for everyone.
+    // LC0 server through the backend, as hints always have.
     try {
-      const token = await authContext?.user?.getIdToken?.();
-      if (!token) return false;
-
       const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3005';
       const response = await fetch(`${backendUrl}/api/analysis/hint`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ fen }),
       });
@@ -1752,7 +1747,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
 
     return false;
-  }, [gameState.hintAvailable, gameState.gameResult, gameState.gameMode, gameState.game, authContext]);
+  }, [gameState.hintAvailable, gameState.gameResult, gameState.gameMode, gameState.game]);
 
   const clearHint = useCallback(() => {
     setGameState(prev => ({

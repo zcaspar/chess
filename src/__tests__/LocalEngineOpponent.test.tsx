@@ -163,16 +163,21 @@ describe('hints', () => {
     expect(result.current.gameState.currentHint).toBeNull();
   });
 
-  it('are refused, without a server call, for a guest in a browser with no engine', async () => {
+  it('fall back to the LC0 server in a browser with no engine', async () => {
     mockGetEngine.mockReturnValue(null);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, bestMove: { from: 'd2', to: 'd4' } }),
+    }) as unknown as typeof fetch;
     const { result } = renderHook(() => useGame(), { wrapper });
 
-    let ok = true;
+    let ok = false;
     await act(async () => {
       ok = await result.current.requestHint();
     });
 
-    expect(ok).toBe(false);
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(ok).toBe(true);
+    expect(result.current.gameState.currentHint).toMatchObject({ from: 'd2', to: 'd4' });
+    expect((global.fetch as jest.Mock).mock.calls[0][0]).toMatch(/\/api\/analysis\/hint$/);
   });
 });
