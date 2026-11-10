@@ -2,8 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useGame } from '../../contexts/GameContext';
 import { useSocket } from '../../contexts/SocketContext';
 
+// The server reports online clocks every second; never run further ahead of
+// its last report than this.
+const MAX_ONLINE_EXTRAPOLATION_MS = 1500;
+
 const ChessClock: React.FC = () => {
-  const { gameState, setTimeControl, pauseClock, getPlayerByColor } = useGame();
+  const { gameState, setTimeControl, pauseClock, startClock, getPlayerByColor } = useGame();
   const { whiteTime, blackTime, activeColor, timeControl, startTime } = gameState;
   const { roomCode, gameState: socketGameState } = useSocket();
   const [showTimeSelector, setShowTimeSelector] = useState(false);
@@ -45,13 +49,44 @@ const ChessClock: React.FC = () => {
     ? socketGameState.timeControl
     : timeControl;
 
-  const effectiveWhiteTime = isInOnlineRoom && socketGameState
-    ? socketGameState.whiteTime
-    : displayWhiteTime;
+  // Online, the server sends the clocks once a second. Count down locally in
+  // between so the display moves smoothly (and shows tenths when time is
+  // short) instead of jumping a second at a time. The extrapolation is capped:
+  // if the updates stop — connection lost, game over — the display holds
+  // rather than running on by itself.
+  const [onlineNow, setOnlineNow] = useState(() => Date.now());
+  const onlineClockSyncedAt = isInOnlineRoom ? socketGameState?.clockSyncedAt ?? null : null;
+  const onlineClockRunning = onlineClockSyncedAt !== null && !socketGameState?.isGameOver;
+  useEffect(() => {
+    if (!onlineClockRunning) return;
+    setOnlineNow(Date.now());
+    const id = setInterval(() => setOnlineNow(Date.now()), 100);
+    return () => clearInterval(id);
+  }, [onlineClockRunning, onlineClockSyncedAt]);
 
-  const effectiveBlackTime = isInOnlineRoom && socketGameState
-    ? socketGameState.blackTime
-    : displayBlackTime;
+  const onlineTime = (color: 'w' | 'b'): number => {
+    const reported = color === 'w' ? socketGameState!.whiteTime : socketGameState!.blackTime;
+    if (!onlineClockRunning || onlineClockSyncedAt === null || socketGameState!.turn !== color) {
+      return reported;
+    }
+    const sinceSync = Math.min(Math.max(onlineNow - onlineClockSyncedAt, 0), MAX_ONLINE_EXTRAPOLATION_MS);
+    return Math.max(0, reported - sinceSync / 1000);
+  };
+
+  const effectiveWhiteTime = isInOnlineRoom && socketGameState ? onlineTime('w') : displayWhiteTime;
+  const effectiveBlackTime = isInOnlineRoom && socketGameState ? onlineTime('b') : displayBlackTime;
+
+  // Which side's clock to highlight: the server's turn online, the local
+  // clock's owner otherwise.
+  const highlightedColor: 'w' | 'b' | null = isInOnlineRoom && socketGameState
+    ? (onlineClockRunning ? socketGameState.turn : null)
+    : activeColor;
+
+  // A local clock can be paused and picked up again. It can be resumed when
+  // it is stopped part-way through a game that is still going.
+  const canPause = !isInOnlineRoom && !!activeColor && !!startTime && !gameState.gameResult;
+  const canResume =
+    !isInOnlineRoom && !startTime && !gameState.gameResult && gameState.history.length > 0;
 
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -216,12 +251,20 @@ const ChessClock: React.FC = () => {
               Online Room
             </span>
           )}
-          {activeColor && (
+          {canPause && (
             <button
               onClick={pauseClock}
               className="text-xs px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
             >
               Pause
+            </button>
+          )}
+          {canResume && (
+            <button
+              onClick={startClock}
+              className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              Resume
             </button>
           )}
         </div>
@@ -230,8 +273,8 @@ const ChessClock: React.FC = () => {
       <div className="space-y-3">
         {/* Black's clock */}
         <div className={`p-3 rounded-lg transition-all ${
-          activeColor === 'b' 
-            ? 'bg-gray-800 text-white transform scale-105' 
+          highlightedColor === 'b'
+            ? 'bg-gray-800 text-white transform scale-105'  
             : 'bg-gray-200 text-gray-800'
         }`}>
           <div className="flex justify-between items-center">
@@ -250,8 +293,8 @@ const ChessClock: React.FC = () => {
 
         {/* White's clock */}
         <div className={`p-3 rounded-lg transition-all ${
-          activeColor === 'w' 
-            ? 'bg-gray-800 text-white transform scale-105' 
+          highlightedColor === 'w'
+            ? 'bg-gray-800 text-white transform scale-105'  
             : 'bg-gray-100 text-gray-800'
         }`}>
           <div className="flex justify-between items-center">

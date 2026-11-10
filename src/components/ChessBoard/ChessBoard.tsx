@@ -9,6 +9,7 @@ import { useResponsiveBoardSize } from '../../hooks/useResponsiveBoardSize';
 import { useSoundEffects } from '../../hooks/useSoundEffects';
 import { isFeatureEnabled } from '../../config/gameFeatures';
 import { ALL_SQUARES } from '../../utils/chessSquares';
+import PromotionPicker, { PromotionPiece } from './PromotionPicker';
 
 const ChessBoard: React.FC = () => {
   const { gameState, makeMove, executeNuke, executeTeleport } = useGame();
@@ -27,6 +28,8 @@ const ChessBoard: React.FC = () => {
   const [optionSquares, setOptionSquares] = useState<Partial<Record<Square, { background: string }>>>({});
   const [isDragging, setIsDragging] = useState(false);
   const [touchStartTime, setTouchStartTime] = useState<number>(0);
+  // A pawn move waiting for the player to choose what it promotes to.
+  const [pendingPromotion, setPendingPromotion] = useState<{ from: Square; to: Square; color: 'w' | 'b' } | null>(null);
   
   // Board theme configurations
   const boardThemes = {
@@ -61,8 +64,15 @@ const ChessBoard: React.FC = () => {
       setMoveFrom(null);
       setOptionSquares({});
       setRightClickedSquares([]);
+      setPendingPromotion(null);
     }
   }, [gameState.gameResult]);
+
+  // A promotion choice only makes sense for the position it was asked in.
+  const boardFen = gameState.game.fen();
+  useEffect(() => {
+    setPendingPromotion(null);
+  }, [boardFen]);
 
   /**
    * Local legality check for the online path.
@@ -84,6 +94,77 @@ const ChessBoard: React.FC = () => {
       .moves({ square: from, verbose: true })
       .some((move) => move.to === to);
   }, [assignedColor, gameState.game]);
+
+  /** Whether moving from -> to is a legal pawn promotion in this position. */
+  const isPromotionMove = useCallback((from: Square, to: Square): boolean => {
+    return gameState.game
+      .moves({ square: from, verbose: true })
+      .some((move) => move.to === to && !!move.promotion);
+  }, [gameState.game]);
+
+  /**
+   * Play a move on whichever game this board is showing: through the server
+   * for an online game, directly for a local one. `promotion` is only passed
+   * for promotions, so ordinary moves are unaffected.
+   */
+  const playMove = useCallback((from: Square, to: Square, promotion?: PromotionPiece): boolean => {
+    if (isOnlineGame && roomCode) {
+      if (!isLocallyPlayable(from, to)) return false;
+      if (promotion) socketMakeMove(from, to, promotion);
+      else socketMakeMove(from, to);
+      return true; // Optimistically assume success; the server confirms
+    }
+    return promotion ? makeMove(from, to, promotion) : makeMove(from, to);
+  }, [isOnlineGame, roomCode, isLocallyPlayable, socketMakeMove, makeMove]);
+
+  /**
+   * Try a move the player just made by click or drag. Returns true when the
+   * move was played. A promotion is not played yet: it opens the picker (and
+   * returns false, so a dragged pawn drops back until the choice is made).
+   */
+  const attemptMove = useCallback((from: Square, to: Square): boolean => {
+    if (isPromotionMove(from, to)) {
+      if (isOnlineGame && roomCode && !isLocallyPlayable(from, to)) return false;
+      if (profile?.preferences?.autoPromoteQueen) {
+        return playMove(from, to, 'q');
+      }
+      setPendingPromotion({ from, to, color: gameState.game.turn() });
+      return false;
+    }
+    return playMove(from, to);
+  }, [isPromotionMove, isOnlineGame, roomCode, isLocallyPlayable, profile?.preferences?.autoPromoteQueen, playMove, gameState.game]);
+
+  const handlePromotionSelect = useCallback((piece: PromotionPiece) => {
+    if (pendingPromotion) {
+      playMove(pendingPromotion.from, pendingPromotion.to, piece);
+    }
+    setPendingPromotion(null);
+    setMoveFrom(null);
+    setOptionSquares({});
+  }, [pendingPromotion, playMove]);
+
+  const handlePromotionCancel = useCallback(() => {
+    setPendingPromotion(null);
+    setMoveFrom(null);
+    setOptionSquares({});
+  }, []);
+
+  /**
+   * react-chessboard has its own promotion dialog, driven by this check. The
+   * picker above replaces it (it also has to work for click-to-move and for
+   * online games), so the check must say "no" for a move being made now. The
+   * library calls the same function afterwards to match up the animation of a
+   * pawn that has just promoted; by then the pawn has left its square, and
+   * the geometric answer is the right one.
+   */
+  const onPromotionCheck = useCallback((sourceSquare: Square, targetSquare: Square, piece: string): boolean => {
+    const stillThere = gameState.game.get(sourceSquare);
+    if (stillThere && stillThere.type === 'p') return false;
+    return (
+      (piece === 'wP' && sourceSquare[1] === '7' && targetSquare[1] === '8') ||
+      (piece === 'bP' && sourceSquare[1] === '2' && targetSquare[1] === '1')
+    ) && Math.abs(sourceSquare.charCodeAt(0) - targetSquare.charCodeAt(0)) <= 1;
+  }, [gameState.game]);
 
   const getMoveOptions = useCallback((square: Square) => {
     const moves = gameState.game.moves({
@@ -157,18 +238,13 @@ const ChessBoard: React.FC = () => {
     }
 
     // Try to make the move
-    let moveSuccessful = false;
-    
-    if (isOnlineGame && roomCode) {
-      if (isLocallyPlayable(moveFrom, square)) {
-        socketMakeMove(moveFrom, square);
-        moveSuccessful = true; // Optimistically assume success
-      }
-    } else {
-      // For local games, use the regular makeMove
-      moveSuccessful = makeMove(moveFrom, square);
+    const moveSuccessful = attemptMove(moveFrom, square);
+
+    // Waiting on the promotion picker: keep the selection as it is.
+    if (!moveSuccessful && isPromotionMove(moveFrom, square) && !profile?.preferences?.autoPromoteQueen) {
+      return;
     }
-    
+
     if (moveSuccessful) {
       setMoveFrom(null);
       setOptionSquares({});
@@ -183,7 +259,7 @@ const ChessBoard: React.FC = () => {
         setOptionSquares({});
       }
     }
-  }, [gameState.gameResult, gameState.nukeModeActive, gameState.teleportModeActive, gameState.game, moveFrom, isOnlineGame, roomCode, socketMakeMove, makeMove, executeNuke, executeTeleport, getMoveOptions, isLocallyPlayable]);
+  }, [gameState.gameResult, gameState.nukeModeActive, gameState.teleportModeActive, gameState.game, moveFrom, executeNuke, executeTeleport, getMoveOptions, attemptMove, isPromotionMove, profile?.preferences?.autoPromoteQueen]);
 
   const onSquareRightClick = useCallback((square: Square) => {
     const newSquares = rightClickedSquares.includes(square)
@@ -210,22 +286,12 @@ const ChessBoard: React.FC = () => {
       return false;
     }
     
-    let moveSuccessful = false;
-    
-    if (isOnlineGame && roomCode) {
-      if (isLocallyPlayable(sourceSquare, targetSquare)) {
-        socketMakeMove(sourceSquare, targetSquare);
-        moveSuccessful = true; // Optimistically assume success
-      }
-    } else {
-      // For local games, use the regular makeMove
-      moveSuccessful = makeMove(sourceSquare, targetSquare);
-    }
-    
+    const moveSuccessful = attemptMove(sourceSquare, targetSquare);
+
     setMoveFrom(null);
     setOptionSquares({});
     return moveSuccessful;
-  }, [gameState.gameResult, gameState.nukeModeActive, gameState.teleportModeActive, isOnlineGame, roomCode, socketMakeMove, makeMove, isLocallyPlayable]);
+  }, [gameState.gameResult, gameState.nukeModeActive, gameState.teleportModeActive, attemptMove]);
 
   const onDragBegin = useCallback((piece: string, sourceSquare: Square) => {
     // Don't allow drag if game has ended
@@ -400,11 +466,19 @@ const ChessBoard: React.FC = () => {
                   // Long press detected, could show context menu
                 }
               }}
-              style={{ touchAction: isDragging ? 'none' : 'auto' }}
+              style={{ touchAction: isDragging ? 'none' : 'auto', position: 'relative' }}
             >
+              {pendingPromotion && (
+                <PromotionPicker
+                  color={pendingPromotion.color}
+                  onSelect={handlePromotionSelect}
+                  onCancel={handlePromotionCancel}
+                />
+              )}
               <Chessboard
               position={gameState.game.fen()}
               onPieceDrop={onDrop}
+              onPromotionCheck={onPromotionCheck}
               onPieceDragBegin={onDragBegin}
               onPieceDragEnd={onDragEnd}
               onSquareClick={onSquareClick}
