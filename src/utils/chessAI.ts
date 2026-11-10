@@ -1,5 +1,6 @@
 import { Chess, Move } from 'chess.js';
 import { BackendAI, DifficultyLevel } from './backendAI';
+import { getLocalEngineMove } from '../engine/localOpponent';
 import { logger } from './logger';
 
 // Re-export so consumers can import the type alongside ChessAI from this module
@@ -73,7 +74,7 @@ const NODE_BUDGET = 40000;
  * For advanced AI features, use the backend API
  */
 /** Which engine actually produced the most recent move. */
-export type MoveSource = 'lc0' | 'fallback';
+export type MoveSource = 'lc0' | 'stockfish' | 'fallback';
 
 export class SimpleChessAI {
   private difficulty: DifficultyLevel;
@@ -112,7 +113,16 @@ export class SimpleChessAI {
       logger.debug('Backend AI unavailable, using frontend AI');
     }
 
-    // Fallback to frontend AI
+    // LC0 is unreachable: play with Stockfish in the browser. It runs in a
+    // worker (the page stays responsive) and is a real opponent at every level.
+    const localMove = await getLocalEngineMove(game.fen(), this.difficulty);
+    if (localMove) {
+      logger.debug(`♟️ Using in-browser Stockfish for ${this.difficulty} difficulty`);
+      this.lastMoveSource = 'stockfish';
+      return localMove;
+    }
+
+    // Last resort, for a browser that cannot run the engine at all.
     logger.debug(`🎲 Using frontend AI for ${this.difficulty} difficulty`);
     this.lastMoveSource = 'fallback';
 

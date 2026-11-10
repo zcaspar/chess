@@ -7,6 +7,7 @@ import { GameApp } from './components/GameApp';
 import GameHistoryManager from './components/GameHistoryManager/GameHistoryManager';
 import GameReviewScreen from './components/GameReview/GameReviewScreen';
 import StatisticalDashboard from './components/StatisticalDashboard';
+import RatingPanel from './components/Ratings/RatingPanel';
 import PuzzleTrainer from './components/PuzzleTraining/PuzzleTrainer';
 import { isFeatureEnabled } from './config/gameFeatures';
 import './App.css';
@@ -40,6 +41,7 @@ function App() {
                   >
                     ← Back to Game
                   </button>
+                  <RatingPanel />
                   <StatisticalDashboard />
                 </div>
               )}

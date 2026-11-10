@@ -5,6 +5,8 @@ import { useAuth } from '../hooks/useAuth';
 import { isFeatureEnabled } from '../config/gameFeatures';
 import { useChessVariants } from '../hooks/useChessVariants';
 import { logger } from '../utils/logger';
+import { loadSavedGame, persistGame } from '../utils/gamePersistence';
+import { getLocalEngineHint } from '../engine/localOpponent';
 
 /**
  * Pause between moves in AI vs AI so the game is watchable rather than a blur.
@@ -57,11 +59,12 @@ export interface GameState {
   aiDifficulty: DifficultyLevel;
   /**
    * Engine behind the computer's most recent move, or null before it has moved.
-   * 'fallback' means LC0 was unreachable and the far weaker offline evaluator
+   * 'stockfish' means LC0 was unreachable and the in-browser engine played.
+   * 'fallback' means neither was available and the far weaker offline evaluator
    * played instead — surfaced in the UI so the drop in strength is visible
    * rather than looking like the computer simply playing badly.
    */
-  lastAiEngine: 'lc0' | 'fallback' | null;
+  lastAiEngine: 'lc0' | 'stockfish' | 'fallback' | null;
   // AI vs AI specific settings
   whiteAiDifficulty?: DifficultyLevel;
   blackAiDifficulty?: DifficultyLevel;
@@ -141,6 +144,11 @@ export interface GameContextType {
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
+const withSavedGame = (fresh: GameState): GameState => {
+  const saved = loadSavedGame();
+  return saved ? { ...fresh, ...saved } : fresh;
+};
+
 export const useGame = () => {
   const context = useContext(GameContext);
   if (!context) {
@@ -154,8 +162,9 @@ interface GameProviderProps {
 }
 
 export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
-  // Initialize state first
-  const [gameState, setGameState] = useState<GameState>({
+  // Initialize state first. A game that was in progress when the page was last
+  // closed is picked up again (see utils/gamePersistence).
+  const [gameState, setGameState] = useState<GameState>(() => withSavedGame({
     game: new Chess(),
     history: [],
     currentMoveIndex: -1,
@@ -211,7 +220,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       white: false,
       black: false,
     },
-  });
+  }));
+
+  // Keep the stored copy in step with the board (and forget it once the game
+  // is finished, reset, or handed over to an online room).
+  useEffect(() => {
+    persistGame(gameState);
+  }, [gameState]);
 
   // Get auth context for user stats updates
   const authContext = useAuth();
@@ -317,14 +332,20 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       return; // No authenticated user
     }
 
+    // Online games are recorded by the server (GameSocketHandler.endGame) for
+    // both players, from the moves it validated. Saving from here as well
+    // would add a second, client-authored row for the same game.
+    if (gameState.onlineGameRoom) {
+      logger.debug('🌐 Online game - history is recorded by the server');
+      return;
+    }
+
     try {
       const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3005';
       
-      // An online game knows which colour the server assigned us; only local
-      // and AI games need the fallback convention.
-      const playerColor =
-        gameState.onlineGameRoom?.myColor ??
-        getLocalPlayerColor(gameState.gameMode, gameState.aiColor);
+      // Only local and AI games are saved from the client, so the colour comes
+      // from the local convention.
+      const playerColor = getLocalPlayerColor(gameState.gameMode, gameState.aiColor);
 
       // Outcome is relative to the colour the signed-in player is recorded as
       // playing. This used to hard-code 'win' for every human-vs-human game,
@@ -457,12 +478,6 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         const opponentPlayerKey = playerColor === 'w' ? 'black' : 'white';
         const opponentKey = gameState.colorAssignment[opponentPlayerKey];
         opponentName = gameState.players[opponentKey];
-        
-        // Get opponent ID from online game room if available
-        if (gameState.onlineGameRoom) {
-          opponentId = gameState.onlineGameRoom.opponentId;
-          opponentName = gameState.onlineGameRoom.opponentName || opponentName;
-        }
       }
       
       const gameHistoryData = {
@@ -816,25 +831,39 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
   }, []);
 
+  // Start the clock, or resume it after a pause, for the side to move.
+  // (It used to hand the clock to White whoever's turn it was.)
   const startClock = useCallback(() => {
     setGameState(prev => {
-      if (prev.timeControl && !prev.activeColor) {
-        return {
-          ...prev,
-          activeColor: 'w',
-          startTime: Date.now(),
-        };
+      if (!prev.timeControl || prev.gameResult || prev.startTime) {
+        return prev;
       }
-      return prev;
+      return {
+        ...prev,
+        activeColor: prev.game.turn(),
+        startTime: Date.now(),
+      };
     });
   }, []);
 
+  // Pause the clock, keeping the time already used. Pausing used to drop the
+  // elapsed time on the floor, so every pause handed the thinking time back.
   const pauseClock = useCallback(() => {
-    setGameState(prev => ({
-      ...prev,
-      activeColor: null,
-      startTime: null,
-    }));
+    setGameState(prev => {
+      if (!prev.activeColor || !prev.startTime) {
+        return prev.activeColor || prev.startTime
+          ? { ...prev, activeColor: null, startTime: null }
+          : prev;
+      }
+      const elapsed = (Date.now() - prev.startTime) / 1000;
+      const timeKey = prev.activeColor === 'w' ? 'whiteTime' : 'blackTime';
+      return {
+        ...prev,
+        [timeKey]: Math.max(0, prev[timeKey] - elapsed),
+        activeColor: null,
+        startTime: null,
+      };
+    });
   }, []);
 
   const makeMove = useCallback((from: Square, to: Square, promotion: string = 'q'): boolean => {
@@ -1345,17 +1374,58 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   useEffect(() => {
     const handleSocketMoveMade = (event: CustomEvent) => {
       const data = event.detail;
-      logger.debug('🌐 Socket move made received - updating timers only:', data);
-      
-      // Only update timer information here
-      // The actual move is handled by useOnlineGame hook calling makeMove
+      logger.debug('🌐 Socket move made received:', data);
+
+      // Apply the server's move here, in the provider, so it lands whichever
+      // screen is showing. This used to live in a hook mounted only by the
+      // board: open History or Stats mid-game and the opponent's moves were
+      // dropped, leaving this client on a different position from the server.
+      const current = gameStateRef.current;
+      let inStep = false;
+      if (data.move && current.currentMoveIndex === current.history.length - 1) {
+        try {
+          const probe = new Chess(current.game.fen());
+          probe.move({ from: data.move.from, to: data.move.to, promotion: data.move.promotion });
+          inStep = probe.fen() === data.fen;
+        } catch {
+          inStep = false;
+        }
+      }
+
+      const applied = inStep && makeMove(data.move.from as Square, data.move.to as Square, data.move.promotion);
+      if (!applied) {
+        // Out of step with the server (a missed move, two moves arriving
+        // together, a local edit): take the server's game wholesale.
+        logger.warn('🌐 Local board out of step with the server - resyncing');
+        let serverGame: Chess;
+        let serverHistory: Move[] | null = null;
+        try {
+          serverGame = new Chess();
+          serverGame.loadPgn(data.pgn);
+          if (serverGame.fen() !== data.fen) throw new Error('PGN does not reach the reported position');
+          serverHistory = serverGame.history({ verbose: true });
+        } catch {
+          serverGame = new Chess(data.fen);
+        }
+        setGameState(prev => {
+          const history = serverHistory ?? prev.history;
+          return {
+            ...prev,
+            game: serverGame,
+            history,
+            currentMoveIndex: history.length - 1,
+            drawOffer: { offered: false, by: null },
+          };
+        });
+      }
+
+      // The server's clocks are the real ones.
       setGameState(prev => ({
         ...prev,
         whiteTime: data.whiteTime,
         blackTime: data.blackTime,
-        // Only start timer for next player if this is not the first move
-        activeColor: prev.history.length > 0 ? data.turn : null,
-        startTime: prev.history.length > 0 ? Date.now() : null,
+        activeColor: prev.gameResult ? null : data.turn,
+        startTime: prev.gameResult ? null : Date.now(),
       }));
     };
 
@@ -1363,23 +1433,20 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       const data = event.detail;
       logger.debug('🌐 Socket game ended received:', data);
       
-      // Parse the result to determine winning color
-      let winningColor: 'w' | 'b' | undefined;
-      if (data.result.includes('White wins')) {
-        winningColor = 'w';
-      } else if (data.result.includes('Black wins')) {
-        winningColor = 'b';
-      }
-
-      const current = gameStateRef.current;
-      const finalFen = current.game.fen();
-      const pgn = data.pgn || current.game.pgn(); // Use PGN from socket if available
-      const resultText = `${data.result} (${data.reason})`;
+      // The server sends result as 'white' | 'black' | 'draw' plus a readable
+      // resultText. (This used to look for the phrase "White wins" in the bare
+      // result code, never found it, and filed every online game as a draw.)
+      const outcome =
+        data.result === 'white' ? 'White wins' : data.result === 'black' ? 'Black wins' : 'Draw';
+      const resultText: string = data.resultText || `${outcome} (${data.reason})`;
 
       // Update game state to show game result
       setGameState(prev => ({
         ...prev,
         gameResult: resultText,
+        drawOffer: { offered: false, by: null },
+        whiteTime: typeof data.whiteTime === 'number' ? data.whiteTime : prev.whiteTime,
+        blackTime: typeof data.blackTime === 'number' ? data.blackTime : prev.blackTime,
         activeColor: null,
         startTime: null,
       }));
@@ -1393,8 +1460,8 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         intervalRef.current = null;
       }
 
-      // Save outside the updater so it cannot fire twice under StrictMode.
-      saveGameToHistory(resultText, winningColor, finalFen, pgn, current.history.length);
+      // Nothing is saved from here: the server records an online game's
+      // history, statistics and head-to-head itself, from the game it refereed.
     };
 
     const handleSocketDrawOffered = (event: Event) => {
@@ -1501,21 +1568,30 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         timeControl: data.timeControl || prev.timeControl,
         whiteTime: data.whiteTime || (data.timeControl ? data.timeControl.initial : prev.whiteTime),
         blackTime: data.blackTime || (data.timeControl ? data.timeControl.initial : prev.blackTime),
-        activeColor: data.gameState.turn,
+        activeColor: data.gameResult ? null : data.gameState.turn,
+        // The server is the source of truth for whether this game is over and
+        // whether a draw offer is open (this also runs when we rejoin after a
+        // dropped connection).
+        gameResult: data.gameResult || '',
+        drawOffer: data.drawOfferBy
+          ? { offered: true, by: data.drawOfferBy }
+          : { offered: false, by: null },
         gameMode: 'human-vs-human', // Online games are always human vs human
-        onlineGameRoom: myColor
-          ? {
-              opponentId: opponent?.id,
-              opponentName: opponent?.displayName || opponent?.username,
-              myColor,
-            }
-          : prev.onlineGameRoom,
+        // Set for spectators too (with no colour): it is what marks this board
+        // as the server's game rather than a local one to save and score.
+        onlineGameRoom: {
+          opponentId: opponent?.id,
+          opponentName: opponent?.displayName || opponent?.username,
+          myColor,
+        },
         // Set player names based on color assignment
         players: {
           player1: prev.colorAssignment.white === 'player1' ? whitePlayerName : blackPlayerName,
           player2: prev.colorAssignment.white === 'player2' ? whitePlayerName : blackPlayerName,
         },
       }));
+
+      gameEndedRef.current = !!data.gameResult;
 
       logger.debug('✅ Game state synchronized with server');
     };
@@ -1539,7 +1615,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       }));
     };
 
+    // Leaving the room turns this back into a local board: without this the
+    // next local game still counted as "online" and was never saved or scored.
+    const handleSocketRoomLeft = () => {
+      setGameState(prev => (prev.onlineGameRoom ? { ...prev, onlineGameRoom: undefined } : prev));
+    };
+
     // Add event listeners
+    window.addEventListener('socketRoomLeft', handleSocketRoomLeft);
     window.addEventListener('socketMoveMade', handleSocketMoveMade as EventListener);
     window.addEventListener('socketGameEnded', handleSocketGameEnded as EventListener);
     window.addEventListener('socketDrawOffered', handleSocketDrawOffered as EventListener);
@@ -1552,6 +1635,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
     return () => {
       // Clean up event listeners
+      window.removeEventListener('socketRoomLeft', handleSocketRoomLeft);
       window.removeEventListener('socketMoveMade', handleSocketMoveMade as EventListener);
       window.removeEventListener('socketGameEnded', handleSocketGameEnded as EventListener);
       window.removeEventListener('socketDrawOffered', handleSocketDrawOffered as EventListener);
@@ -1562,7 +1646,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       window.removeEventListener('socketRoomJoined', handleSocketRoomJoined as EventListener);
       window.removeEventListener('socketGameStarted', handleSocketGameStarted as EventListener);
     };
-  }, [saveGameToHistory]);
+  }, [saveGameToHistory, makeMove]);
 
   const canUndo = gameState.currentMoveIndex >= 0;
   const canRedo = gameState.currentMoveIndex < gameState.history.length - 1;
@@ -1609,64 +1693,59 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       return false;
     }
 
+    const fen = gameState.game.fen();
+    const showHint = (move: { from: string; to: string; promotion?: string }) => {
+      setGameState(prev => ({
+        ...prev,
+        hintAvailable: {
+          white: currentPlayer === 'w' ? false : prev.hintAvailable.white,
+          black: currentPlayer === 'b' ? false : prev.hintAvailable.black,
+        },
+        currentHint: {
+          from: move.from as Square,
+          to: move.to as Square,
+          promotion: move.promotion,
+        },
+      }));
+    };
+
+    // The engine in the browser answers in a fraction of a second, works for
+    // guests and offline, and costs the server nothing.
+    const localHint = await getLocalEngineHint(fen);
+    if (localHint) {
+      // The board may have moved on while the engine was thinking.
+      if (gameStateRef.current.game.fen() !== fen) return false;
+      showHint(localHint);
+      return true;
+    }
+
+    // No local engine (a browser without Web Workers / WebAssembly): ask the
+    // LC0 server through the backend, as hints always have.
     try {
       const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3005';
-      const url = `${backendUrl}/api/analysis/hint`;
-      logger.debug('💡 Requesting hint from:', url);
-      logger.debug('💡 Request payload:', { fen: gameState.game.fen() });
-      
-      const response = await fetch(url, {
+      const response = await fetch(`${backendUrl}/api/analysis/hint`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          fen: gameState.game.fen(),
-        }),
+        body: JSON.stringify({ fen }),
       });
 
-      logger.debug('💡 Response status:', response.status, response.statusText);
-
       if (!response.ok) {
-        const errorText = await response.text();
-        logger.error('Failed to get hint from server:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
-        });
+        logger.error('Failed to get hint from server:', response.status, response.statusText);
         return false;
       }
 
       const data = await response.json();
-      logger.debug('💡 Response data:', data);
-      
-      if (data.success && data.bestMove) {
-        logger.debug('💡 Setting hint:', data.bestMove);
-        const currentPlayer = gameState.game.turn();
-        setGameState(prev => ({
-          ...prev,
-          hintAvailable: {
-            white: currentPlayer === 'w' ? false : prev.hintAvailable.white,
-            black: currentPlayer === 'b' ? false : prev.hintAvailable.black,
-          },
-          currentHint: {
-            from: data.bestMove.from,
-            to: data.bestMove.to,
-            promotion: data.bestMove.promotion,
-          },
-        }));
+      if (data.success && data.bestMove && gameStateRef.current.game.fen() === fen) {
+        showHint(data.bestMove);
         return true;
-      } else {
-        logger.warn('💡 Invalid response format or no best move:', data);
-        return false;
       }
+      logger.warn('💡 Invalid response format or no best move:', data);
     } catch (error) {
       logger.error('Error requesting hint:', error);
-      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        logger.error('💡 This is likely a CORS or network connectivity issue');
-      }
     }
-    
+
     return false;
   }, [gameState.hintAvailable, gameState.gameResult, gameState.gameMode, gameState.game]);
 

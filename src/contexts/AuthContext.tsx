@@ -27,6 +27,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
 
 
+  // A rated online game just finished: the server has already changed the
+  // rating, so show the new number without waiting for a profile reload.
+  useEffect(() => {
+    const onRatingsUpdated = (event: Event) => {
+      const entries = (event as CustomEvent).detail as Array<{
+        playerId?: string;
+        after: number;
+        provisional: boolean;
+      }>;
+      if (!Array.isArray(entries)) return;
+      setProfile(prev => {
+        if (!prev) return prev;
+        const mine = entries.find((entry) => entry.playerId === prev.id);
+        if (!mine) return prev;
+        return {
+          ...prev,
+          stats: { ...prev.stats, rating: mine.after },
+          rating: {
+            value: mine.after,
+            deviation: prev.rating?.deviation ?? 0,
+            provisional: mine.provisional,
+            games: (prev.rating?.games ?? 0) + 1,
+          },
+        };
+      });
+    };
+    window.addEventListener('socketRatingsUpdated', onRatingsUpdated);
+    return () => window.removeEventListener('socketRatingsUpdated', onRatingsUpdated);
+  }, []);
+
   // Authentication methods
   const signInWithEmail = async (email: string, password: string): Promise<void> => {
     try {
@@ -47,7 +77,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setError(null);
       setLoading(true);
       const result = await createUserWithEmailAndPassword(auth, email, password);
-      
+
       // Update Firebase profile
       await updateFirebaseProfile(result.user, { displayName: username });
       
@@ -161,7 +191,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(true);
       
       // This would require additional Firebase setup for account linking
-      // For now, we'll implement a simpler approach: create new account and transfer data
+      // For now, we'll implement a simpler approach: create new account and transfer data.
+      // The guest's own ID token is the proof that this caller owns the guest
+      // profile; it must be fetched before signing in as the new account.
+      const guestToken = await user.getIdToken();
       const result = await createUserWithEmailAndPassword(auth, email, password);
       
       // Transfer guest data to new account (backend handles this)
@@ -171,9 +204,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${await result.user.getIdToken()}`,
         },
-        body: JSON.stringify({
-          guestUid: user.uid,
-        }),
+        body: JSON.stringify({ guestToken }),
       });
 
       await loadUserProfile(result.user);

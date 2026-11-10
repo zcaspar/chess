@@ -40,12 +40,12 @@ export class RoomPersistence {
             fen: room.game.fen(),
             pgn: room.game.pgn(),
             turn: room.game.turn(),
-            isGameOver: room.game.isGameOver(),
+            isGameOver: !!room.ended || room.game.isGameOver(),
             gameResult: room.gameResult,
             timeControl: room.timeControl,
             whiteTime: room.whiteTime,
             blackTime: room.blackTime,
-            createdAt: new Date(room.lastMoveTime - 60000).toISOString(), // Approximate
+            createdAt: new Date(room.createdAt || room.lastMoveTime).toISOString(),
             lastActivity: new Date(room.lastMoveTime).toISOString(),
           });
         }

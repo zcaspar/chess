@@ -49,6 +49,7 @@ describe('ChessClock Component', () => {
       whiteTime: 300,
       blackTime: 300,
       activeColor: 'w',
+      startTime: Date.now(), // a running clock has both an owner and a start
       timeControl: { initial: 300, increment: 0 },
     });
   });

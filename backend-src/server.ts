@@ -189,6 +189,10 @@ const gracefulShutdown = async (signal: string) => {
   logger.debug(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
   
   try {
+    // Stop the room timers and write the live rooms out first, so games in
+    // progress can be restored (seats and clocks intact) by the next process.
+    gameSocketHandler.shutdown();
+
     // Close Redis connection
     await closeRedis();
     logger.debug('✅ Redis connection closed');

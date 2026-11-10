@@ -14,6 +14,14 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = jest.fn();
 }
 
+// The game in progress is saved to localStorage and restored on mount, and the
+// online room to sessionStorage. Start every test from a clean slate, or one
+// test's unfinished game becomes the next test's starting position.
+beforeEach(() => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+});
+
 // Add ReadableStream polyfill
 global.ReadableStream = jest.fn().mockImplementation(() => ({
   cancel: jest.fn(),

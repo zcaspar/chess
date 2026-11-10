@@ -1,7 +1,25 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../hooks/useAuth';
 import { logger } from '../utils/logger';
+import type { RatingChange } from '../utils/rating';
+
+interface OnlinePlayer {
+  id: string;
+  username: string;
+  displayName?: string;
+  /** False while that player's connection is down; their seat is held. */
+  connected?: boolean;
+  /** Null for a player who cannot play rated games (a guest). */
+  rating?: number | null;
+  ratingProvisional?: boolean;
+}
+
+/** What the game that just finished did to each player's rating. */
+export interface RatingChanges {
+  white: RatingChange;
+  black: RatingChange;
+}
 
 interface SocketContextType {
   socket: Socket | null;
@@ -9,8 +27,8 @@ interface SocketContextType {
   roomCode: string | null;
   assignedColor: 'white' | 'black' | 'spectator' | null;
   players: {
-    white: { id: string; username: string; displayName?: string } | null;
-    black: { id: string; username: string; displayName?: string } | null;
+    white: OnlinePlayer | null;
+    black: OnlinePlayer | null;
   };
   gameState: {
     fen: string;
@@ -20,7 +38,17 @@ interface SocketContextType {
     whiteTime: number;
     blackTime: number;
     timeControl: { initial: number; increment: number } | null;
+    /**
+     * When the server last reported a running clock (ms since epoch), or null
+     * while the clocks are stopped. The clock display counts down from the
+     * reported times between the server's one-per-second updates.
+     */
+    clockSyncedAt: number | null;
   } | null;
+  /** Whether the game in this room counts for rating. */
+  rated: boolean;
+  /** Set when a rated game ends; null before that and in casual games. */
+  ratingChanges: RatingChanges | null;
   createRoom: (timeControl?: { initial: number; increment: number }) => void;
   joinRoom: (roomCode: string) => void;
   makeMove: (from: string, to: string, promotion?: string) => void;
@@ -32,6 +60,27 @@ interface SocketContextType {
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
+
+// The room this tab is in, kept for the life of the tab so a reload can rejoin.
+const ROOM_STORAGE_KEY = 'chess_online_room';
+
+const readStoredRoomCode = (): string | null => {
+  try {
+    const code = window.sessionStorage.getItem(ROOM_STORAGE_KEY);
+    return code && /^[A-Z0-9]{6}$/.test(code) ? code : null;
+  } catch {
+    return null;
+  }
+};
+
+const storeRoomCode = (code: string | null): void => {
+  try {
+    if (code) window.sessionStorage.setItem(ROOM_STORAGE_KEY, code);
+    else window.sessionStorage.removeItem(ROOM_STORAGE_KEY);
+  } catch {
+    /* storage unavailable: a reload simply will not rejoin */
+  }
+};
 
 export const useSocket = () => {
   const context = useContext(SocketContext);
@@ -51,9 +100,26 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [assignedColor, setAssignedColor] = useState<'white' | 'black' | 'spectator' | null>(null);
   const [players, setPlayers] = useState<{
-    white: { id: string; username: string; displayName?: string } | null;
-    black: { id: string; username: string; displayName?: string } | null;
+    white: OnlinePlayer | null;
+    black: OnlinePlayer | null;
   }>({ white: null, black: null });
+
+  // The socket handlers below are registered once per sign-in, so they read
+  // the current room and display name through refs rather than stale closures.
+  const [rated, setRated] = useState(false);
+  const [ratingChanges, setRatingChanges] = useState<RatingChanges | null>(null);
+  const playersRef = useRef(players);
+  playersRef.current = players;
+
+  // Seeded from sessionStorage so a page reload mid-game walks straight back
+  // into the room (the server has kept the seat).
+  const roomCodeRef = useRef<string | null>(readStoredRoomCode());
+  const displayNameRef = useRef<string>('Player');
+  const rejoiningRef = useRef(false);
+  const rememberRoom = (code: string | null) => {
+    roomCodeRef.current = code;
+    storeRoomCode(code);
+  };
   
   const [gameState, setGameState] = useState<{
     fen: string;
@@ -63,9 +129,16 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     whiteTime: number;
     blackTime: number;
     timeControl: { initial: number; increment: number } | null;
+    /**
+     * When the server last reported a running clock (ms since epoch), or null
+     * while the clocks are stopped. The clock display counts down from the
+     * reported times between the server's one-per-second updates.
+     */
+    clockSyncedAt: number | null;
   } | null>(null);
   
   const { user, profile } = useAuth();
+  displayNameRef.current = profile?.displayName || profile?.username || user?.displayName || 'Player';
 
   useEffect(() => {
     if (!user) return;
@@ -79,28 +152,45 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       forceNew: true,
       timeout: 20000,
       reconnection: true,
-      reconnectionAttempts: 5,
+      // Keep trying: a phone that was backgrounded for a minute used to exhaust
+      // five attempts and strand the player outside their own game.
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
     });
 
     // Connect and authenticate
     const connectSocket = async () => {
       try {
-        const token = await user.getIdToken();
-        
         socketInstance.connect();
-        
-        socketInstance.on('connect', () => {
+
+        socketInstance.on('connect', async () => {
           logger.debug('Socket connected');
           setIsConnected(true);
-          
-          // Authenticate with Firebase token
-          socketInstance.emit('authenticate', token);
+
+          // Authenticate with a fresh Firebase token on EVERY connection. ID
+          // tokens expire after an hour, so re-sending the one fetched at
+          // sign-in made every later reconnect fail authentication.
+          try {
+            socketInstance.emit('authenticate', await user.getIdToken());
+          } catch (tokenError) {
+            logger.error('Could not get an auth token for the socket:', tokenError);
+          }
         });
 
         socketInstance.on('authenticated', (data) => {
           if (data.success) {
             logger.debug('Socket authenticated successfully');
+            // After a dropped connection the server still holds our seat, but
+            // this is a new socket: ask for the room again to get the seat and
+            // the current position back.
+            if (roomCodeRef.current) {
+              rejoiningRef.current = true;
+              socketInstance.emit('joinRoom', {
+                roomCode: roomCodeRef.current,
+                displayName: displayNameRef.current,
+              });
+            }
           } else {
             logger.error('Socket authentication failed:', data.error);
             socketInstance.disconnect();
@@ -125,8 +215,12 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         socketInstance.on('roomJoined', (data) => {
           logger.debug('Room joined:', data);
           setRoomCode(data.roomCode);
+          rememberRoom(data.roomCode);
+          rejoiningRef.current = false;
           setAssignedColor(data.assignedColor);
           setPlayers(data.players);
+          setRated(data.rated === true);
+          setRatingChanges(null);
           
           // Initialize game state
           setGameState({
@@ -137,6 +231,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             whiteTime: data.whiteTime,
             blackTime: data.blackTime,
             timeControl: data.timeControl,
+            // Stopped until the server says otherwise (its next clock tick
+            // arrives within a second if the game is under way).
+            clockSyncedAt: null,
           });
           
           // Broadcast room joined event to GameContext
@@ -157,30 +254,55 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             white: data.white,
             black: data.black,
           });
+          setRated(data.rated === true);
           // Broadcast to GameContext to update player names
           window.dispatchEvent(new CustomEvent('socketGameStarted', { detail: data }));
         });
 
+        const markConnection = (data: { color?: string; seatReleased?: boolean }, connected: boolean) => {
+          if (data?.color !== 'white' && data?.color !== 'black') return;
+          const color: 'white' | 'black' = data.color;
+          setPlayers(prev => {
+            const seat = prev[color];
+            if (!seat) return prev;
+            return { ...prev, [color]: data.seatReleased ? null : { ...seat, connected } };
+          });
+        };
+
         socketInstance.on('playerDisconnected', (data) => {
           logger.debug('Player disconnected:', data);
-          // TODO: Show reconnection timer
+          markConnection(data, false);
+        });
+
+        socketInstance.on('playerLeft', (data) => {
+          logger.debug('Player left:', data);
+          markConnection(data, false);
         });
 
         socketInstance.on('error', (data) => {
           logger.error('Socket error:', data);
-          
+
+          // An automatic rejoin (after a reconnect or a page reload) that the
+          // server turns down just means the room is gone. Forget it quietly
+          // rather than greeting the player with an error popup.
+          const failedRejoin = rejoiningRef.current;
+          rejoiningRef.current = false;
+
           // Reset room state on room not found error
-          if (data.code === 'ROOM_NOT_FOUND') {
+          if (data.code === 'ROOM_NOT_FOUND' || failedRejoin) {
             setRoomCode(null);
             setAssignedColor(null);
             setPlayers({ white: null, black: null });
+            setGameState(null);
+            rememberRoom(null);
+            window.dispatchEvent(new CustomEvent('socketRoomLeft'));
           }
           
           // Broadcast error to components via custom event
           window.dispatchEvent(new CustomEvent('socketError', { detail: data }));
           
           // Notify user of error (you might want to use a toast library here)
-          if (data.message) {
+          if (data.message && !failedRejoin) {
             alert(`Error: ${data.message}`);
           }
         });
@@ -226,6 +348,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             turn: data.turn,
             whiteTime: data.whiteTime,
             blackTime: data.blackTime,
+            clockSyncedAt: Date.now(), // the clock runs from the first move on
           } : null);
           
           // Broadcast to GameContext or other components via custom event
@@ -239,10 +362,31 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           setGameState(prev => prev ? {
             ...prev,
             isGameOver: true,
+            whiteTime: typeof data.whiteTime === 'number' ? data.whiteTime : prev.whiteTime,
+            blackTime: typeof data.blackTime === 'number' ? data.blackTime : prev.blackTime,
+            clockSyncedAt: null,
           } : null);
           
           // Broadcast to GameContext or other components via custom event
           window.dispatchEvent(new CustomEvent('socketGameEnded', { detail: data }));
+        });
+
+        socketInstance.on('ratingsUpdated', (data: RatingChanges) => {
+          logger.debug('Ratings updated:', data);
+          if (!data?.white || !data?.black) return;
+          setRatingChanges(data);
+          const seats = playersRef.current;
+          setPlayers(prev => ({
+            white: prev.white ? { ...prev.white, rating: data.white.after, ratingProvisional: data.white.provisional } : prev.white,
+            black: prev.black ? { ...prev.black, rating: data.black.after, ratingProvisional: data.black.provisional } : prev.black,
+          }));
+          // Let the signed-in player's profile pick up their new rating.
+          window.dispatchEvent(new CustomEvent('socketRatingsUpdated', {
+            detail: [
+              { playerId: seats.white?.id, ...data.white },
+              { playerId: seats.black?.id, ...data.black },
+            ],
+          }));
         });
 
         socketInstance.on('drawOffered', (data: { by: 'w' | 'b' }) => {
@@ -278,6 +422,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             whiteTime: data.whiteTime,
             blackTime: data.blackTime,
             turn: data.turn,
+            clockSyncedAt: Date.now(),
           } : null);
           
           // Broadcast to GameContext or other components via custom event
@@ -354,7 +499,12 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       setRoomCode(null);
       setAssignedColor(null);
       setPlayers({ white: null, black: null });
-      
+      setGameState(null);
+      setRated(false);
+      setRatingChanges(null);
+      rememberRoom(null);
+      window.dispatchEvent(new CustomEvent('socketRoomLeft'));
+
       logger.debug('Left room:', roomCode);
     }
   };
@@ -366,6 +516,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     assignedColor,
     players,
     gameState,
+    rated,
+    ratingChanges,
     createRoom,
     joinRoom,
     makeMove,

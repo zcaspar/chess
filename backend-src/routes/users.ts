@@ -1,9 +1,93 @@
 import express from 'express';
-import { AuthenticatedRequest, verifyFirebaseToken } from '../middleware/auth';
-import { UserModel } from '../models/User';
+import { AuthenticatedRequest, verifyFirebaseToken, verifyToken } from '../middleware/auth';
+import { UserModel, UserStats, UserUpdates } from '../models/User';
 import { logger } from '../utils/logger';
 
 const router = express.Router();
+
+const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,30}$/;
+const MAX_PREFERENCES_BYTES = 4096;
+
+// Counters a client may report for games played on its own device (local and
+// vs-computer games never touch the server, so they are self-reported by
+// nature). `rating` is deliberately absent, and online results are scored by
+// the server in GameSocketHandler.endGame, never through this route.
+const CLIENT_STAT_COUNTERS: Array<keyof UserStats> = [
+  'wins',
+  'losses',
+  'draws',
+  'gamesPlayed',
+  'totalPlayTime',
+  'winStreak',
+  'bestWinStreak',
+];
+
+const cleanString = (value: unknown, maxLength: number): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, maxLength) : undefined;
+};
+
+/**
+ * Reduce a PATCH body to the fields a user may change about their own
+ * profile. The body used to be spread straight into the stored profile, so a
+ * client could set its own rating, email, or any other field.
+ * Returns a string describing the problem when the body is unacceptable.
+ */
+export const sanitizeProfileUpdates = (body: unknown): UserUpdates | string => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return 'Request body must be an object';
+  }
+  const input = body as Record<string, unknown>;
+  const updates: UserUpdates = {};
+
+  if (input.username !== undefined) {
+    if (typeof input.username !== 'string' || !USERNAME_PATTERN.test(input.username)) {
+      return 'Username must be 3-30 letters, numbers or underscores';
+    }
+    updates.username = input.username;
+  }
+
+  const displayName = cleanString(input.displayName, 100);
+  if (displayName) updates.displayName = displayName;
+
+  const avatarUrl = cleanString(input.avatarUrl, 2048);
+  if (avatarUrl) {
+    if (!/^https:\/\//i.test(avatarUrl)) return 'avatarUrl must be an https URL';
+    updates.avatarUrl = avatarUrl;
+  }
+
+  if (input.preferences !== undefined) {
+    if (!input.preferences || typeof input.preferences !== 'object' || Array.isArray(input.preferences)) {
+      return 'preferences must be an object';
+    }
+    if (JSON.stringify(input.preferences).length > MAX_PREFERENCES_BYTES) {
+      return 'preferences is too large';
+    }
+    updates.preferences = input.preferences as UserUpdates['preferences'];
+  }
+
+  if (input.stats !== undefined) {
+    if (!input.stats || typeof input.stats !== 'object' || Array.isArray(input.stats)) {
+      return 'stats must be an object';
+    }
+    const rawStats = input.stats as Record<string, unknown>;
+    const stats: Partial<UserStats> = {};
+    for (const key of CLIENT_STAT_COUNTERS) {
+      const value = rawStats[key];
+      if (value === undefined) continue;
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 10_000_000) {
+        return `stats.${key} must be a non-negative integer`;
+      }
+      (stats as Record<string, number>)[key] = value;
+    }
+    const favorite = cleanString(rawStats.favoriteTimeControl, 32);
+    if (favorite) stats.favoriteTimeControl = favorite;
+    updates.stats = stats;
+  }
+
+  return updates;
+};
 
 // GET /api/users/profile - Get current user profile
 router.get('/profile', verifyFirebaseToken, async (req: AuthenticatedRequest, res): Promise<void> => {
@@ -37,9 +121,9 @@ router.post('/profile', verifyFirebaseToken, async (req: AuthenticatedRequest, r
       return;
     }
 
-    const { username, email, displayName, isGuest } = req.body;
+    const { username, displayName, isGuest } = req.body || {};
 
-    if (!username) {
+    if (typeof username !== 'string' || !username.trim()) {
       res.status(400).json({ error: 'Username is required' });
       return;
     }
@@ -54,10 +138,12 @@ router.post('/profile', verifyFirebaseToken, async (req: AuthenticatedRequest, r
     // Create new user profile
     const profile = await UserModel.create({
       firebaseUid: req.user.uid,
-      username,
-      email: email || req.user.email || '',
-      displayName: displayName || req.user.name,
-      isGuest: isGuest || false,
+      username: username.trim().slice(0, 50),
+      // The address comes from the verified token only; a client-supplied
+      // email would let one account squat on someone else's address.
+      email: req.user.email || '',
+      displayName: cleanString(displayName, 100) || req.user.name,
+      isGuest: isGuest === true,
     });
 
     res.status(201).json(profile);
@@ -83,13 +169,11 @@ router.patch('/profile', verifyFirebaseToken, async (req: AuthenticatedRequest, 
       return;
     }
 
-    const updates = req.body;
-    
-    // Don't allow updating certain fields
-    delete updates.id;
-    delete updates.firebaseUid;
-    delete updates.createdAt;
-    delete updates.isGuest; // Prevent changing guest status via this endpoint
+    const updates = sanitizeProfileUpdates(req.body);
+    if (typeof updates === 'string') {
+      res.status(400).json({ error: updates });
+      return;
+    }
 
     const updatedProfile = await UserModel.update(req.user.uid, updates);
     res.json(updatedProfile);
@@ -119,10 +203,26 @@ router.post('/upgrade-guest', verifyFirebaseToken, async (req: AuthenticatedRequ
       return;
     }
 
-    const { guestUid } = req.body;
+    // Proof of ownership: the caller must present the guest account's own ID
+    // token. This used to accept a bare `guestUid`, so any signed-in user could
+    // take over (and delete) any guest profile whose UID they knew.
+    const { guestToken } = req.body || {};
 
-    if (!guestUid) {
-      res.status(400).json({ error: 'Guest UID is required' });
+    if (typeof guestToken !== 'string' || !guestToken) {
+      res.status(400).json({ error: 'Guest token is required' });
+      return;
+    }
+
+    let guestUid: string;
+    try {
+      guestUid = (await verifyToken(guestToken)).uid;
+    } catch {
+      res.status(403).json({ error: 'Invalid guest token' });
+      return;
+    }
+
+    if (guestUid === req.user.uid) {
+      res.status(400).json({ error: 'Guest and permanent accounts must differ' });
       return;
     }
 
@@ -159,10 +259,36 @@ router.post('/upgrade-guest', verifyFirebaseToken, async (req: AuthenticatedRequ
   }
 });
 
-// GET /api/users/stats - Get user statistics (development endpoint)
-router.get('/stats', (req, res) => {
+// GET /api/users/leaderboard - Top rated players (public: names and ratings only)
+router.get('/leaderboard', async (req, res): Promise<void> => {
   try {
-    const stats = UserModel.getStats();
+    const limit = Number(req.query.limit) || 50;
+    res.json({ players: await UserModel.getLeaderboard(limit) });
+  } catch (error) {
+    logger.error('Error fetching leaderboard:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/users/rating-history - The caller's own recent rated games
+router.get('/rating-history', verifyFirebaseToken, async (req: AuthenticatedRequest, res): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    const limit = Number(req.query.limit) || 50;
+    res.json({ history: await UserModel.getRatingHistory(req.user.uid, limit) });
+  } catch (error) {
+    logger.error('Error fetching rating history:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/users/stats - Get user statistics (development endpoint)
+router.get('/stats', async (req, res) => {
+  try {
+    const stats = await UserModel.getStats();
     res.json(stats);
   } catch (error) {
     logger.error('Error fetching user stats:', error);
@@ -191,78 +317,8 @@ router.delete('/profile', verifyFirebaseToken, async (req: AuthenticatedRequest,
   }
 });
 
-// Debug endpoint to test new route deployment
-router.get('/debug-analysis', (req, res) => {
-  res.json({
-    message: 'New analysis route deployment test - routes are working',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Analysis endpoint in users route for testing
-router.post('/analyze-position', async (req, res) => {
-  try {
-    const { fen } = req.body;
-    
-    logger.debug('🧠 Analysis request received:', { fen });
-    
-    if (!fen) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'FEN position is required'
-      });
-    }
-
-    // Call LC0 server for best move analysis
-    const LC0_SERVER_URL = process.env.LC0_SERVER_URL || 'https://web-production-4cc9.up.railway.app';
-    logger.debug('🔗 Calling LC0 server:', LC0_SERVER_URL);
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-    
-    const analysisResponse = await fetch(`${LC0_SERVER_URL}/move`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        fen,
-        difficulty: 'expert'
-      }),
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-
-    if (!analysisResponse.ok) {
-      throw new Error(`LC0 server responded with ${analysisResponse.status}: ${analysisResponse.statusText}`);
-    }
-
-    const analysisData = await analysisResponse.json() as any;
-    
-    const formattedAnalysis = {
-      position: fen,
-      engine: 'LC0',
-      depth: 15,
-      analysisTime: analysisData.responseTime || 0,
-      evaluation: null,
-      bestMove: analysisData.move || null,
-      recommendation: analysisData.move ? `Best move: ${analysisData.move.uci}` : null,
-      analysisDate: new Date().toISOString()
-    };
-
-    res.json({
-      success: true,
-      analysis: formattedAnalysis
-    });
-
-  } catch (error) {
-    logger.error('Error analyzing position:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Failed to analyze position'
-    });
-  }
-});
+// The unauthenticated `/analyze-position` and `/debug-analysis` test routes
+// that lived here were removed: they proxied to the engine with no token, no
+// rate limit and no FEN validation, bypassing everything /api/analysis enforces.
 
 export default router;

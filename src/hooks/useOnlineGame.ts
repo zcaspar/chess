@@ -1,79 +1,19 @@
-import { useEffect, useCallback } from 'react';
 import { useSocket } from '../contexts/SocketContext';
-import { useGame } from '../contexts/GameContext';
-import { Square } from 'chess.js';
-import { logger } from '../utils/logger';
 
+/**
+ * Whether the board is showing an online game, and whether this client holds
+ * a seat in it.
+ *
+ * Applying the opponent's moves is NOT done here. This hook is mounted by the
+ * board component, so a listener here stopped existing the moment the player
+ * opened another screen. GameContext applies server moves instead (see its
+ * `socketMoveMade` handler).
+ */
 export const useOnlineGame = () => {
   const { roomCode, assignedColor } = useSocket();
-  const { gameState, makeMove } = useGame();
-
-  // Memoize handlers to prevent unnecessary re-renders
-  const handleMoveMade = useCallback((event: Event) => {
-    const customEvent = event as CustomEvent<{
-      move: { from: string; to: string; promotion?: string; san: string };
-      fen: string;
-      pgn: string;
-      turn: string;
-      whiteTime: number;
-      blackTime: number;
-    }>;
-    const data = customEvent.detail;
-
-    // Apply the move to the local game state
-    // Note: The move has already been validated on the server
-    logger.debug('[useOnlineGame] Received move from opponent:', data.move);
-    makeMove(data.move.from as Square, data.move.to as Square, data.move.promotion);
-  }, [makeMove]);
-
-  const handleGameEnded = useCallback((event: Event) => {
-    const customEvent = event as CustomEvent<{
-      result: 'white' | 'black' | 'draw';
-      reason: string;
-      pgn: string;
-    }>;
-    const data = customEvent.detail;
-
-    // Update local game state to reflect game end
-    logger.debug('[useOnlineGame] Game ended:', data);
-    // TODO: Update GameContext to handle remote game endings
-  }, []);
-
-  useEffect(() => {
-    if (!roomCode) return;
-
-    // Listen for custom events dispatched by SocketContext
-    // SocketContext receives raw socket events and converts them to CustomEvents
-    // Note: Draw events (socketDrawOffered, socketDrawOfferSent, socketDrawDeclined)
-    // are handled by GameContext directly
-    logger.debug('[useOnlineGame] Setting up event listeners for room:', roomCode);
-
-    window.addEventListener('socketMoveMade', handleMoveMade);
-    window.addEventListener('socketGameEnded', handleGameEnded);
-
-    return () => {
-      logger.debug('[useOnlineGame] Cleaning up event listeners');
-      window.removeEventListener('socketMoveMade', handleMoveMade);
-      window.removeEventListener('socketGameEnded', handleGameEnded);
-    };
-  }, [roomCode, handleMoveMade, handleGameEnded]);
-
-  // Get socket functions at hook level
-  const { makeMove: socketMakeMove } = useSocket();
-
-  // Override local move making to use socket for online games
-  const makeOnlineMove = (from: Square, to: Square, promotion?: string) => {
-    if (roomCode && assignedColor && gameState.game.turn() === assignedColor.charAt(0)) {
-      // For online games, emit the move through socket
-      socketMakeMove(from, to, promotion);
-      return true;
-    }
-    return false;
-  };
 
   return {
     isOnlineGame: !!roomCode,
     canMakeMove: assignedColor === 'white' || assignedColor === 'black',
-    makeOnlineMove,
   };
 };

@@ -2,6 +2,11 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { useAuth } from '../../hooks/useAuth';
+import { useEngineAnalysis } from '../../hooks/useEngineAnalysis';
+import { QUALITY_LABEL, QUALITY_SYMBOL } from '../../engine/evaluation';
+import { splitUciMove } from '../../engine/uci';
+import AnalysisPanel, { QUALITY_TEXT_CLASS } from '../Analysis/AnalysisPanel';
+import EvalBar from '../Analysis/EvalBar';
 import { logger } from '../../utils/logger';
 
 export interface GameHistoryEntry {
@@ -24,22 +29,6 @@ export interface GameHistoryEntry {
   createdAt: string;
 }
 
-interface PositionAnalysis {
-  position: string;
-  engine: string;
-  depth: number;
-  analysisTime: number;
-  evaluation: number | null;
-  bestMove: {
-    from: string;
-    to: string;
-    uci: string;
-  } | null;
-  recommendation: string | null;
-  analysisDate: string;
-  message?: string;
-}
-
 interface GameReplayProps {
   game: GameHistoryEntry;
   onClose?: () => void;
@@ -49,12 +38,9 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [autoPlaySpeed, setAutoPlaySpeed] = useState(1000); // milliseconds
-  const [analysis, setAnalysis] = useState<PositionAnalysis | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [gameError, setGameError] = useState<string | null>(null);
   
-  const { user, profile } = useAuth();
+  const { profile } = useAuth();
   
   // Ref for the move history container to enable auto-scrolling
   const moveHistoryRef = useRef<HTMLDivElement>(null);
@@ -460,78 +446,81 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
     return index % 2 === 0;
   };
 
-  const analyzePosition = async () => {
-    if (!user) {
-      setAnalysisError('You must be signed in to analyze positions');
-      return;
-    }
+  // Get board orientation from user preferences
+  const boardOrientation = profile?.preferences?.boardOrientation === 'black' ? 'black' : 'white';
 
-    setIsAnalyzing(true);
-    setAnalysisError(null);
-    setAnalysis(null);
+  // Engine analysis runs in the browser (Stockfish in a Web Worker), so it is
+  // instant, works for guests and offline, and needs no server round trip.
+  const currentFen = currentGame.fen();
+  const analysis = useEngineAnalysis(gameHistory, currentFen, `${game.gameId}|${game.pgn}`);
+  const { review, live, liveEnabled } = analysis;
+  const currentPlyReview = review && currentMoveIndex >= 0 ? review.plies[currentMoveIndex] : null;
 
-    try {
-      const token = await user.getIdToken();
-      const currentFen = currentGame.fen();
-      
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/analysis/position`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          fen: currentFen,
-          depth: 15
-        })
-      });
+  // What the bar shows: the reviewed evaluation of this position when the game
+  // has been analysed, otherwise the live engine's current opinion.
+  const liveForThisPosition = live && live.fen === currentFen ? live : null;
+  const currentEvaluation =
+    review?.evaluations[currentMoveIndex + 1] ?? liveForThisPosition?.lines[0]?.evaluation ?? null;
+  const showEvalBar = !!review || liveEnabled;
 
-      if (!response.ok) {
-        throw new Error(`Analysis failed: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setAnalysis(data.analysis);
-        if (data.warning) {
-          setAnalysisError(data.warning);
-        }
-      } else {
-        throw new Error('Analysis request failed');
-      }
-
-    } catch (error) {
-      logger.error('Analysis error:', error);
-      setAnalysisError(error instanceof Error ? error.message : 'Analysis failed');
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  // Create custom square styles for highlighting the best move
+  // Highlight the move that led to this position.
   const getCustomSquareStyles = () => {
     const styles: { [square: string]: React.CSSProperties } = {};
-    
-    if (analysis?.bestMove) {
-      // Highlight the from square in light purple
-      styles[analysis.bestMove.from] = {
-        backgroundColor: 'rgba(147, 51, 234, 0.3)',
-        borderRadius: '3px',
-      };
-      
-      // Highlight the to square in darker purple
-      styles[analysis.bestMove.to] = {
-        backgroundColor: 'rgba(147, 51, 234, 0.5)',
-        borderRadius: '3px',
-      };
+    const lastMove = currentMoveIndex >= 0 ? gameHistory[currentMoveIndex] : null;
+    if (lastMove) {
+      styles[lastMove.from] = { backgroundColor: 'rgba(255, 255, 0, 0.3)' };
+      styles[lastMove.to] = { backgroundColor: 'rgba(255, 255, 0, 0.3)' };
     }
-    
     return styles;
   };
 
-  // Get board orientation from user preferences
-  const boardOrientation = profile?.preferences?.boardOrientation === 'black' ? 'black' : 'white';
+  // Arrows: blue for the live engine's best move from here; green for the move
+  // the engine preferred to the one just played (drawn on the squares it
+  // would have used).
+  const boardArrows = useMemo(() => {
+    const arrows: Array<[string, string, string]> = [];
+    const better = currentPlyReview?.bestMoveUci ? splitUciMove(currentPlyReview.bestMoveUci) : null;
+    if (better) arrows.push([better.from, better.to, 'rgba(22, 163, 74, 0.85)']);
+    const liveBest = liveForThisPosition?.lines[0]?.pv[0];
+    const next = liveBest ? splitUciMove(liveBest) : null;
+    if (next) arrows.push([next.from, next.to, 'rgba(37, 99, 235, 0.85)']);
+    return arrows;
+  }, [currentPlyReview, liveForThisPosition]);
+
+  // Arrow keys step through the game; Home and End jump to either end.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) return;
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      const last = gameHistory.length - 1;
+      let next: number | null = null;
+      if (event.key === 'ArrowLeft') next = Math.max(-1, currentMoveIndex - 1);
+      else if (event.key === 'ArrowRight') next = Math.min(last, currentMoveIndex + 1);
+      else if (event.key === 'Home') next = -1;
+      else if (event.key === 'End') next = last;
+      if (next === null) return;
+      event.preventDefault();
+      setIsAutoPlaying(false);
+      setCurrentMoveIndex(next);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [currentMoveIndex, gameHistory.length]);
+
+  // Annotation for a move in the list once the game has been analysed.
+  const moveAnnotation = (index: number): { symbol: string; className: string; title?: string } => {
+    const ply = review?.plies[index];
+    if (!ply) return { symbol: '', className: '' };
+    return {
+      symbol: QUALITY_SYMBOL[ply.quality],
+      className: QUALITY_SYMBOL[ply.quality] ? `font-semibold ${QUALITY_TEXT_CLASS[ply.quality]}` : '',
+      title: ply.bestMoveSan
+        ? `${QUALITY_LABEL[ply.quality]} — the engine preferred ${ply.bestMoveSan}`
+        : QUALITY_LABEL[ply.quality],
+    };
+  };
+
 
   // If there's a critical error, show error message
   if (gameError) {
@@ -591,11 +580,14 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
         {/* Chess Board - Responsive */}
         <div className="lg:flex-1">
           <div className="flex justify-center">
-            <div className="w-full max-w-[500px] lg:sticky lg:top-4">
+            <div className="w-full max-w-[540px] lg:sticky lg:top-4 flex items-stretch gap-2">
+              {showEvalBar && <EvalBar evaluation={currentEvaluation} orientation={boardOrientation} />}
+              <div className="flex-1 min-w-0">
               <div className="relative w-full" style={{ paddingBottom: '100%' }}>
                 <div className="absolute inset-0">
                   <Chessboard
-                    position={currentGame.fen()}
+                    position={currentFen}
+                    customArrows={boardArrows as any}
                     customBoardStyle={{
                       borderRadius: '4px',
                       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
@@ -607,45 +599,8 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                   />
                 </div>
               </div>
+              </div>
             </div>
-          </div>
-
-          {/* Position Analysis - Left aligned with board */}
-          <div className="mb-4 flex gap-2">
-            <button
-              onClick={analyzePosition}
-              disabled={isAnalyzing || !user}
-              className={`px-4 py-2 rounded transition-colors ${
-                isAnalyzing || !user
-                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                  : 'bg-purple-600 text-white hover:bg-purple-700'
-              }`}
-              title={!user ? 'Sign in to analyze positions' : 'Analyze current position with LC0'}
-            >
-              {isAnalyzing ? (
-                <div className="flex items-center gap-2">
-                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                  Analyzing...
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  🧠 Analyze Position
-                </div>
-              )}
-            </button>
-            
-            {analysis && (
-              <button
-                onClick={() => {
-                  setAnalysis(null);
-                  setAnalysisError(null);
-                }}
-                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
-                title="Clear analysis and highlighting"
-              >
-                Clear Analysis
-              </button>
-            )}
           </div>
 
           {/* Controls */}
@@ -728,6 +683,19 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                 <span className="text-red-500">No moves available in this game</span>
               )}
             </div>
+
+            {gameHistory.length > 0 && (
+              <AnalysisPanel
+                analysis={analysis}
+                currentPly={currentMoveIndex}
+                currentFen={currentFen}
+                moveCount={gameHistory.length}
+                onSelectPly={(ply) => {
+                  setIsAutoPlaying(false);
+                  setCurrentMoveIndex(ply);
+                }}
+              />
+            )}
           </div>
         </div>
 
@@ -837,13 +805,14 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                             logger.error('Error setting move index:', error);
                           }
                         }}
+                        title={moveAnnotation(whiteIndex).title}
                         className={`px-2 py-0.5 rounded text-sm transition-colors min-w-[60px] ${
                           currentMoveIndex === whiteIndex
                             ? 'bg-blue-500 text-white'
-                            : 'hover:bg-gray-200'
+                            : `hover:bg-gray-200 ${moveAnnotation(whiteIndex).className}`
                         }`}
                       >
-                        {whiteMove?.san || 'Invalid'}
+                        {whiteMove?.san || 'Invalid'}{moveAnnotation(whiteIndex).symbol}
                       </button>
                       
                       {/* Black move (if exists) */}
@@ -857,13 +826,14 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
                               logger.error('Error setting move index:', error);
                             }
                           }}
+                          title={moveAnnotation(blackIndex).title}
                           className={`px-2 py-0.5 rounded text-sm transition-colors min-w-[60px] ${
                             currentMoveIndex === blackIndex
                               ? 'bg-blue-500 text-white'
-                              : 'hover:bg-gray-200'
+                              : `hover:bg-gray-200 ${moveAnnotation(blackIndex).className}`
                           }`}
                         >
-                          {blackMove.san || 'Invalid'}
+                          {blackMove.san || 'Invalid'}{moveAnnotation(blackIndex).symbol}
                         </button>
                       ) : (
                         <div className="min-w-[60px]"></div>
@@ -875,63 +845,6 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
             )}
           </div>
 
-          {/* Analysis Results */}
-          {(analysis || analysisError) && (
-            <div className="mt-4">
-              <h4 className="text-md font-semibold mb-2">Position Analysis</h4>
-              
-              {analysisError && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded mb-2">
-                  <div className="text-sm">{analysisError}</div>
-                </div>
-              )}
-              
-              {analysis && (
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Engine:</span>
-                      <span className="text-sm">{analysis.engine}</span>
-                    </div>
-                    
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Analysis Time:</span>
-                      <span className="text-sm">{analysis.analysisTime}ms</span>
-                    </div>
-                    
-                    {analysis.bestMove && (
-                      <div className="border-t pt-2">
-                        <div className="text-sm font-medium mb-1">Best Move:</div>
-                        <div className="text-lg font-bold text-purple-700">
-                          {analysis.bestMove.uci}
-                        </div>
-                        <div className="text-xs text-gray-600">
-                          {analysis.bestMove.from} → {analysis.bestMove.to}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {analysis.recommendation && (
-                      <div className="text-sm text-purple-700 font-medium">
-                        {analysis.recommendation}
-                      </div>
-                    )}
-                    
-                    {analysis.message && (
-                      <div className="text-xs text-gray-600 italic">
-                        {analysis.message}
-                      </div>
-                    )}
-                    
-                    <div className="text-xs text-gray-500 border-t pt-2">
-                      Analyzed: {new Date(analysis.analysisDate).toLocaleTimeString()}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* PGN Export */}
           <div className="mt-4 space-y-2">
             <button
@@ -942,39 +855,6 @@ const GameReplay: React.FC<GameReplayProps> = ({ game, onClose }) => {
               className="w-full px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
             >
               Copy PGN
-            </button>
-            <button
-              onClick={() => {
-                logger.debug('=== DEBUG PGN ===');
-                logger.debug('Raw PGN:', game.pgn);
-                logger.debug('PGN type:', typeof game.pgn);
-                logger.debug('PGN length:', game.pgn.length);
-                logger.debug('Move count:', game.moveCount);
-                logger.debug('Final FEN:', game.finalFen);
-                logger.debug('First 100 chars:', game.pgn.substring(0, 100));
-                logger.debug('Last 100 chars:', game.pgn.substring(game.pgn.length - 100));
-                logger.debug('PGN as JSON:', JSON.stringify(game.pgn));
-                logger.debug('Current gameHistory length:', gameHistory.length);
-                logger.debug('Discrepancy:', game.moveCount, 'expected vs', gameHistory.length, 'actual');
-                
-                // Try to manually parse and see where it stops
-                const testGame = new Chess();
-                logger.debug('=== MANUAL PARSING TEST ===');
-                try {
-                  const result = testGame.loadPgn(game.pgn);
-                  logger.debug('Manual loadPgn result:', result);
-                  const moves = testGame.history({ verbose: true });
-                  logger.debug('Manual parsing got', moves.length, 'moves');
-                  logger.debug('All moves:', moves.map(m => m.san).join(' '));
-                } catch (e) {
-                  logger.debug('Manual parsing failed:', e);
-                }
-                
-                alert('PGN debug info logged to console. Check developer tools.');
-              }}
-              className="w-full px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors text-sm"
-            >
-              Debug PGN (Console)
             </button>
           </div>
         </div>

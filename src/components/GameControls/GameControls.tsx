@@ -36,6 +36,7 @@ const GameControls: React.FC = () => {
   const {
     assignedColor,
     roomCode,
+    resign: socketResign,
     offerDraw: socketOfferDraw,
     acceptDraw: socketAcceptDraw,
     declineDraw: socketDeclineDraw
@@ -79,11 +80,30 @@ const GameControls: React.FC = () => {
     }
   };
 
-  const handleAcceptDraw = () => {
-    if (roomCode) {
-      socketAcceptDraw();
+  // An online game belongs to the server: this client only asks. Ending,
+  // rewinding or restarting it locally would leave the two boards disagreeing
+  // (and used to resign the wrong player and save a result the opponent never
+  // saw), so those controls go through the socket or are switched off.
+  // `roomCode` alone is not enough: after an online game finishes, "New Game"
+  // starts a local board while the socket is still sitting in the old room.
+  const isOnlineGame =
+    !!roomCode && (assignedColor === 'spectator' || !!gameState.onlineGameRoom);
+  const isLiveOnlineGame = isOnlineGame && !isGameOver;
+
+  const handleResign = () => {
+    if (isOnlineGame) {
+      if (myColor) socketResign(); // the server knows which seat is resigning
+      return;
     }
-    acceptDraw(); // Also update local state
+    resign(currentPlayer);
+  };
+
+  const handleAcceptDraw = () => {
+    if (isOnlineGame) {
+      socketAcceptDraw(); // the server announces the result to both players
+      return;
+    }
+    acceptDraw();
   };
 
   const handleDeclineDraw = () => {
@@ -105,7 +125,8 @@ const GameControls: React.FC = () => {
   };
 
   const handleRequestHint = async () => {
-    if (isRequestingHint || !canUseHint) return;
+    // No engine help against a human opponent.
+    if (isRequestingHint || !canUseHint || isOnlineGame) return;
 
     setHintError(null);
     setIsRequestingHint(true);
@@ -130,14 +151,16 @@ const GameControls: React.FC = () => {
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={resetGame}
-          className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm"
+          disabled={isLiveOnlineGame}
+          title={isLiveOnlineGame ? 'Finish or resign the online game first' : undefined}
+          className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
           New Game
         </button>
         
         <button
-          onClick={() => resign(currentPlayer)}
-          disabled={isGameOver}
+          onClick={handleResign}
+          disabled={isGameOver || (isOnlineGame && !myColor)}
           className="px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Resign
@@ -148,7 +171,7 @@ const GameControls: React.FC = () => {
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={undoMove}
-          disabled={!canUndo || isGameOver}
+          disabled={!canUndo || isGameOver || isOnlineGame}
           className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
           ← Undo
@@ -156,7 +179,7 @@ const GameControls: React.FC = () => {
         
         <button
           onClick={redoMove}
-          disabled={!canRedo || isGameOver}
+          disabled={!canRedo || isGameOver || isOnlineGame}
           className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Redo →

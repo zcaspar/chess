@@ -11,6 +11,7 @@ import CapturedPieces from '../CapturedPieces/CapturedPieces';
 import GameEndModal from '../GameEndModal/GameEndModal';
 import OpeningBanner from '../OpeningBanner/OpeningBanner';
 import { useAuth } from '../../hooks/useAuth';
+import { useSocket } from '../../contexts/SocketContext';
 
 interface GameAppProps {
   /** Open the review screen for the game that just finished. */
@@ -21,6 +22,12 @@ export const GameApp: React.FC<GameAppProps> = ({ onReview }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<'game' | 'moves' | null>(null);
   const { profile } = useAuth();
+  const { assignedColor, ratingChanges } = useSocket();
+  // The local player's own rating change, once a rated online game has ended.
+  const ownRatingChange =
+    ratingChanges && (assignedColor === 'white' || assignedColor === 'black')
+      ? ratingChanges[assignedColor]
+      : null;
   const boardFlipped = profile?.preferences?.boardOrientation === 'black';
 
   return (
@@ -132,7 +139,7 @@ export const GameApp: React.FC<GameAppProps> = ({ onReview }) => {
       )}
 
       {/* Game End Modal */}
-      <GameEndModal onReview={onReview} />
+      <GameEndModal onReview={onReview} ratingChange={ownRatingChange} />
     </div>
   );
 };
