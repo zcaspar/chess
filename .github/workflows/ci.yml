@@ -101,18 +101,27 @@ jobs:
         name: codecov-umbrella
         fail_ci_if_error: false
 
-    - name: Run E2E tests
-      uses: cypress-io/github-action@v6
-      with:
-        build: npm run build
-        start: npm start
-        wait-on: 'http://localhost:3000'
-        wait-on-timeout: 120
-        browser: chrome
-        record: false
+    # Runs against the production build, served as static files: that is what
+    # ships, and it starts in a second.
+    #
+    # Done with plain steps rather than cypress-io/github-action: that action's
+    # built-in wait-on failed with "Socket closed before the connection was
+    # established" before any test ran — against the dev server and against a
+    # static server alike — so the suite never executed.
+    - name: Build for E2E tests
+      run: npm run build
       env:
         CI: true
-        CYPRESS_baseUrl: http://localhost:3000
+
+    - name: Run E2E tests
+      run: |
+        npx cypress install
+        python3 -m http.server 3000 --bind 127.0.0.1 --directory build > /dev/null 2>&1 &
+        curl --silent --fail --output /dev/null --retry 30 --retry-delay 1 --retry-connrefused http://127.0.0.1:3000/
+        npx cypress run --browser chrome
+      env:
+        CI: true
+        CYPRESS_baseUrl: http://127.0.0.1:3000
 
     - name: Upload E2E test screenshots
       uses: actions/upload-artifact@v4
@@ -120,13 +129,6 @@ jobs:
       with:
         name: cypress-screenshots
         path: cypress/screenshots
-
-    - name: Upload E2E test videos
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: cypress-videos
-        path: cypress/videos
 
   build:
     name: Build Application
@@ -163,28 +165,3 @@ jobs:
       with:
         name: build-files
         path: build/
-
-  deploy-preview:
-    name: Deploy Preview
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'pull_request'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: build-files
-        path: build/
-
-    - name: Deploy to Vercel Preview
-      uses: amondnet/vercel-action@v25
-      with:
-        vercel-token: ${{ secrets.VERCEL_TOKEN }}
-        vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-        vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-        working-directory: ./
-        alias-domains: pr-{{PR_NUMBER}}.chess-app.vercel.app

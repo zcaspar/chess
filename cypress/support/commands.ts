@@ -3,53 +3,43 @@
 declare global {
   namespace Cypress {
     interface Chainable {
-      getBySel(dataTestAttribute: string): Chainable<JQuery<HTMLElement>>;
-      getBySelLike(dataTestPrefixAttribute: string): Chainable<JQuery<HTMLElement>>;
-      login(): Chainable<void>;
+      /** Play a move by clicking the piece, then its destination. */
       makeMove(from: string, to: string): Chainable<void>;
-      waitForMove(): Chainable<void>;
-      checkGameStatus(status: string): Chainable<void>;
+      /** Play a list of moves written as "e2e4". */
+      playMoves(moves: string[]): Chainable<void>;
+      /** Assert which piece ("wP", "bQ", ...) stands on a square, or that it is empty. */
+      pieceOn(square: string, piece: string | null): Chainable<void>;
+      /** The move list card that is on screen. */
+      moveList(): Chainable<JQuery<HTMLElement>>;
     }
   }
 }
 
-// Custom command to select DOM element by data-cy attribute
-Cypress.Commands.add('getBySel', (selector) => {
-  return cy.get(`[data-cy=${selector}]`);
+const square = (name: string) => `[data-square="${name}"]`;
+
+Cypress.Commands.add('pieceOn', (name: string, piece: string | null) => {
+  if (piece) {
+    cy.get(`${square(name)} [data-piece="${piece}"]`).should('exist');
+  } else {
+    cy.get(`${square(name)} [data-piece]`).should('not.exist');
+  }
 });
 
-// Custom command to select DOM elements by data-cy attribute prefix
-Cypress.Commands.add('getBySelLike', (selector) => {
-  return cy.get(`[data-cy*=${selector}]`);
-});
+Cypress.Commands.add('moveList', () =>
+  cy.contains('h3:visible', 'Move History').parent().parent(),
+);
 
-// Mock login command for testing
-Cypress.Commands.add('login', () => {
-  // Mock Firebase authentication
-  cy.window().then((win) => {
-    // Simulate logged in user
-    win.localStorage.setItem('mockAuth', JSON.stringify({
-      uid: 'test-user-123',
-      email: 'test@example.com',
-      displayName: 'Test User'
-    }));
-  });
-});
-
-// Command to make a chess move
 Cypress.Commands.add('makeMove', (from: string, to: string) => {
-  cy.get(`[data-square="${from}"]`).click();
-  cy.get(`[data-square="${to}"]`).click();
+  cy.get(square(from)).click();
+  cy.get(square(to)).click();
+  // The move has landed once the piece has left its starting square. Waiting
+  // on that, rather than a fixed delay, keeps a fast run from clicking the
+  // next piece while the board is still animating the last one.
+  cy.get(`${square(from)} [data-piece]`).should('not.exist');
 });
 
-// Command to wait for AI/opponent move
-Cypress.Commands.add('waitForMove', () => {
-  cy.wait(1000); // Wait for move animation
-});
-
-// Command to check game status
-Cypress.Commands.add('checkGameStatus', (status: string) => {
-  cy.contains(status).should('be.visible');
+Cypress.Commands.add('playMoves', (moves: string[]) => {
+  moves.forEach((move) => cy.makeMove(move.slice(0, 2), move.slice(2, 4)));
 });
 
 export {};
