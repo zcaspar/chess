@@ -102,18 +102,23 @@ jobs:
         fail_ci_if_error: false
 
     # Runs against the production build, served as static files: that is what
-    # ships, and it starts in a second. (The dev server, `npm start`, was not
-    # coming up on the runner at all — `wait-on` gave up before any test ran.)
-    # 127.0.0.1 rather than localhost, which newer Node resolves to IPv6 first.
+    # ships, and it starts in a second.
+    #
+    # Done with plain steps rather than cypress-io/github-action: that action's
+    # built-in wait-on failed with "Socket closed before the connection was
+    # established" before any test ran — against the dev server and against a
+    # static server alike — so the suite never executed.
+    - name: Build for E2E tests
+      run: npm run build
+      env:
+        CI: true
+
     - name: Run E2E tests
-      uses: cypress-io/github-action@v6
-      with:
-        build: npm run build
-        start: python3 -m http.server 3000 --bind 127.0.0.1 --directory build
-        wait-on: 'http://127.0.0.1:3000'
-        wait-on-timeout: 120
-        browser: chrome
-        record: false
+      run: |
+        npx cypress install
+        python3 -m http.server 3000 --bind 127.0.0.1 --directory build > /dev/null 2>&1 &
+        curl --silent --fail --output /dev/null --retry 30 --retry-delay 1 --retry-connrefused http://127.0.0.1:3000/
+        npx cypress run --browser chrome
       env:
         CI: true
         CYPRESS_baseUrl: http://127.0.0.1:3000
