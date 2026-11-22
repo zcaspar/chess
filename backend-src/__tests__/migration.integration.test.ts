@@ -173,3 +173,7 @@ describeOrSkip('game_history migration (live Postgres)', () => {
     expect(indexNames).toContain('idx_game_history_player_created');
   });
 });
+// Makes this file a module. Without it the top-level constants above are
+// globals shared with the other integration test files, and ts-jest reports
+// them as redeclared whenever two of those files are compiled by one worker.
+export {};

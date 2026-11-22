@@ -190,3 +190,8 @@ describeOrSkip('ratings (live Postgres)', () => {
     expect(JSON.stringify(board)).not.toContain('@');
   });
 });
+
+// Makes this file a module. Without it the top-level constants above are
+// globals shared with the other integration test files, and ts-jest reports
+// them as redeclared whenever two of those files are compiled by one worker.
+export {};
