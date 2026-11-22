@@ -24,9 +24,9 @@ src/
 
 cypress/
 ├── e2e/
-│   ├── guest-user.cy.ts
-│   ├── authenticated-user.cy.ts
-│   └── complete-game-flow.cy.ts
+│   ├── local-game.cy.ts
+│   ├── promotion-and-reload.cy.ts
+│   └── engine.cy.ts
 ├── support/
 │   ├── commands.ts
 │   └── e2e.ts
@@ -97,30 +97,31 @@ After running `npm run test:coverage`, open `coverage/lcov-report/index.html` in
 - Event handling
 - Error scenarios
 
-### 2. Integration Tests
+### 2. E2E Tests (Cypress)
 
-Located in `cypress/e2e/complete-game-flow.cy.ts`, these tests cover:
-- Complete game scenarios (checkmate, draw, resignation)
-- Time control behavior
-- Special moves (castling, en passant, promotion)
-- Game state persistence
-- Error handling
+These run in a real browser against the **production build** with no backend
+and no account, so they cover what a visitor can do on their own device:
 
-### 3. E2E Tests (Cypress)
+- `local-game.cy.ts` — the starting position, playing and listing moves,
+  illegal moves refused, undo/redo, checkmate and the game-over screen, resign.
+- `promotion-and-reload.cy.ts` — the promotion picker (choose, cancel), and a
+  game in progress surviving a page reload.
+- `engine.cy.ts` — reviewing a finished game with the in-browser engine
+  (accuracy, the losing mistake marked, arrow-key navigation, live engine
+  lines), and the computer opponent answering from the local engine when the
+  engine server is unreachable.
 
-**Guest User Journey:**
-- Landing page and board display
-- Local gameplay
-- AI opponent interaction
-- Game controls
-- Responsive design
+Not covered here: anything that needs a signed-in session or a second player
+(online games, ratings, game history). Those are covered by the backend's
+socket tests and the frontend component tests.
 
-**Authenticated User Journey:**
-- Google authentication flow
-- Online game creation/joining
-- Game history access
-- Friend system
-- Multiplayer gameplay
+To run them locally:
+
+```bash
+npm run build
+python3 -m http.server 3000 --bind 127.0.0.1 --directory build &
+npx cypress run
+```
 
 ## CI/CD Pipeline
 

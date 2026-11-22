@@ -101,18 +101,22 @@ jobs:
         name: codecov-umbrella
         fail_ci_if_error: false
 
+    # Runs against the production build, served as static files: that is what
+    # ships, and it starts in a second. (The dev server, `npm start`, was not
+    # coming up on the runner at all — `wait-on` gave up before any test ran.)
+    # 127.0.0.1 rather than localhost, which newer Node resolves to IPv6 first.
     - name: Run E2E tests
       uses: cypress-io/github-action@v6
       with:
         build: npm run build
-        start: npm start
-        wait-on: 'http://localhost:3000'
+        start: python3 -m http.server 3000 --bind 127.0.0.1 --directory build
+        wait-on: 'http://127.0.0.1:3000'
         wait-on-timeout: 120
         browser: chrome
         record: false
       env:
         CI: true
-        CYPRESS_baseUrl: http://localhost:3000
+        CYPRESS_baseUrl: http://127.0.0.1:3000
 
     - name: Upload E2E test screenshots
       uses: actions/upload-artifact@v4
@@ -120,13 +124,6 @@ jobs:
       with:
         name: cypress-screenshots
         path: cypress/screenshots
-
-    - name: Upload E2E test videos
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: cypress-videos
-        path: cypress/videos
 
   build:
     name: Build Application
